@@ -1,0 +1,6 @@
+data/
+*.sqlite
+*.sqlite-journal
+dist/
+node_modules/.cache/
+tsconfig.tsbuildinfo
