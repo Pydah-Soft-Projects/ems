@@ -43,6 +43,13 @@ export function createSubjectMappingRoutes(services: Services) {
     res.status(201).json(await services.subjects.createMapping(req.body));
   }));
 
+  router.put(
+    '/scope',
+    asyncHandler(async (req, res) => {
+      res.json(await services.subjects.replaceScopeMapping(req.body));
+    }),
+  );
+
   router.get('/', asyncHandler(async (req, res) => {
     res.json(
       await services.subjects.findAllMappings({
@@ -52,6 +59,9 @@ export function createSubjectMappingRoutes(services: Services) {
         course: req.query.course as string | undefined,
         branch: req.query.branch as string | undefined,
         batch: req.query.batch as string | undefined,
+        yearOfStudy: req.query.yearOfStudy
+          ? parseInt(String(req.query.yearOfStudy), 10)
+          : undefined,
         semester: req.query.semester
           ? parseInt(String(req.query.semester), 10)
           : undefined,

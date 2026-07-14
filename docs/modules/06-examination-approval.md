@@ -37,6 +37,6 @@ Administrative verification layer before examinations become visible to students
 | POST | `/exams/:id/reject` body: `{ remarks }` |
 | GET | `/exams?status=pending_approval` |
 
-## Frontend (planned)
+## Frontend
 
-Approval queue with detail review panel
+`/dashboard/exams` — Pending approval filter with Approve / Reject (remarks) actions and detail review.

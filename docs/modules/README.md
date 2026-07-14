@@ -10,12 +10,12 @@ Reference documentation for the Examination Management System (EMS), derived fro
 | [Regulations](./02-regulations.md) | ✅ | ✅ | ✅ | Done |
 | [Subjects](./03-subjects.md) | ✅ | ✅ | ✅ | Done |
 | [Subject Mapping](./04-subject-mapping.md) | ✅ | ✅ | ✅ | Done |
-| [Examination Creation](./05-examination-creation.md) | ✅ | ✅ | ⏳ | Backend only |
-| [Examination Approval](./06-examination-approval.md) | ✅ | ✅ | ⏳ | Backend only |
-| [Examination Publication](./07-examination-publication.md) | ✅ | ✅ | ⏳ | Backend only |
-| [Fee Generation](./08-fee-generation.md) | ✅ | ✅ | ⏳ | Backend only |
-| [Fee Payment](./09-fee-payment.md) | ✅ | ✅ | ⏳ | Backend only |
-| [Late Fee & Fine](./10-late-fee.md) | ✅ | ⏳ | ⏳ | Planned |
+| [Examination Creation](./05-examination-creation.md) | ✅ | ✅ | ✅ | Done |
+| [Examination Approval](./06-examination-approval.md) | ✅ | ✅ | ✅ | Done |
+| [Examination Publication](./07-examination-publication.md) | ✅ | ✅ | ✅ | Done |
+| [Fee Generation](./08-fee-generation.md) | ✅ | ✅ | ✅ | Desk via Fees page |
+| [Fee Payment](./09-fee-payment.md) | ✅ | ✅ | ✅ | Done (offline desk) |
+| [Late Fee & Fine](./10-late-fee.md) | ✅ | ✅ | ✅ | Pay-time slabs |
 | [Hall Tickets](./11-hall-tickets.md) | ✅ | ⏳ | ⏳ | Planned |
 | [Marks & Results](./12-marks-results.md) | ✅ | ⏳ | ⏳ | Planned |
 | [Reports & Analytics](./13-reports-analytics.md) | ✅ | ⏳ | ⏳ | Planned |

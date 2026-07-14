@@ -4,48 +4,39 @@
 
 Unified fee collection — students pay online; Accounts staff collect offline (cash/bank).
 
-## Payment methods
+## Desk collection UI
 
-### Online (student)
-- UPI, Debit Card, Credit Card, Net Banking
-- **Current:** Simulated gateway success
+`/dashboard/fees` → click student / Collect → `/dashboard/fees/collect/[roll]`
 
-### Offline (accounts staff)
-- Cash, Bank Transfer
-- Search student by roll number → select exam fee → record payment
+Screenshot-style desk page:
+- Student banner (PIN, admission, year, total due)
+- Year summary cards
+- Fee dues table (select fees)
+- Collect sidebar (cash/bank, collector, remarks)
+- Transaction history → print receipt
 
-## Functional flow — Online
+## Receipt (A5)
 
-1. Student views pending fees
-2. Clicks Pay Now
-3. Payment gateway (simulated)
-4. Fee status → `paid`
-5. Receipt generated
-6. Hall ticket eligibility updated (future)
+`/dashboard/fees/receipt/[paymentId]` and `/student/receipt/[paymentId]`
 
-## Functional flow — Offline
+- Printable A5 landscape layout (mock fee receipt style)
+- QR for receipt number, particulars, authorized signatory
+- Browser **Print receipt** button
 
-1. Accounts staff logs in
-2. Search student roll number
-3. Select examination fee
-4. Record payment mode + details
-5. Receipt generated
+## Student portal
 
-## Business rules
-
-- One payment per fee record
-- Duplicate payments blocked
-- Receipt immutable after generation
-- Payment history cannot be modified
+- Login: `/student/login` — PIN + Admission Number (password)
+- Home: `/student` — exams, subjects, paid/pending, online pay
+- Auth: `POST /auth/student/login`
 
 ## API
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/fees/records/:id/pay-online` | Simulated online pay |
-| POST | `/fees/pay-offline` | Accounts offline collection |
-| GET | `/fees/payments` | Payment history |
-
-## Frontend (planned)
-
-`/dashboard/fees` — records list, payment actions, receipt view
+| GET | `/fees/collection?rollNumber=` | Desk lookup |
+| GET | `/fees/records` | List records |
+| POST | `/fees/pay-offline` | Desk collect |
+| GET | `/fees/payments/:id` | Receipt data |
+| GET | `/student/fees` | Student’s own fees |
+| POST | `/student/fees/:id/pay` | Student online pay |
+| GET | `/student/payments/:id` | Student receipt |

@@ -50,8 +50,16 @@ export interface SdmsBranchYearSemesters {
   course: Pick<SdmsCourse, 'id' | 'name' | 'code'>;
   years: {
     yearOfStudy: number;
+    isAdditional: boolean;
+    label: string;
     semesters: { semesterNumber: number; label: string }[];
   }[];
+  additionalYear: number | null;
+  hasAdditionalYear: boolean;
+  sections: {
+    enabled: boolean;
+    items: { name: string; strength?: number }[];
+  };
 }
 
 export interface SdmsSemester {
@@ -79,6 +87,9 @@ export interface SdmsStudent {
   currentYear: number;
   currentSemester: number;
   studentStatus: string | null;
+  studentMobile?: string | null;
+  preferredMobileNumber?: string | null;
+  email?: string | null;
 }
 
 export interface SdmsStudentSection {

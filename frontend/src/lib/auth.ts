@@ -5,7 +5,19 @@ export interface AuthUser {
   id: string;
   username: string;
   fullName: string;
-  role: 'super_admin';
+  role: 'super_admin' | 'student';
+  pinNo?: string;
+  studentId?: number;
+  admissionNumber?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  college?: string | null;
+  course?: string | null;
+  branch?: string | null;
+  batch?: string | null;
+  currentYear?: number;
+  currentSemester?: number;
+  studentStatus?: string | null;
 }
 
 export interface LoginResponse {
@@ -18,6 +30,7 @@ export function setAuth(token: string, user: AuthUser) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   document.cookie = `ems_token=${token}; path=/; max-age=86400; SameSite=Lax`;
+  document.cookie = `ems_role=${user.role}; path=/; max-age=86400; SameSite=Lax`;
 }
 
 export function clearAuth() {
@@ -25,6 +38,7 @@ export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   document.cookie = 'ems_token=; path=/; max-age=0';
+  document.cookie = 'ems_role=; path=/; max-age=0';
 }
 
 export function getToken(): string | null {

@@ -10,8 +10,14 @@ import {
   Exam,
   ExamSubject,
   LateFeeSlab,
+  ExamScope,
 } from '../exam/schemas/exam.schema';
-import { ExamFeeRecord, Payment } from '../exam/schemas/fee.schema';
+import {
+  ExamFeeRecord,
+  ExamApplication,
+  Payment,
+} from '../exam/schemas/fee.schema';
+import { PaymentGatewaySettings } from '../settings/payment-gateway-settings.entity';
 
 export const entities = [
   Regulation,
@@ -21,8 +27,11 @@ export const entities = [
   Exam,
   ExamSubject,
   LateFeeSlab,
+  ExamScope,
   ExamFeeRecord,
+  ExamApplication,
   Payment,
+  PaymentGatewaySettings,
 ];
 
 export function createExamPortalDataSource() {

@@ -48,6 +48,8 @@ export interface SubjectMappingAssignment {
   batch: string;
   yearOfStudy: number;
   semester: number;
+  sectionMode?: 'all' | 'selected';
+  sections?: string[];
 }
 
 export interface SubjectMappingEntry {
@@ -64,6 +66,9 @@ export interface SubjectMappingEntry {
   batch: string;
   yearOfStudy: number;
   semester: number;
+  sectionMode: 'all' | 'selected';
+  sections: string[] | null;
+  sectionKey: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -73,6 +78,31 @@ export interface CreateSubjectMappingInput {
   assignments: SubjectMappingAssignment[];
 }
 
+export interface ReplaceScopeMappingInput {
+  regulationId: number;
+  collegeId: number;
+  collegeName: string;
+  courseId: number;
+  courseName: string;
+  branchId: number;
+  branchName: string;
+  batch: string;
+  yearOfStudy: number;
+  semester: number;
+  sectionMode?: 'all' | 'selected';
+  sections?: string[];
+  subjectIds: number[];
+  previous?: {
+    collegeId: number;
+    courseId: number;
+    branchId: number;
+    batch: string;
+    yearOfStudy: number;
+    semester: number;
+    sectionKey: string;
+  };
+}
+
 export type UpdateSubjectMappingInput = Partial<SubjectMappingAssignment>;
 
 export interface SubjectMappingFilters {
@@ -80,5 +110,6 @@ export interface SubjectMappingFilters {
   course?: string;
   branch?: string;
   batch?: string;
+  yearOfStudy?: number;
   semester?: number;
 }

@@ -9,6 +9,8 @@ import {
   CreateSubjectMappingBulkDto,
   SubjectMappingAssignmentDto,
   UpdateSubjectMappingDto,
+  ReplaceScopeMappingDto,
+  normalizeSectionFields,
 } from './dto/subject.dto';
 import { SubjectStatus, SubjectType } from './schemas/subject.enums';
 
@@ -166,6 +168,7 @@ export class SubjectsService {
 
     for (const assignment of dto.assignments) {
       this.assertAssignmentInRegulationScope(regulation, assignment);
+      const sectionFields = normalizeSectionFields(assignment);
 
       const exists = await this.mappingRepo.findOne({
         where: {
@@ -177,22 +180,166 @@ export class SubjectsService {
           batch: assignment.batch,
           yearOfStudy: assignment.yearOfStudy,
           semester: assignment.semester,
+          sectionKey: sectionFields.sectionKey,
         },
       });
       if (exists) {
         throw AppError.badRequest(
-          `Subject is already mapped for ${assignment.branchName} batch ${assignment.batch} year ${assignment.yearOfStudy} semester ${assignment.semester}`,
+          `Subject is already mapped for ${assignment.branchName} batch ${assignment.batch} year ${assignment.yearOfStudy} semester ${assignment.semester} (${sectionFields.sectionMode === 'all' ? 'all sections' : sectionFields.sections?.join(', ')})`,
         );
       }
     }
 
-    const rows = dto.assignments.map((assignment) =>
-      this.mappingRepo.create({
+    const rows = dto.assignments.map((assignment) => {
+      const sectionFields = normalizeSectionFields(assignment);
+      return this.mappingRepo.create({
         regulationId: dto.regulationId,
-        ...assignment,
-      }),
-    );
+        subjectId: assignment.subjectId,
+        collegeId: assignment.collegeId,
+        collegeName: assignment.collegeName,
+        courseId: assignment.courseId,
+        courseName: assignment.courseName,
+        branchId: assignment.branchId,
+        branchName: assignment.branchName,
+        batch: assignment.batch,
+        yearOfStudy: assignment.yearOfStudy,
+        semester: assignment.semester,
+        ...sectionFields,
+      });
+    });
     return this.mappingRepo.save(rows);
+  }
+
+  /**
+   * Sync subjects for one academic scope. Creates missing rows, deletes removed,
+   * updates section fields on kept rows. Same table as createMapping / updateMapping.
+   */
+  async replaceScopeMapping(
+    dto: ReplaceScopeMappingDto,
+  ): Promise<SubjectMappingEntry[]> {
+    const regulation = await this.assertRegulationWithScopes(dto.regulationId);
+    const subjectIds = [...new Set(dto.subjectIds ?? [])];
+
+    const scopeAssignment: SubjectMappingAssignmentDto = {
+      subjectId: 0,
+      collegeId: dto.collegeId,
+      collegeName: dto.collegeName,
+      courseId: dto.courseId,
+      courseName: dto.courseName,
+      branchId: dto.branchId,
+      branchName: dto.branchName,
+      batch: dto.batch,
+      yearOfStudy: dto.yearOfStudy,
+      semester: dto.semester,
+      sectionMode: dto.sectionMode,
+      sections: dto.sections,
+    };
+    this.assertAssignmentInRegulationScope(regulation, {
+      ...scopeAssignment,
+      subjectId: subjectIds[0] ?? 0,
+    });
+
+    const sectionFields = normalizeSectionFields(dto);
+
+    if (dto.previous) {
+      const prevKey = dto.previous.sectionKey;
+      const newKey = sectionFields.sectionKey;
+      const scopeMoved =
+        dto.previous.collegeId !== dto.collegeId ||
+        dto.previous.courseId !== dto.courseId ||
+        dto.previous.branchId !== dto.branchId ||
+        dto.previous.batch !== dto.batch ||
+        dto.previous.yearOfStudy !== dto.yearOfStudy ||
+        dto.previous.semester !== dto.semester ||
+        prevKey !== newKey;
+
+      if (scopeMoved) {
+        const oldRows = await this.mappingRepo.find({
+          where: {
+            regulationId: dto.regulationId,
+            collegeId: dto.previous.collegeId,
+            courseId: dto.previous.courseId,
+            branchId: dto.previous.branchId,
+            batch: dto.previous.batch,
+            yearOfStudy: dto.previous.yearOfStudy,
+            semester: dto.previous.semester,
+            sectionKey: dto.previous.sectionKey,
+          },
+        });
+        if (oldRows.length > 0) await this.mappingRepo.remove(oldRows);
+      }
+    }
+
+    const existing = await this.mappingRepo.find({
+      where: {
+        regulationId: dto.regulationId,
+        collegeId: dto.collegeId,
+        courseId: dto.courseId,
+        branchId: dto.branchId,
+        batch: dto.batch,
+        yearOfStudy: dto.yearOfStudy,
+        semester: dto.semester,
+        sectionKey: sectionFields.sectionKey,
+      },
+      relations: ['subject'],
+    });
+
+    if (subjectIds.length === 0) {
+      if (existing.length > 0) await this.mappingRepo.remove(existing);
+      return [];
+    }
+
+    await this.resolveSubjects(dto.regulationId, subjectIds);
+
+    const keep = new Set(subjectIds);
+    const toRemove = existing.filter((row) => !keep.has(row.subjectId));
+    if (toRemove.length > 0) {
+      await this.mappingRepo.remove(toRemove);
+    }
+
+    const existingBySubject = new Map(
+      existing
+        .filter((row) => keep.has(row.subjectId))
+        .map((row) => [row.subjectId, row]),
+    );
+    const result: SubjectMappingEntry[] = [];
+
+    for (const subjectId of subjectIds) {
+      const current = existingBySubject.get(subjectId);
+      if (current) {
+        Object.assign(current, {
+          collegeName: dto.collegeName,
+          courseName: dto.courseName,
+          branchName: dto.branchName,
+          ...sectionFields,
+        });
+        result.push(await this.mappingRepo.save(current));
+      } else {
+        const created = await this.mappingRepo.save(
+          this.mappingRepo.create({
+            regulationId: dto.regulationId,
+            subjectId,
+            collegeId: dto.collegeId,
+            collegeName: dto.collegeName,
+            courseId: dto.courseId,
+            courseName: dto.courseName,
+            branchId: dto.branchId,
+            branchName: dto.branchName,
+            batch: dto.batch,
+            yearOfStudy: dto.yearOfStudy,
+            semester: dto.semester,
+            ...sectionFields,
+          }),
+        );
+        const loaded = await this.mappingRepo.findOne({
+          where: { id: created.id },
+          relations: ['subject'],
+        });
+        if (loaded) result.push(loaded);
+      }
+    }
+
+    return result;
   }
 
   findAllMappings(filters?: {
@@ -200,6 +347,7 @@ export class SubjectsService {
     course?: string;
     branch?: string;
     batch?: string;
+    yearOfStudy?: number;
     semester?: number;
     subjectId?: number;
   }): Promise<SubjectMappingEntry[]> {
@@ -221,6 +369,11 @@ export class SubjectsService {
     }
     if (filters?.batch) {
       qb.andWhere('entry.batch = :batch', { batch: filters.batch });
+    }
+    if (filters?.yearOfStudy) {
+      qb.andWhere('entry.yearOfStudy = :yearOfStudy', {
+        yearOfStudy: filters.yearOfStudy,
+      });
     }
     if (filters?.semester) {
       qb.andWhere('entry.semester = :semester', { semester: filters.semester });
@@ -263,10 +416,14 @@ export class SubjectsService {
       batch: dto.batch ?? mapping.batch,
       yearOfStudy: dto.yearOfStudy ?? mapping.yearOfStudy,
       semester: dto.semester ?? mapping.semester,
+      sectionMode: dto.sectionMode ?? mapping.sectionMode,
+      sections:
+        dto.sections !== undefined ? dto.sections : (mapping.sections ?? undefined),
     };
 
     await this.resolveSubjects(mapping.regulationId, [next.subjectId]);
     this.assertAssignmentInRegulationScope(regulation, next);
+    const sectionFields = normalizeSectionFields(next);
 
     const duplicate = await this.mappingRepo.findOne({
       where: {
@@ -278,13 +435,17 @@ export class SubjectsService {
         batch: next.batch,
         yearOfStudy: next.yearOfStudy,
         semester: next.semester,
+        sectionKey: sectionFields.sectionKey,
       },
     });
     if (duplicate && duplicate.id !== mapping.id) {
       throw AppError.badRequest('This subject assignment already exists');
     }
 
-    Object.assign(mapping, next);
+    Object.assign(mapping, {
+      ...next,
+      ...sectionFields,
+    });
     return this.mappingRepo.save(mapping);
   }
 
@@ -298,6 +459,7 @@ export class SubjectsService {
     course: string;
     branch: string;
     batch: string;
+    yearOfStudy: number;
     semester: number;
   }): Promise<Subject[]> {
     const entries = await this.mappingRepo.find({
@@ -306,6 +468,7 @@ export class SubjectsService {
         courseName: params.course,
         branchName: params.branch,
         batch: params.batch,
+        yearOfStudy: params.yearOfStudy,
         semester: params.semester,
       },
       relations: ['subject'],

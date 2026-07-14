@@ -27,7 +27,7 @@ When **all** exam subjects selected → `min(subjectWiseTotal, packageFee)`.
 | `selectedSubjectIds` | Subjects in fee |
 | `feeBreakdown` | Per-subject fee detail |
 | `baseFee` | Calculated base |
-| `lateFee` | Applied after due date (future scheduler) |
+| `lateFee` | Applied from exam slabs at lookup/pay time |
 | `totalAmount` | Final payable |
 | `status` | `pending` \| `paid` |
 | `dueDate` | Application end date |

@@ -22,8 +22,15 @@ import {
   Exam,
   ExamSubject,
   LateFeeSlab,
+  ExamScope,
 } from '../exam/schemas/exam.schema';
-import { ExamFeeRecord, Payment } from '../exam/schemas/fee.schema';
+import {
+  ExamFeeRecord,
+  ExamApplication,
+  Payment,
+} from '../exam/schemas/fee.schema';
+import { PaymentGatewaySettings } from '../settings/payment-gateway-settings.entity';
+import { SettingsService } from '../settings/settings.service';
 
 export interface Services {
   auth: AuthService;
@@ -31,6 +38,7 @@ export interface Services {
   subjects: SubjectsService;
   exam: ExamService;
   sdms: SdmsService;
+  settings: SettingsService;
 }
 
 export function createServices(
@@ -54,16 +62,24 @@ export function createServices(
     dataSource.getRepository(Regulation),
   );
 
+  const settings = new SettingsService(
+    dataSource.getRepository(PaymentGatewaySettings),
+  );
+
   const exam = new ExamService(
     dataSource.getRepository(Exam),
     dataSource.getRepository(ExamSubject),
     dataSource.getRepository(ExamFeeRecord),
     dataSource.getRepository(Payment),
+    dataSource.getRepository(ExamScope),
+    dataSource.getRepository(ExamApplication),
     subjects,
     regulations,
+    sdms,
+    settings,
   );
 
-  const auth = new AuthService();
+  const auth = new AuthService(sdms);
 
-  return { auth, regulations, subjects, exam, sdms };
+  return { auth, regulations, subjects, exam, sdms, settings };
 }

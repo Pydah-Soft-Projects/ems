@@ -3,7 +3,14 @@ export type NavItem = {
   label: string;
   description?: string;
   exact?: boolean;
-  icon: 'dashboard' | 'regulations' | 'subjects' | 'organization' | 'exams' | 'fees';
+  icon:
+    | 'dashboard'
+    | 'regulations'
+    | 'subjects'
+    | 'organization'
+    | 'exams'
+    | 'fees'
+    | 'settings';
 };
 
 export type NavGroup = {
@@ -66,6 +73,12 @@ export const navigation: NavGroup[] = [
         label: 'Fees & Payments',
         description: 'Fee records and collections',
         icon: 'fees',
+      },
+      {
+        href: '/dashboard/settings',
+        label: 'Settings',
+        description: 'Payment gateway and portal config',
+        icon: 'settings',
       },
     ],
   },

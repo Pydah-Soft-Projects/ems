@@ -33,6 +33,13 @@ export enum PaymentMethod {
 }
 
 export enum PaymentStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
   SUCCESS = 'success',
   FAILED = 'failed',
+  /** Staff voided a mistaken collection — fee returns to pending */
+  VOIDED = 'voided',
 }
+
+/** UPI online convenience / bank charges (2.2% of exam fee) */
+export const UPI_CONVENIENCE_FEE_RATE = 0.022;

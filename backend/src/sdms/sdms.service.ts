@@ -8,6 +8,7 @@ import { SdmsBranchAcademicYear } from './entities/branch-academic-year.entity';
 import { SdmsSemester } from './entities/semester.entity';
 import { SdmsStudent } from './entities/student.entity';
 import { SdmsStudentSection } from './entities/student-section.entity';
+import { SdmsStudentCredentials } from './entities/student-credentials.entity';
 
 export interface SdmsStudentFilters {
   college?: string;
@@ -58,6 +59,7 @@ export class SdmsService {
     private readonly semesterRepo: Repository<SdmsSemester>,
     private readonly studentRepo: Repository<SdmsStudent>,
     private readonly studentSectionRepo: Repository<SdmsStudentSection>,
+    private readonly credentialsRepo: Repository<SdmsStudentCredentials>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -176,6 +178,10 @@ export class SdmsService {
           hasAdditionalYear?: boolean;
           additionalYear?: number;
           additionalYearSemesters?: number;
+          sections?: {
+            enabled?: boolean;
+            items?: { name: string; strength?: number }[];
+          };
         }
       | null;
 
@@ -193,24 +199,41 @@ export class SdmsService {
       metadata,
     );
 
+    const additionalYear =
+      metadata?.hasAdditionalYear && metadata.additionalYear
+        ? Number(metadata.additionalYear)
+        : null;
+
     const years = Array.from({ length: maxYear }, (_, index) => {
       const year = index + 1;
+      const isAdditional = additionalYear === year;
       const configured = config?.find((item) => item.year === year);
       const semesterCount =
         configured?.semesters ??
-        (metadata?.hasAdditionalYear && metadata.additionalYear === year
-          ? metadata.additionalYearSemesters
-          : undefined) ??
+        (isAdditional ? metadata?.additionalYearSemesters : undefined) ??
         semestersPerYear;
 
       return {
         yearOfStudy: year,
+        isAdditional,
+        label: isAdditional
+          ? `Year ${year} (optional / additional)`
+          : `Year ${year}`,
         semesters: Array.from({ length: semesterCount }, (_, semIndex) => ({
           semesterNumber: semIndex + 1,
-          label: `Year ${year} / Sem ${semIndex + 1}`,
+          label: `Sem ${semIndex + 1}`,
         })),
       };
     });
+
+    const sectionItems = (metadata?.sections?.items ?? [])
+      .filter((item) => !!item.name)
+      .map((item) => ({
+        name: item.name,
+        strength: item.strength,
+      }));
+    const sectionsEnabled = metadata?.sections?.enabled === true;
+    const hasSections = sectionsEnabled && sectionItems.length > 0;
 
     return {
       branch: {
@@ -225,6 +248,12 @@ export class SdmsService {
         code: course.code,
       },
       years,
+      additionalYear,
+      hasAdditionalYear: !!additionalYear,
+      sections: {
+        enabled: hasSections,
+        items: hasSections ? sectionItems : [],
+      },
     };
   }
 
@@ -470,6 +499,9 @@ export class SdmsService {
         's.currentYear',
         's.currentSemester',
         's.studentStatus',
+        's.studentMobile',
+        's.preferredMobileNumber',
+        's.email',
       ])
       .orderBy('s.student_name', 'ASC');
 
@@ -522,6 +554,162 @@ export class SdmsService {
       limit,
       totalPages: Math.ceil(total / limit) || 1,
     };
+  }
+
+  /** Exact PIN / roll lookup for login and fee desk */
+  async findStudentByPin(pinNo: string) {
+    const pin = pinNo.trim();
+    if (!pin) return null;
+    return this.studentRepo.findOne({
+      where: { pinNo: pin },
+      select: {
+        id: true,
+        studentName: true,
+        admissionNumber: true,
+        pinNo: true,
+        college: true,
+        course: true,
+        branch: true,
+        batch: true,
+        section: true,
+        currentYear: true,
+        currentSemester: true,
+        studentStatus: true,
+        studentMobile: true,
+        preferredMobileNumber: true,
+        email: true,
+      },
+    });
+  }
+
+  /** Prefer preferred mobile, then student_mobile; normalize to 10-digit IN. */
+  resolveStudentContact(student: {
+    preferredMobileNumber?: string | null;
+    studentMobile?: string | null;
+  }): string | null {
+    const raw =
+      student.preferredMobileNumber?.trim() ||
+      student.studentMobile?.trim() ||
+      '';
+    if (!raw) return null;
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length >= 10) return digits.slice(-10);
+    return null;
+  }
+
+  /**
+   * Resolve student_credentials for portal login.
+   * Matches username, admission_number, or PIN (via students.pin_no → student_id).
+   */
+  async findStudentCredentials(loginId: string): Promise<{
+    credentials: SdmsStudentCredentials;
+    student: {
+      id: number;
+      studentName: string;
+      admissionNumber: string | null;
+      pinNo: string | null;
+      college: string | null;
+      course: string | null;
+      branch: string | null;
+      batch: string | null;
+      section: string | null;
+      currentYear: number;
+      currentSemester: number;
+      studentStatus: string | null;
+      studentMobile: string | null;
+      preferredMobileNumber: string | null;
+      email: string | null;
+    };
+  } | null> {
+    const id = loginId.trim();
+    if (!id) return null;
+
+    // Prefer exact username / admission match on credentials
+    let credentials = await this.credentialsRepo
+      .createQueryBuilder('c')
+      .where('LOWER(c.username) = LOWER(:id)', { id })
+      .orWhere('LOWER(c.admissionNumber) = LOWER(:id)', { id })
+      .getOne();
+
+    let student: {
+      id: number;
+      studentName: string;
+      admissionNumber: string | null;
+      pinNo: string | null;
+      college: string | null;
+      course: string | null;
+      branch: string | null;
+      batch: string | null;
+      section: string | null;
+      currentYear: number;
+      currentSemester: number;
+      studentStatus: string | null;
+      studentMobile: string | null;
+      preferredMobileNumber: string | null;
+      email: string | null;
+    } | null = null;
+
+    if (credentials) {
+      student = await this.studentRepo.findOne({
+        where: { id: credentials.studentId },
+        select: {
+          id: true,
+          studentName: true,
+          admissionNumber: true,
+          pinNo: true,
+          college: true,
+          course: true,
+          branch: true,
+          batch: true,
+          section: true,
+          currentYear: true,
+          currentSemester: true,
+          studentStatus: true,
+          studentMobile: true,
+          preferredMobileNumber: true,
+          email: true,
+        },
+      });
+    } else {
+      // Login id may be PIN / roll — look up student then credentials
+      const byPin = await this.findStudentByPin(id);
+      if (byPin) {
+        student = byPin;
+      } else {
+        const result = await this.listStudents({ pinNo: id, limit: 20 });
+        const found =
+          result.items.find(
+            (s) => s.pinNo?.toLowerCase() === id.toLowerCase(),
+          ) ?? null;
+        if (found) {
+          student = {
+            id: found.id,
+            studentName: found.studentName,
+            admissionNumber: found.admissionNumber,
+            pinNo: found.pinNo,
+            college: found.college,
+            course: found.course,
+            branch: found.branch,
+            batch: found.batch,
+            section: found.section,
+            currentYear: found.currentYear,
+            currentSemester: found.currentSemester,
+            studentStatus: found.studentStatus,
+            studentMobile: found.studentMobile ?? null,
+            preferredMobileNumber: found.preferredMobileNumber ?? null,
+            email: found.email ?? null,
+          };
+        }
+      }
+      if (!student) return null;
+
+      credentials = await this.credentialsRepo.findOne({
+        where: { studentId: student.id },
+      });
+    }
+
+    if (!credentials?.passwordHash || !student) return null;
+    return { credentials, student };
   }
 
   async getStudent(id: number) {
@@ -754,6 +942,7 @@ export function createSdmsService(dataSource: DataSource): SdmsService {
     dataSource.getRepository(SdmsSemester),
     dataSource.getRepository(SdmsStudent),
     dataSource.getRepository(SdmsStudentSection),
+    dataSource.getRepository(SdmsStudentCredentials),
     dataSource,
   );
 }

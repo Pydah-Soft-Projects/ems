@@ -14,8 +14,31 @@ import {
   SubjectMappingEntry,
   CreateSubjectMappingInput,
   UpdateSubjectMappingInput,
+  ReplaceScopeMappingInput,
   SubjectMappingFilters,
 } from '@/types/subject';
+import {
+  Exam,
+  CreateExamInput,
+  UpdateExamInput,
+  PublishExamInput,
+  ExamStatus,
+  EligibleStudentsResponse,
+  ExamAnalytics,
+  StudentExamListItem,
+  StudentExamDetail,
+  CreateExamApplicationInput,
+  HallTicket,
+} from '@/types/exam';
+import {
+  FeeCollectionLookup,
+  ExamFeeRecord,
+  FeeBreakdownItem,
+  OfflinePaymentInput,
+  Payment,
+  PaymentResult,
+  PaymentMethod,
+} from '@/types/fee';
 import {
   SdmsCollege,
   SdmsCourse,
@@ -173,6 +196,7 @@ export const api = {
     if (filters.course) params.set('course', filters.course);
     if (filters.branch) params.set('branch', filters.branch);
     if (filters.batch) params.set('batch', filters.batch);
+    if (filters.yearOfStudy) params.set('yearOfStudy', String(filters.yearOfStudy));
     if (filters.semester) params.set('semester', String(filters.semester));
     const query = params.toString() ? `?${params.toString()}` : '';
     return request<SubjectMappingEntry[]>(`/subject-mappings${query}`);
@@ -185,6 +209,13 @@ export const api = {
   createSubjectMapping(data: CreateSubjectMappingInput) {
     return request<SubjectMappingEntry[]>('/subject-mappings', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  replaceSubjectMappingScope(data: ReplaceScopeMappingInput) {
+    return request<SubjectMappingEntry[]>('/subject-mappings/scope', {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },
@@ -315,7 +346,268 @@ export const api = {
     return request<SdmsStudent>(`/sdms/students/${id}`);
   },
 
-  getExams() {
-    return request<unknown[]>('/exams');
+  getExams(status?: ExamStatus) {
+    const query = status ? `?status=${status}` : '';
+    return request<Exam[]>(`/exams${query}`);
+  },
+
+  getExam(id: number) {
+    return request<Exam>(`/exams/${id}`);
+  },
+
+  createExam(data: CreateExamInput) {
+    return request<Exam>('/exams', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateExam(id: number, data: UpdateExamInput) {
+    return request<Exam>(`/exams/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  submitExam(id: number) {
+    return request<Exam>(`/exams/${id}/submit`, { method: 'POST' });
+  },
+
+  approveExam(id: number) {
+    return request<Exam>(`/exams/${id}/approve`, { method: 'POST' });
+  },
+
+  rejectExam(id: number, remarks: string) {
+    return request<Exam>(`/exams/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ remarks }),
+    });
+  },
+
+  publishExam(id: number, data: PublishExamInput = {}) {
+    return request<Exam>(`/exams/${id}/publish`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  releaseHallTickets(id: number) {
+    return request<Exam>(`/exams/${id}/release-hall-tickets`, {
+      method: 'POST',
+    });
+  },
+
+  getExamHallTickets(id: number) {
+    return request<{
+      exam: {
+        id: number;
+        name: string;
+        hallTicketsReleasedAt: string | null;
+        status: string;
+      };
+      tickets: HallTicket[];
+      total: number;
+    }>(`/exams/${id}/hall-tickets`);
+  },
+
+  getExamHallTicket(examId: number, applicationId: number) {
+    return request<HallTicket>(
+      `/exams/${examId}/hall-tickets/${applicationId}`,
+    );
+  },
+
+  getStudentHallTickets() {
+    return request<HallTicket[]>('/student/hall-tickets');
+  },
+
+  getStudentHallTicket(applicationId: number) {
+    return request<HallTicket>(`/student/hall-tickets/${applicationId}`);
+  },
+
+  getExamEligibleStudents(id: number) {
+    return request<EligibleStudentsResponse>(`/exams/${id}/eligible-students`);
+  },
+
+  getExamAnalytics(id: number) {
+    return request<ExamAnalytics>(`/exams/${id}/analytics`);
+  },
+
+  getStudentExams() {
+    return request<StudentExamListItem[]>('/student/exams');
+  },
+
+  getStudentExam(id: number) {
+    return request<StudentExamDetail>(`/student/exams/${id}`);
+  },
+
+  createStudentExamApplication(
+    examId: number,
+    data: CreateExamApplicationInput,
+  ) {
+    return request<{
+      application: {
+        id: number;
+        examId: number;
+        selectedSubjectIds: number[];
+        feeBreakdown: FeeBreakdownItem[];
+        feeRecordId: number;
+        submittedAt: string;
+      };
+      feeRecord: ExamFeeRecord;
+    }>(`/student/exams/${examId}/applications`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  lookupFeeCollection(rollNumber: string) {
+    const q = encodeURIComponent(rollNumber.trim());
+    return request<FeeCollectionLookup>(`/fees/collection?rollNumber=${q}`);
+  },
+
+  getFeeRecords(
+    filters: {
+      examId?: number;
+      rollNumber?: string;
+      status?: 'pending' | 'paid';
+    } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (filters.examId) params.set('examId', String(filters.examId));
+    if (filters.rollNumber) params.set('rollNumber', filters.rollNumber.trim());
+    if (filters.status) params.set('status', filters.status);
+    const query = params.toString() ? `?${params}` : '';
+    return request<ExamFeeRecord[]>(`/fees/records${query}`);
+  },
+
+  getFeeRecord(id: number) {
+    return request<ExamFeeRecord>(`/fees/records/${id}`);
+  },
+
+  payOffline(data: OfflinePaymentInput) {
+    return request<PaymentResult>('/fees/pay-offline', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getPayments(feeRecordId?: number, rollNumber?: string) {
+    const params = new URLSearchParams();
+    if (feeRecordId) params.set('feeRecordId', String(feeRecordId));
+    if (rollNumber) params.set('rollNumber', rollNumber.trim());
+    const query = params.toString() ? `?${params}` : '';
+    return request<Payment[]>(`/fees/payments${query}`);
+  },
+
+  getPayment(id: number) {
+    return request<Payment>(`/fees/payments/${id}`);
+  },
+
+  voidPayment(paymentId: number, reason?: string) {
+    return request<PaymentResult>(`/fees/payments/${paymentId}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  markFeeUnpaid(feeRecordId: number, reason?: string) {
+    return request<{ payment: Payment | null; feeRecord: ExamFeeRecord }>(
+      `/fees/records/${feeRecordId}/mark-unpaid`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      },
+    );
+  },
+
+  studentLogin(pinNo: string, password: string) {
+    return request<LoginResponse>('/auth/student/login', {
+      method: 'POST',
+      body: JSON.stringify({ pinNo, password }),
+    });
+  },
+
+  getStudentFees() {
+    return request<ExamFeeRecord[]>('/student/fees');
+  },
+
+  payStudentFee(
+    feeRecordId: number,
+    data: { paymentMethod?: PaymentMethod; transactionReference?: string } = {},
+  ) {
+    return request<PaymentResult>(`/student/fees/${feeRecordId}/pay`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getStudentPayment(id: number) {
+    return request<Payment>(`/student/payments/${id}`);
+  },
+
+  getRazorpayStatus() {
+    return request<{ enabled: boolean; configured: boolean; ready: boolean }>(
+      '/fees/razorpay/status',
+    );
+  },
+
+  createRazorpayOrder(
+    feeRecordId: number,
+    paymentMethod: PaymentMethod = 'upi',
+  ) {
+    return request<import('./razorpayCheckout').RazorpayOrderResponse>(
+      '/fees/razorpay/order',
+      {
+        method: 'POST',
+        body: JSON.stringify({ feeRecordId, paymentMethod }),
+      },
+    );
+  },
+
+  verifyRazorpayPayment(data: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+    paymentId?: number;
+  }) {
+    return request<import('./razorpayCheckout').RazorpayVerifyResult>(
+      '/fees/razorpay/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    );
+  },
+
+  getPaymentStatus(id: number) {
+    return request<{
+      paymentId: number;
+      status: string;
+      feeRecordId: number;
+      feeStatus: string;
+      receiptNumber: string;
+      transactionReference: string | null;
+      paidAt: string;
+    }>(`/fees/payments/${id}/status`);
+  },
+
+  getPaymentSettings() {
+    return request<import('./razorpayCheckout').PaymentGatewaySettings>(
+      '/settings/payments',
+    );
+  },
+
+  updatePaymentSettings(data: {
+    enabled?: boolean;
+    razorpayKeyId?: string;
+    razorpayKeySecret?: string;
+  }) {
+    return request<import('./razorpayCheckout').PaymentGatewaySettings>(
+      '/settings/payments',
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      },
+    );
   },
 };

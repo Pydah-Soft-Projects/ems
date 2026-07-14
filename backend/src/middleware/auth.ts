@@ -15,6 +15,15 @@ export function createAuthMiddleware(services: Services) {
 
       const token = header.slice(7);
       const payload = jwt.verify(token, config.jwt.secret) as AuthUser;
+
+      if (payload.role === 'student') {
+        if (!payload.pinNo || !payload.studentId) {
+          throw AppError.unauthorized();
+        }
+        req.user = payload;
+        return next();
+      }
+
       const user = await services.auth.validateUser(payload.sub);
       if (!user) throw AppError.unauthorized();
 

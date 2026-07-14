@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -12,7 +13,9 @@ import { Regulation } from '../../regulations/schemas/regulation.schema';
 import { Subject } from './subject.schema';
 
 @Entity('subject_mapping_entries')
-@Unique([
+@Index('IDX_sme_regulationId', ['regulationId'])
+@Index('IDX_sme_subjectId', ['subjectId'])
+@Unique('UQ_sme_assignment_scope', [
   'regulationId',
   'subjectId',
   'collegeId',
@@ -21,6 +24,7 @@ import { Subject } from './subject.schema';
   'batch',
   'yearOfStudy',
   'semester',
+  'sectionKey',
 ])
 export class SubjectMappingEntry {
   @PrimaryGeneratedColumn()
@@ -66,6 +70,18 @@ export class SubjectMappingEntry {
 
   @Column({ type: 'int' })
   semester: number;
+
+  /** `all` = every section / no section split; `selected` = only `sections` */
+  @Column({ type: 'varchar', length: 20, default: 'all' })
+  sectionMode: 'all' | 'selected';
+
+  /** Section names when sectionMode is `selected`; empty when `all` */
+  @Column({ type: 'simple-json', nullable: true })
+  sections: string[] | null;
+
+  /** Unique helper: `*` for all, otherwise sorted section names joined by `|` */
+  @Column({ type: 'varchar', length: 255, default: '*' })
+  sectionKey: string;
 
   @CreateDateColumn()
   createdAt: Date;

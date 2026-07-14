@@ -19,7 +19,7 @@ draft → pending_approval → approved → published
 | `name` | Examination name |
 | `type` | `regular` \| `supply` \| `improvement` \| `special_supply` |
 | `regulationId` | Regulation |
-| `course`, `branch`, `batch`, `semester` | Academic scope |
+| `college`, `course`, `branch`, `batch`, `yearOfStudy`, `semester` | Academic scope (year/sem from SDMS branch config, same as subject mapping) |
 | `examSubjects[]` | `{ subjectId, fee }` per subject |
 | `packageFee` | Optional package fee when all subjects selected |
 | `examinationStartDate` / `examinationEndDate` | Exam dates |
@@ -56,6 +56,6 @@ draft → pending_approval → approved → published
 
 `backend/src/exam/`
 
-## Frontend (planned)
+## Frontend
 
-`/dashboard/exams` — multi-step wizard: scope → subjects → fees → dates → review
+`/dashboard/exams` — status filters, create wizard (scope → subjects & fees → dates → review), view detail, submit / approve / reject / publish actions.

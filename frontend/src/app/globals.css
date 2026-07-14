@@ -49,3 +49,9 @@ body {
   background: var(--sidebar-border);
   border-radius: 4px;
 }
+
+/* Screen preview — A5 landscape width */
+.fee-receipt {
+  width: 210mm;
+  max-width: 100%;
+}

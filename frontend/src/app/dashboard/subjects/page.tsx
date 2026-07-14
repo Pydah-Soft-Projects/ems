@@ -8,7 +8,7 @@ import {
   CreateSubjectInput,
   SubjectMappingEntry,
   CreateSubjectMappingInput,
-  SubjectMappingAssignment,
+  ReplaceScopeMappingInput,
 } from '@/types/subject';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -154,14 +154,11 @@ export default function SubjectsPage() {
     }
   }
 
-  async function handleUpdateMapping(
-    id: number,
-    data: SubjectMappingAssignment,
-  ) {
+  async function handleReplaceScope(data: ReplaceScopeMappingInput) {
     setSaving(true);
     setActionError('');
     try {
-      await api.updateSubjectMapping(id, data);
+      await api.replaceSubjectMappingScope(data);
       setFormOpen(false);
       setSelectedMapping(null);
       await loadMappings();
@@ -208,7 +205,7 @@ export default function SubjectsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Subjects"
-        description="Create subjects under a regulation, then map them to colleges, branches, and batches from the regulation scope."
+        description="Create subjects under a regulation, then map academic scopes (college → branch → year/sem → sections) to subjects — both assignment styles share one table."
         action={
           <Button onClick={openCreate}>
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -305,8 +302,8 @@ export default function SubjectsPage() {
               ? 'Update subject details. Code and regulation cannot be changed.'
               : 'Add a subject under a regulation. College, branch, and batch mapping is done separately.'
             : selectedMapping
-              ? 'Update the subjects linked to this academic scope.'
-              : 'Map subjects to colleges, programmes, branches, and batches from the regulation scope.'
+              ? 'Full mapping dialog — change college, branch, year, semester, sections, and subjects for this scope. Same rows update for both views.'
+              : 'Choose Scope → subjects (daily-life) or Subject → scopes. Both write the same mapping table.'
         }
       >
         {isSubjectTab ? (
@@ -321,10 +318,11 @@ export default function SubjectsPage() {
         ) : (
           <MappingForm
             regulations={regulations}
+            allMappings={mappings}
             initial={selectedMapping}
             defaultRegulationId={regulationFilter}
             onSubmit={handleSaveMapping}
-            onUpdate={handleUpdateMapping}
+            onReplaceScope={handleReplaceScope}
             onCancel={() => setFormOpen(false)}
             loading={saving}
           />

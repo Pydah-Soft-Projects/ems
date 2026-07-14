@@ -131,6 +131,7 @@ async function run() {
           batch: '2022-2026',
           yearOfStudy: 3,
           semester: 5,
+          sectionMode: 'all',
         },
         {
           subjectId: s2.id,
@@ -143,6 +144,7 @@ async function run() {
           batch: '2022-2026',
           yearOfStudy: 3,
           semester: 5,
+          sectionMode: 'all',
         },
         {
           subjectId: s3.id,
@@ -155,6 +157,7 @@ async function run() {
           batch: '2022-2026',
           yearOfStudy: 3,
           semester: 5,
+          sectionMode: 'all',
         },
       ],
     });
@@ -163,14 +166,16 @@ async function run() {
     const exam = await services.exam.create({
       name: 'B.Tech 5th Sem Regular May 2026',
       regulationId: regulation.id,
+      college: 'Simulation College',
       course: 'B.Tech',
       branch: 'CSE',
       batch: '2022-2026',
+      yearOfStudy: 3,
       semester: 5,
       subjects: [
-        { subjectId: s1.id, fee: 180 },
-        { subjectId: s2.id, fee: 180 },
-        { subjectId: s3.id, fee: 180 },
+        { subjectId: s1.id, fee: 180, examDate: '2026-05-10' },
+        { subjectId: s2.id, fee: 180, examDate: '2026-05-12' },
+        { subjectId: s3.id, fee: 180, examDate: '2026-05-14' },
       ],
       packageFee: 500,
       applicationStartDate: '2026-04-01',
@@ -210,10 +215,13 @@ async function run() {
       aliceFee ? `baseFee=${aliceFee.baseFee}` : '',
     );
 
-    await services.exam.payOnline(aliceFee!.id, {
+    await services.exam.payOffline({
+      feeRecordId: aliceFee!.id,
       paymentMethod: PaymentMethod.UPI,
+      collectedBy: 'Self-service counter',
+      remarks: 'Simulated online/UPI collection',
     });
-    record('Online payment', true);
+    record('Online-style payment (offline UPI record)', true);
 
     await services.exam.payOffline({
       studentRollNumber: '21CS002',

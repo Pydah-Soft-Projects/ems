@@ -54,4 +54,11 @@ export default () => ({
     useSqlite: process.env.SIMULATE_USE_SQLITE === 'true',
     sqlitePath: process.env.SIMULATE_SQLITE_PATH || './data/simulate.sqlite',
   },
+
+  /** Optional env fallback when Settings UI credentials are empty */
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID || '',
+    keySecret: process.env.RAZORPAY_KEY_SECRET || '',
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
+  },
 });

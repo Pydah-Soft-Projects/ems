@@ -33,6 +33,9 @@ export interface SubjectMappingAssignmentDto {
   batch: string;
   yearOfStudy: number;
   semester: number;
+  /** Default `all` when branch has no sections or user picks all */
+  sectionMode?: 'all' | 'selected';
+  sections?: string[];
 }
 
 export interface CreateSubjectMappingBulkDto {
@@ -41,3 +44,62 @@ export interface CreateSubjectMappingBulkDto {
 }
 
 export type UpdateSubjectMappingDto = Partial<SubjectMappingAssignmentDto>;
+
+/** Replace all subjects for one academic scope (same table as per-subject assignments). */
+export interface ReplaceScopeMappingDto {
+  regulationId: number;
+  collegeId: number;
+  collegeName: string;
+  courseId: number;
+  courseName: string;
+  branchId: number;
+  branchName: string;
+  batch: string;
+  yearOfStudy: number;
+  semester: number;
+  sectionMode?: 'all' | 'selected';
+  sections?: string[];
+  subjectIds: number[];
+  /** When editing, if scope identity changed, clear these old rows first */
+  previous?: {
+    collegeId: number;
+    courseId: number;
+    branchId: number;
+    batch: string;
+    yearOfStudy: number;
+    semester: number;
+    sectionKey: string;
+  };
+}
+
+export function buildSectionKey(
+  sectionMode: 'all' | 'selected' = 'all',
+  sections?: string[] | null,
+): string {
+  if (sectionMode !== 'selected' || !sections?.length) return '*';
+  return [...new Set(sections.map((s) => s.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+    .join('|');
+}
+
+export function normalizeSectionFields(input: {
+  sectionMode?: 'all' | 'selected';
+  sections?: string[] | null;
+}): {
+  sectionMode: 'all' | 'selected';
+  sections: string[] | null;
+  sectionKey: string;
+} {
+  const mode = input.sectionMode ?? 'all';
+  if (mode !== 'selected' || !input.sections?.length) {
+    return { sectionMode: 'all', sections: null, sectionKey: '*' };
+  }
+  const sections = [
+    ...new Set(input.sections.map((s) => s.trim()).filter(Boolean)),
+  ].sort((a, b) => a.localeCompare(b));
+  return {
+    sectionMode: 'selected',
+    sections,
+    sectionKey: buildSectionKey('selected', sections),
+  };
+}

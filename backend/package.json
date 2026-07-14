@@ -22,6 +22,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.7.0",
     "mysql2": "^3.11.3",
+    "razorpay": "^2.9.6",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.20"
   },

@@ -36,6 +36,20 @@ export class SdmsStudent {
   @Column({ type: 'varchar', length: 50, name: 'pin_no', nullable: true })
   pinNo: string | null;
 
+  @Column({ type: 'varchar', length: 20, name: 'student_mobile', nullable: true })
+  studentMobile: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    name: 'preferred_mobile_number',
+    nullable: true,
+  })
+  preferredMobileNumber: string | null;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  email: string | null;
+
   @Column({ type: 'varchar', length: 50, name: 'student_status', nullable: true })
   studentStatus: string | null;
 

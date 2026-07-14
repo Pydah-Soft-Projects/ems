@@ -10,6 +10,7 @@ import { SdmsBranchAcademicYear } from '../sdms/entities/branch-academic-year.en
 import { SdmsSemester } from '../sdms/entities/semester.entity';
 import { SdmsStudent } from '../sdms/entities/student.entity';
 import { SdmsStudentSection } from '../sdms/entities/student-section.entity';
+import { SdmsStudentCredentials } from '../sdms/entities/student-credentials.entity';
 
 export const sdmsEntities = [
   SdmsCollege,
@@ -20,6 +21,7 @@ export const sdmsEntities = [
   SdmsSemester,
   SdmsStudent,
   SdmsStudentSection,
+  SdmsStudentCredentials,
 ];
 
 export function createStudentDataSource() {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { SubjectMappingEntry } from '@/types/subject';
 import { Regulation } from '@/types/regulation';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +18,25 @@ function regulationLabel(regulations: Regulation[], regulationId: number) {
   return reg ? reg.code : `#${regulationId}`;
 }
 
+function scopeKey(m: SubjectMappingEntry) {
+  return [
+    m.regulationId,
+    m.collegeId,
+    m.courseId,
+    m.branchId,
+    m.batch,
+    m.yearOfStudy,
+    m.semester,
+    m.sectionKey ?? '*',
+  ].join('|');
+}
+
+function sectionLabel(m: SubjectMappingEntry) {
+  return m.sectionMode === 'selected' && m.sections?.length
+    ? m.sections.join(', ')
+    : 'All';
+}
+
 export function MappingTable({
   mappings,
   regulations,
@@ -24,6 +44,23 @@ export function MappingTable({
   onEdit,
   onDelete,
 }: MappingTableProps) {
+  const [view, setView] = useState<'grouped' | 'flat'>('grouped');
+
+  const groups = useMemo(() => {
+    const map = new Map<
+      string,
+      { key: string; sample: SubjectMappingEntry; entries: SubjectMappingEntry[] }
+    >();
+    for (const m of mappings) {
+      const key = scopeKey(m);
+      if (!map.has(key)) {
+        map.set(key, { key, sample: m, entries: [] });
+      }
+      map.get(key)!.entries.push(m);
+    }
+    return Array.from(map.values());
+  }, [mappings]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -37,73 +74,218 @@ export function MappingTable({
       <div className="py-16 text-center">
         <p className="text-sm font-medium text-slate-900">No mappings found</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Assign subjects to branches, batches, years, and semesters from the
-          regulation scope.
+          Map an academic scope (college → branch → year/sem → sections) to
+          subjects, or assign subjects into scopes. Both store the same rows.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1100px] text-left text-sm">
-        <thead>
-          <tr className="border-b border-[var(--border)] bg-slate-50/80">
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Regulation</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Subject</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">College</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Programme</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Branch</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Batch</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Year</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Sem</th>
-            <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--border)]">
-          {mappings.map((mapping) => (
-            <tr key={mapping.id} className="transition hover:bg-slate-50/50">
-              <td className="px-5 py-4 font-medium text-slate-800">
-                {regulationLabel(regulations, mapping.regulationId)}
-              </td>
-              <td className="px-5 py-4">
-                <p className="font-semibold text-slate-900">
-                  {mapping.subject?.code ?? '—'}
-                </p>
-                <p className="text-xs text-[var(--muted)]">
-                  {mapping.subject?.name ?? ''}
-                </p>
-              </td>
-              <td className="px-5 py-4 text-slate-600">{mapping.collegeName}</td>
-              <td className="px-5 py-4 text-slate-600">{mapping.courseName}</td>
-              <td className="px-5 py-4 text-slate-600">{mapping.branchName}</td>
-              <td className="px-5 py-4 text-slate-600">{mapping.batch}</td>
-              <td className="px-5 py-4 text-slate-600">{mapping.yearOfStudy}</td>
-              <td className="px-5 py-4 text-slate-600">{mapping.semester}</td>
-              <td className="px-5 py-4">
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    className="!px-3 !py-1.5 text-xs"
-                    onClick={() => onEdit(mapping)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="!px-3 !py-1.5 text-xs !text-red-600 hover:!bg-red-50"
-                    onClick={() => onDelete(mapping)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <div className="flex items-center justify-end gap-2 border-b border-[var(--border)] px-5 py-3">
+        <span className="text-xs text-[var(--muted)]">View</span>
+        <div className="inline-flex rounded-md border border-[var(--border)] p-0.5">
+          <button
+            type="button"
+            onClick={() => setView('grouped')}
+            className={`rounded px-2.5 py-1 text-xs font-medium ${
+              view === 'grouped'
+                ? 'bg-[var(--primary)] text-white'
+                : 'text-slate-600'
+            }`}
+          >
+            By scope
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('flat')}
+            className={`rounded px-2.5 py-1 text-xs font-medium ${
+              view === 'flat'
+                ? 'bg-[var(--primary)] text-white'
+                : 'text-slate-600'
+            }`}
+          >
+            Flat rows
+          </button>
+        </div>
+      </div>
+
+      {view === 'grouped' ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] bg-slate-50/80">
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Regulation
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Academic scope
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Year / Sem
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Sections
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Subjects
+                </th>
+                <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {groups.map((group) => {
+                const m = group.sample;
+                return (
+                  <tr key={group.key} className="transition hover:bg-slate-50/50">
+                    <td className="px-5 py-4 font-medium text-slate-800">
+                      {regulationLabel(regulations, m.regulationId)}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      <p className="font-medium text-slate-800">
+                        {m.collegeName}
+                      </p>
+                      <p className="text-xs text-[var(--muted)]">
+                        {m.courseName} → {m.branchName} → {m.batch}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      Y{m.yearOfStudy} / S{m.semester}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600">
+                      {sectionLabel(m)}
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="font-medium text-slate-800">
+                        {group.entries.length} subject
+                        {group.entries.length !== 1 ? 's' : ''}
+                      </p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-[var(--muted)]">
+                        {group.entries
+                          .map((e) => e.subject?.code ?? `#${e.subjectId}`)
+                          .join(', ')}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          className="!px-3 !py-1.5 text-xs"
+                          onClick={() => onEdit(m)}
+                        >
+                          Edit scope
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="!px-3 !py-1.5 text-xs !text-red-600 hover:!bg-red-50"
+                          onClick={() => onDelete(m)}
+                        >
+                          Delete one
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] bg-slate-50/80">
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Regulation
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Subject
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  College
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Programme
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Branch
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Batch
+                </th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">Year</th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">Sem</th>
+                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                  Sections
+                </th>
+                <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)]">
+              {mappings.map((mapping) => (
+                <tr
+                  key={mapping.id}
+                  className="transition hover:bg-slate-50/50"
+                >
+                  <td className="px-5 py-4 font-medium text-slate-800">
+                    {regulationLabel(regulations, mapping.regulationId)}
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-semibold text-slate-900">
+                      {mapping.subject?.code ?? '—'}
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {mapping.subject?.name ?? ''}
+                    </p>
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">
+                    {mapping.collegeName}
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">
+                    {mapping.courseName}
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">
+                    {mapping.branchName}
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">{mapping.batch}</td>
+                  <td className="px-5 py-4 text-slate-600">
+                    {mapping.yearOfStudy}
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">
+                    {mapping.semester}
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">
+                    {sectionLabel(mapping)}
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        className="!px-3 !py-1.5 text-xs"
+                        onClick={() => onEdit(mapping)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="!px-3 !py-1.5 text-xs !text-red-600 hover:!bg-red-50"
+                        onClick={() => onDelete(mapping)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

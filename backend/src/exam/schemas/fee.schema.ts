@@ -2,13 +2,15 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
+  OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Exam } from './exam.schema';
-import { FeeStatus } from './exam.enums';
+import { ExamType, FeeStatus } from './exam.enums';
 
 @Entity('exam_fee_records')
 export class ExamFeeRecord {
@@ -21,6 +23,10 @@ export class ExamFeeRecord {
   @ManyToOne(() => Exam)
   @JoinColumn({ name: 'examId' })
   exam: Exam;
+
+  /** Enrollment type chosen by the student (regular / supply / …) */
+  @Column({ type: 'varchar', length: 30, default: ExamType.REGULAR })
+  examType: ExamType;
 
   /** Placeholder until SDMS integration */
   @Column({ type: 'varchar', length: 50 })
@@ -53,8 +59,63 @@ export class ExamFeeRecord {
   @OneToMany(() => Payment, (p) => p.feeRecord)
   payments: Payment[];
 
+  @OneToOne(() => ExamApplication, (app) => app.feeRecord)
+  application?: ExamApplication | null;
+
   @CreateDateColumn()
   createdAt: Date;
+}
+
+/**
+ * Student enrollment for an exam (type + subjects + consent). Creates the fee record.
+ * One application per student per exam type (Regular and Supply can both exist).
+ */
+@Entity('exam_applications')
+@Index('IDX_exam_applications_examId', ['examId'])
+@Index('UQ_exam_app_enrollment', ['examId', 'studentRollNumber', 'examType'], {
+  unique: true,
+})
+export class ExamApplication {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ type: 'int' })
+  examId: number;
+
+  @ManyToOne(() => Exam)
+  @JoinColumn({ name: 'examId' })
+  exam: Exam;
+
+  @Column({ type: 'varchar', length: 30, default: ExamType.REGULAR })
+  examType: ExamType;
+
+  @Column({ type: 'varchar', length: 50 })
+  studentRollNumber: string;
+
+  @Column({ type: 'varchar', length: 150 })
+  studentName: string;
+
+  @Column({ type: 'simple-json' })
+  selectedSubjectIds: number[];
+
+  @Column({ type: 'simple-json' })
+  feeBreakdown: { subjectId: number; subjectCode: string; fee: number }[];
+
+  @Column({ type: 'boolean', default: false })
+  declarationAccepted: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  consentAccepted: boolean;
+
+  @Column({ type: 'int' })
+  feeRecordId: number;
+
+  @OneToOne(() => ExamFeeRecord, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'feeRecordId' })
+  feeRecord: ExamFeeRecord;
+
+  @CreateDateColumn()
+  submittedAt: Date;
 }
 
 @Entity('payments')
@@ -85,10 +146,17 @@ export class Payment {
   receiptNumber: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  transactionReference: string;
+  transactionReference: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  collectedBy: string;
+  collectedBy: string | null;
+
+  /** Logged-in staff username/email who recorded the payment */
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  collectorUsername: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  remarks: string | null;
 
   @Column({ type: 'text', nullable: true })
   gatewayResponse: string;

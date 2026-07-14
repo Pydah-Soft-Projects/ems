@@ -3,6 +3,8 @@ import { ExamType, PaymentMethod } from '../schemas/exam.enums';
 export interface ExamSubjectFeeDto {
   subjectId: number;
   fee: number;
+  /** Required — date of this paper */
+  examDate: string;
 }
 
 export interface LateFeeSlabDto {
@@ -11,14 +13,30 @@ export interface LateFeeSlabDto {
   amount: number;
 }
 
+/** One branch audience; empty/omitted sections = all sections */
+export interface ExamScopeInputDto {
+  branch: string;
+  branchId?: number;
+  /** Specific sections; omit or empty = all sections */
+  sections?: string[];
+}
+
 export interface CreateExamDto {
   name: string;
+  /** Single type (legacy). Prefer `types` for Regular + Supply together. */
   type?: ExamType;
+  /** Allowed enrollment types on THIS exam (student picks at apply time) */
+  types?: ExamType[];
   regulationId: number;
+  college: string;
   course: string;
-  branch: string;
+  /** Legacy single branch — used when `scopes` omitted */
+  branch?: string;
   batch: string;
+  yearOfStudy: number;
   semester: number;
+  /** Multi-branch (+ section) audiences */
+  scopes?: ExamScopeInputDto[];
   subjects: ExamSubjectFeeDto[];
   packageFee?: number;
   examinationStartDate?: string;
@@ -44,7 +62,16 @@ export interface StudentRefDto {
 }
 
 export interface PublishExamDto {
+  /** @deprecated Fees are created on student enrollment, not publish */
   students?: StudentRefDto[];
+}
+
+export interface CreateExamApplicationDto {
+  /** Regular / supply / … — required when exam allows more than one */
+  examType?: ExamType;
+  selectedSubjectIds?: number[];
+  declarationAccepted: boolean;
+  consentAccepted: boolean;
 }
 
 export interface OnlinePaymentDto {
@@ -53,10 +80,13 @@ export interface OnlinePaymentDto {
 }
 
 export interface OfflinePaymentDto {
-  studentRollNumber: string;
-  examId: number;
+  feeRecordId?: number;
+  studentRollNumber?: string;
+  examId?: number;
   paymentMethod: PaymentMethod;
   bankName?: string;
   transactionNumber?: string;
   collectedBy: string;
+  collectorUsername?: string;
+  remarks?: string;
 }

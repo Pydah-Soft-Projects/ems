@@ -20,6 +20,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         router.replace('/login');
         return;
       }
+      if (stored.role === 'student') {
+        router.replace('/student');
+        return;
+      }
       try {
         await api.me();
         setUser(stored);

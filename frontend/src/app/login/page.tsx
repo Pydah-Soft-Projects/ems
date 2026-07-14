@@ -92,7 +92,10 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Authorized Super Admin access only
+          Authorized Super Admin access only ·{' '}
+          <a href="/student/login" className="text-slate-300 hover:underline">
+            Student login
+          </a>
         </p>
       </div>
     </div>
