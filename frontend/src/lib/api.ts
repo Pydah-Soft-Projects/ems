@@ -503,20 +503,15 @@ export const api = {
     return request<Payment>(`/fees/payments/${id}`);
   },
 
-  voidPayment(paymentId: number, reason?: string) {
-    return request<PaymentResult>(`/fees/payments/${paymentId}/void`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    });
+  voidPayment(_paymentId: number, _reason?: string) {
+    return Promise.reject(
+      new ApiError('Voiding payments is not allowed', 400),
+    );
   },
 
-  markFeeUnpaid(feeRecordId: number, reason?: string) {
-    return request<{ payment: Payment | null; feeRecord: ExamFeeRecord }>(
-      `/fees/records/${feeRecordId}/mark-unpaid`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ reason }),
-      },
+  markFeeUnpaid(_feeRecordId: number, _reason?: string) {
+    return Promise.reject(
+      new ApiError('Marking fees unpaid is not allowed', 400),
     );
   },
 

@@ -7,8 +7,6 @@ import { ApiError, api } from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { ConfirmDialog } from '@/components/ui/Dialog';
-import { TextareaField } from '@/components/ui/Field';
 import {
   ExamFeeRecord,
   OfflinePaymentInput,
@@ -50,15 +48,6 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [razorpayReady, setRazorpayReady] = useState(false);
   const [razorpayRecord, setRazorpayRecord] = useState<ExamFeeRecord | null>(
     null,
-  );
-  const [voidingId, setVoidingId] = useState<number | null>(null);
-  const [voidDialog, setVoidDialog] = useState<{
-    kind: 'payment' | 'fee';
-    id: number;
-    label: string;
-  } | null>(null);
-  const [voidReason, setVoidReason] = useState(
-    'Human error — correcting collection',
   );
 
   const load = async () => {
@@ -236,40 +225,6 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     }
   }
 
-  function openVoidDialog(
-    kind: 'payment' | 'fee',
-    id: number,
-    label: string,
-  ) {
-    setVoidDialog({ kind, id, label });
-    setVoidReason('Human error — correcting collection');
-    setError('');
-  }
-
-  async function confirmVoidOrMarkUnpaid() {
-    if (!voidDialog) return;
-    setVoidingId(voidDialog.id);
-    setError('');
-    try {
-      const reason = voidReason.trim() || undefined;
-      if (voidDialog.kind === 'payment') {
-        await api.voidPayment(voidDialog.id, reason);
-      } else {
-        await api.markFeeUnpaid(voidDialog.id, reason);
-      }
-      setVoidDialog(null);
-      await load();
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : 'Could not mark as unpaid.',
-      );
-    } finally {
-      setVoidingId(null);
-    }
-  }
-
   const displayName = studentName || sdms?.studentName || rollNumber;
   const initials = displayName
     .split(/\s+/)
@@ -301,31 +256,6 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
   return (
     <div className="space-y-4">
-      <ConfirmDialog
-        open={voidDialog != null}
-        onClose={() => !voidingId && setVoidDialog(null)}
-        onConfirm={confirmVoidOrMarkUnpaid}
-        title={
-          voidDialog?.kind === 'payment'
-            ? 'Void payment / mark unpaid'
-            : 'Mark fee as unpaid'
-        }
-        description={
-          voidDialog
-            ? `This will reverse "${voidDialog.label}". Provide an optional note.`
-            : undefined
-        }
-        confirmLabel={voidingId ? 'Updating…' : 'Confirm'}
-        tone="warning"
-        loading={!!voidingId}
-      >
-        <TextareaField
-          label="Reason (optional)"
-          value={voidReason}
-          onChange={(e) => setVoidReason(e.target.value)}
-          rows={3}
-        />
-      </ConfirmDialog>
       <RazorpayInlinePay
         open={razorpayRecord != null}
         record={razorpayRecord}
@@ -526,14 +456,13 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     <th className="px-4 py-3">Late</th>
                     <th className="px-4 py-3">Balance</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRecords.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={6}
                         className="px-4 py-10 text-center text-sm text-[var(--muted)]"
                       >
                         No fees found for this selection.
@@ -585,30 +514,6 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                             >
                               {r.status}
                             </Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            {r.status === 'paid' ? (
-                              <button
-                                type="button"
-                                disabled={voidingId === r.id}
-                                onClick={() =>
-                                  openVoidDialog(
-                                    'fee',
-                                    r.id,
-                                    r.exam?.name ?? `Fee #${r.id}`,
-                                  )
-                                }
-                                className="text-xs font-semibold text-amber-700 hover:underline disabled:opacity-50"
-                              >
-                                {voidingId === r.id
-                                  ? 'Updating…'
-                                  : 'Mark unpaid'}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-[var(--muted)]">
-                                —
-                              </span>
-                            )}
                           </td>
                         </tr>
                       );
@@ -684,43 +589,18 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            {p.status === 'success' && (
-                              <>
-                                <Link
-                                  href={`/dashboard/fees/receipt/${p.id}`}
-                                  className="text-xs font-semibold text-[var(--primary)] hover:underline"
-                                >
-                                  Receipt
-                                </Link>
-                                <button
-                                  type="button"
-                                  disabled={voidingId === p.id}
-                                  onClick={() =>
-                                    openVoidDialog(
-                                      'payment',
-                                      p.id,
-                                      p.receiptNumber,
-                                    )
-                                  }
-                                  className="text-xs font-semibold text-amber-700 hover:underline disabled:opacity-50"
-                                >
-                                  {voidingId === p.id
-                                    ? 'Voiding…'
-                                    : 'Void / unpaid'}
-                                </button>
-                              </>
-                            )}
-                            {p.status === 'voided' && (
+                            {p.status === 'success' ? (
+                              <Link
+                                href={`/dashboard/fees/receipt/${p.id}`}
+                                className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                              >
+                                Receipt
+                              </Link>
+                            ) : (
                               <span className="text-xs text-[var(--muted)]">
-                                Voided
+                                —
                               </span>
                             )}
-                            {p.status !== 'success' &&
-                              p.status !== 'voided' && (
-                                <span className="text-xs text-[var(--muted)]">
-                                  —
-                                </span>
-                              )}
                           </div>
                         </td>
                       </tr>
