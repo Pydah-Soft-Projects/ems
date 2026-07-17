@@ -1,6 +1,10 @@
 'use client';
 
 import { HallTicket } from '@/types/exam';
+import {
+  DocumentHeader,
+  DocumentMetaGrid,
+} from '@/components/documents/DocumentHeader';
 
 function formatDate(value?: string | null) {
   if (!value) return '—';
@@ -15,49 +19,43 @@ function formatDate(value?: string | null) {
 
 export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
   return (
-    <div className="rounded-2xl border-2 border-slate-800 bg-white p-6 shadow-sm print:border print:shadow-none">
-      <div className="border-b border-slate-300 pb-4 text-center">
-        <p className="text-xs uppercase tracking-widest text-slate-500">
-          Examination Management System
-        </p>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Hall Ticket</h1>
-        <p className="mt-1 text-sm text-slate-600">{ticket.examName}</p>
-        <p className="text-xs capitalize text-slate-500">
-          {ticket.examType.replace(/_/g, ' ')} · Y{ticket.yearOfStudy} / S
-          {ticket.semester}
-        </p>
-      </div>
+    <div className="mx-auto max-w-[210mm] rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6 shadow-[var(--shadow-md)] print:rounded-none print:border print:border-slate-800 print:shadow-none">
+      <DocumentHeader
+        collegeName={ticket.college || 'Examination Management System'}
+        documentTitle="Hall ticket"
+        subtitle={`${ticket.examType.replace(/_/g, ' ')} · Y${ticket.yearOfStudy} / S${ticket.semester}`}
+        rightSlot={
+          <p className="text-[10px] font-semibold uppercase text-slate-600">
+            Admit card
+          </p>
+        }
+      />
 
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="text-xs text-slate-500">Candidate</dt>
-          <dd className="font-semibold">{ticket.studentName}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">PIN / Roll</dt>
-          <dd className="font-semibold tabular-nums">
-            {ticket.studentRollNumber}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">College</dt>
-          <dd>{ticket.college ?? '—'}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">Programme / Branch</dt>
-          <dd>
-            {ticket.course} / {ticket.branch}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">Batch</dt>
-          <dd>{ticket.batch}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-slate-500">Fee status</dt>
-          <dd className="capitalize">{ticket.feeStatus}</dd>
-        </div>
-      </dl>
+      <p className="mt-3 text-center text-sm font-semibold text-slate-800">
+        {ticket.examName}
+      </p>
+
+      <DocumentMetaGrid
+        items={[
+          { label: 'Candidate', value: ticket.studentName },
+          {
+            label: 'PIN / Roll',
+            value: (
+              <span className="tabular-nums">{ticket.studentRollNumber}</span>
+            ),
+          },
+          { label: 'College', value: ticket.college ?? '—' },
+          {
+            label: 'Programme / Branch',
+            value: `${ticket.course} / ${ticket.branch}`,
+          },
+          { label: 'Batch', value: ticket.batch },
+          {
+            label: 'Fee status',
+            value: <span className="capitalize">{ticket.feeStatus}</span>,
+          },
+        ]}
+      />
 
       <div className="mt-6">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">
@@ -66,10 +64,18 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-300 text-xs uppercase text-slate-500">
-              <th className="py-2 pr-2">#</th>
-              <th className="py-2 pr-2">Code</th>
-              <th className="py-2 pr-2">Subject</th>
-              <th className="py-2">Exam date</th>
+              <th className="py-2 pr-2" scope="col">
+                #
+              </th>
+              <th className="py-2 pr-2" scope="col">
+                Code
+              </th>
+              <th className="py-2 pr-2" scope="col">
+                Subject
+              </th>
+              <th className="py-2" scope="col">
+                Exam date
+              </th>
             </tr>
           </thead>
           <tbody>

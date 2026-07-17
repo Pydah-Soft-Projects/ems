@@ -1,16 +1,33 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { findNavItem } from '@/config/navigation';
 import { Button } from '@/components/ui/Button';
-import { clearAuth } from '@/lib/auth';
-import { useRouter } from 'next/navigation';
+import { SoftSearchField } from '@/components/ui/SoftSearch';
+import { AuthUser, clearAuth } from '@/lib/auth';
 
 interface TopbarProps {
+  user: AuthUser;
   onMenuClick: () => void;
+  onCollapseClick: () => void;
+  collapsed: boolean;
 }
 
-export function Topbar({ onMenuClick }: TopbarProps) {
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function Topbar({
+  user,
+  onMenuClick,
+  onCollapseClick,
+  collapsed,
+}: TopbarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const current = findNavItem(pathname);
@@ -21,32 +38,70 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-white/85 px-4 backdrop-blur-xl sm:px-5 lg:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           type="button"
           onClick={onMenuClick}
-          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+          className="rounded-full p-2 text-[var(--sidebar-text)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)] lg:hidden"
           aria-label="Open menu"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-          </svg>
+          <MenuIcon />
         </button>
-        <div>
-          <p className="text-xs font-medium text-[var(--muted)]">Super Admin</p>
-          <h2 className="text-base font-semibold text-slate-900 sm:text-lg">
+        <button
+          type="button"
+          onClick={onCollapseClick}
+          className="hidden rounded-full p-2 text-[var(--sidebar-text)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)] lg:inline-flex"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <MenuIcon />
+        </button>
+
+        <div className="hidden min-w-0 md:block">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+            Staff portal
+          </p>
+          <h2 className="truncate text-sm font-semibold text-slate-900">
             {current?.label ?? 'Dashboard'}
           </h2>
         </div>
+
+        <SoftSearchField
+          className="ml-2 hidden max-w-md flex-1 lg:block"
+          placeholder="Search modules, students, exams…"
+          aria-label="Search portal"
+          readOnly
+          onFocus={(e) => e.currentTarget.blur()}
+        />
       </div>
 
-      <Button variant="secondary" onClick={handleLogout} className="!py-2 !px-3.5">
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-        </svg>
-        <span className="hidden sm:inline">Logout</span>
-      </Button>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-white py-1 pl-1 pr-3 shadow-[var(--shadow-sm)] sm:flex">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-indigo-400 text-[0.6875rem] font-bold text-white">
+            {getInitials(user.fullName)}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-slate-900">
+              {user.fullName.split(' ')[0]}
+            </p>
+            <p className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+              Super Admin
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleLogout}>
+          Logout
+        </Button>
+      </div>
     </header>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
   );
 }

@@ -1,11 +1,13 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { setAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Alert } from '@/components/ui/Alert';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,28 +35,28 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--sidebar)] px-4">
-      {/* Background pattern */}
-      <div className="pointer-events-none absolute inset-0 opacity-30">
-        <div className="absolute -left-20 -top-20 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
-        <div className="absolute -bottom-20 -right-20 h-96 w-96 rounded-full bg-indigo-500/20 blur-3xl" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--background)] px-4">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-[var(--primary)]/10 blur-3xl" />
+        <div className="absolute -bottom-24 -right-16 h-96 w-96 rounded-full bg-[var(--accent)]/10 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-[420px]">
-        {/* Brand above card */}
+      <div className="relative w-full max-w-[440px]">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)] text-lg font-bold text-white shadow-xl shadow-blue-500/30">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-[var(--primary)] text-lg font-bold text-white shadow-[var(--shadow-lg)]">
             EMS
           </div>
-          <h1 className="text-2xl font-bold text-white">Examination Portal</h1>
-          <p className="mt-1 text-sm text-slate-400">Management System</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Examination Portal
+          </h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">Staff workspace</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white p-8 shadow-2xl">
+        <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-8 shadow-[var(--shadow-lg)]">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Super Admin Sign In</h2>
+            <h2 className="text-xl font-bold text-slate-900">Staff sign-in</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Use your HRMS Super Admin credentials
+              Super Admin / examination staff credentials from HRMS
             </p>
           </div>
 
@@ -79,24 +81,26 @@ export default function LoginPage() {
               placeholder="Enter your password"
             />
 
-            {error && (
-              <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3.5 py-2.5 text-sm text-[var(--danger)]">
-                {error}
-              </div>
-            )}
+            {error ? <Alert tone="danger">{error}</Alert> : null}
 
-            <Button type="submit" disabled={loading} fullWidth>
-              {loading ? 'Signing in...' : 'Sign in to Portal'}
+            <Button type="submit" disabled={loading} fullWidth loading={loading}>
+              {loading ? 'Signing in…' : 'Sign in to portal'}
             </Button>
           </form>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-500">
-          Authorized Super Admin access only ·{' '}
-          <a href="/student/login" className="text-slate-300 hover:underline">
-            Student login
-          </a>
-        </p>
+        <div className="mt-6 space-y-2 text-center text-sm text-[var(--muted)]">
+          <p>Authorized staff access only</p>
+          <p>
+            Student applying for exams?{' '}
+            <Link
+              href="/student/login"
+              className="font-semibold text-[var(--primary)] hover:underline"
+            >
+              Go to Student Portal
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

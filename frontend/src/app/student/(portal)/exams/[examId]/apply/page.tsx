@@ -74,25 +74,11 @@ export default function StudentExamApplyPage({
       if (open.length === 1) setEnrollType(open[0]);
       else setEnrollType('');
 
-      // If only pending payment left for a type already applied, jump to pay
+      // Pending payment for any type → unified application lifecycle page
       const pendingApp = res.applications?.find((a) => a.feeStatus === 'pending');
-      if (res.alreadyApplied && pendingApp) {
-        const fees = await api.getStudentFees();
-        const found =
-          fees.find((f) => f.id === pendingApp.feeRecordId) ?? null;
-        setFeeRecord(found);
-        setEnrollType(pendingApp.examType);
-        if (found?.status === 'paid') {
-          const paid = found.payments?.find((p) => p.status === 'success');
-          if (paid) {
-            router.replace(`/student/receipt/${paid.id}`);
-            return;
-          }
-        }
-        setStep(2);
-      } else if (res.alreadyApplied && !pendingApp) {
-        // All types applied and paid — stay on info, show message via empty openTypes
-        setStep(1);
+      if (pendingApp?.feeRecordId) {
+        router.replace(`/student/applications/${pendingApp.feeRecordId}`);
+        return;
       }
     } catch (err) {
       setError(
@@ -173,7 +159,9 @@ export default function StudentExamApplyPage({
         consentAccepted: true,
       });
       setFeeRecord(result.feeRecord);
-      setStep(2);
+      // Continue payment on the unified application lifecycle page
+      router.push(`/student/applications/${result.feeRecord.id}`);
+      return;
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -208,11 +196,12 @@ export default function StudentExamApplyPage({
 
   return (
     <div className="space-y-5">
-      {feeRecord && (
+      {feeRecord ? (
         <RazorpayInlinePay
           open={payOpen}
           record={feeRecord}
           paymentMethod={method}
+          variant="panel"
           prefillName={user?.fullName}
           prefillContact={user?.mobile ?? undefined}
           prefillEmail={user?.email ?? undefined}
@@ -222,14 +211,14 @@ export default function StudentExamApplyPage({
             router.push(`/student/receipt/${paymentId}`);
           }}
         />
-      )}
+      ) : null}
 
       <div>
         <Link
-          href="/student"
+          href="/student/exams"
           className="text-xs font-medium text-[var(--primary)] hover:underline"
         >
-          ← My examinations
+          ← Examinations
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">
           Apply — {exam.name}
@@ -243,7 +232,7 @@ export default function StudentExamApplyPage({
         <li
           className={`rounded-xl border px-4 py-3 text-sm ${
             step === 1
-              ? 'border-blue-500 bg-blue-50 text-blue-900'
+              ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
               : 'border-[var(--border)] bg-white text-slate-600'
           }`}
         >
@@ -255,7 +244,7 @@ export default function StudentExamApplyPage({
         <li
           className={`rounded-xl border px-4 py-3 text-sm ${
             step === 2
-              ? 'border-blue-500 bg-blue-50 text-blue-900'
+              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-hover)]'
               : 'border-[var(--border)] bg-white text-slate-600'
           }`}
         >
@@ -274,7 +263,7 @@ export default function StudentExamApplyPage({
 
       {step === 1 && (
         <div className="space-y-4">
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-900">
                 Candidate
@@ -292,7 +281,7 @@ export default function StudentExamApplyPage({
             </dl>
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
             <h2 className="mb-3 text-base font-semibold text-slate-900">
               Applying as
             </h2>
@@ -311,7 +300,7 @@ export default function StudentExamApplyPage({
                     key={t}
                     className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
                       enrollType === t
-                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                        ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
                         : 'border-[var(--border)]'
                     }`}
                   >
@@ -339,7 +328,7 @@ export default function StudentExamApplyPage({
             )}
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-900">
                 Subjects
@@ -394,7 +383,7 @@ export default function StudentExamApplyPage({
             </p>
           </section>
 
-          <section className="space-y-3 rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <section className="space-y-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
             <label className="flex items-start gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -446,7 +435,7 @@ export default function StudentExamApplyPage({
 
       {step === 2 && feeRecord && (
         <div className="space-y-4">
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
             <h2 className="mb-3 text-base font-semibold text-slate-900">
               Application fee
             </h2>
@@ -464,7 +453,7 @@ export default function StudentExamApplyPage({
             )}
           </section>
 
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm">
+          <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
             <h2 className="mb-3 text-base font-semibold text-slate-900">
               Payment method
             </h2>

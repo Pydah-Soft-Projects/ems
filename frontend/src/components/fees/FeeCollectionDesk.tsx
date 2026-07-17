@@ -7,6 +7,8 @@ import { ApiError, api } from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/Dialog';
+import { TextareaField } from '@/components/ui/Field';
 import {
   ExamFeeRecord,
   OfflinePaymentInput,
@@ -50,6 +52,14 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     null,
   );
   const [voidingId, setVoidingId] = useState<number | null>(null);
+  const [voidDialog, setVoidDialog] = useState<{
+    kind: 'payment' | 'fee';
+    id: number;
+    label: string;
+  } | null>(null);
+  const [voidReason, setVoidReason] = useState(
+    'Human error — correcting collection',
+  );
 
   const load = async () => {
     setLoading(true);
@@ -226,24 +236,28 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     }
   }
 
-  async function voidOrMarkUnpaid(
+  function openVoidDialog(
     kind: 'payment' | 'fee',
     id: number,
     label: string,
   ) {
-    const reason = window.prompt(
-      `Mark "${label}" as unpaid?\n\nOptional note (e.g. wrong amount / wrong student):`,
-      'Human error — correcting collection',
-    );
-    if (reason === null) return;
-    setVoidingId(id);
+    setVoidDialog({ kind, id, label });
+    setVoidReason('Human error — correcting collection');
+    setError('');
+  }
+
+  async function confirmVoidOrMarkUnpaid() {
+    if (!voidDialog) return;
+    setVoidingId(voidDialog.id);
     setError('');
     try {
-      if (kind === 'payment') {
-        await api.voidPayment(id, reason.trim() || undefined);
+      const reason = voidReason.trim() || undefined;
+      if (voidDialog.kind === 'payment') {
+        await api.voidPayment(voidDialog.id, reason);
       } else {
-        await api.markFeeUnpaid(id, reason.trim() || undefined);
+        await api.markFeeUnpaid(voidDialog.id, reason);
       }
+      setVoidDialog(null);
       await load();
     } catch (err) {
       setError(
@@ -287,10 +301,36 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={voidDialog != null}
+        onClose={() => !voidingId && setVoidDialog(null)}
+        onConfirm={confirmVoidOrMarkUnpaid}
+        title={
+          voidDialog?.kind === 'payment'
+            ? 'Void payment / mark unpaid'
+            : 'Mark fee as unpaid'
+        }
+        description={
+          voidDialog
+            ? `This will reverse "${voidDialog.label}". Provide an optional note.`
+            : undefined
+        }
+        confirmLabel={voidingId ? 'Updating…' : 'Confirm'}
+        tone="warning"
+        loading={!!voidingId}
+      >
+        <TextareaField
+          label="Reason (optional)"
+          value={voidReason}
+          onChange={(e) => setVoidReason(e.target.value)}
+          rows={3}
+        />
+      </ConfirmDialog>
       <RazorpayInlinePay
         open={razorpayRecord != null}
         record={razorpayRecord}
         paymentMethod="upi"
+        variant="overlay"
         prefillName={displayName}
         prefillContact={
           sdms?.preferredMobileNumber || sdms?.studentMobile || undefined
@@ -326,21 +366,23 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4 min-w-0">
           {/* Student banner */}
-          <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20">
+          <div className="overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-white shadow-[var(--shadow-md)]">
             <div className="flex flex-wrap items-center gap-4 px-5 py-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/20 text-lg font-bold">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-lg font-bold text-[var(--primary)]">
                 {initials || '?'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-xl font-bold">{displayName}</h2>
+                  <h2 className="truncate text-xl font-bold text-slate-900">
+                    {displayName}
+                  </h2>
                   {sdms?.course && (
-                    <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold uppercase">
+                    <span className="rounded-full bg-[var(--primary-soft)] px-2.5 py-0.5 text-xs font-semibold uppercase text-[var(--primary)]">
                       {sdms.course}
                     </span>
                   )}
                   {sdms?.branch && (
-                    <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-semibold uppercase">
+                    <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-semibold uppercase text-[var(--accent-hover)]">
                       {sdms.branch}
                     </span>
                   )}
@@ -366,11 +408,11 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   />
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-xs font-medium uppercase tracking-wide text-blue-100">
+              <div className="rounded-[var(--radius)] bg-[var(--accent-soft)] px-4 py-3 text-right">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent-hover)]">
                   Total due
                 </p>
-                <p className="text-3xl font-bold tabular-nums">
+                <p className="text-3xl font-bold tabular-nums text-slate-900">
                   {money(totalDue)}
                 </p>
               </div>
@@ -391,15 +433,15 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                         prev === y.year ? 'all' : y.year,
                       )
                     }
-                    className={`rounded-xl border bg-white p-4 text-left shadow-sm transition ${
+                    className={`rounded-[var(--radius-lg)] border bg-white p-4 text-left shadow-[var(--shadow-sm)] transition ${
                       active
-                        ? 'border-blue-500 ring-2 ring-blue-200'
-                        : 'border-[var(--border)] hover:border-blue-300'
+                        ? 'border-[var(--primary)] ring-2 ring-[var(--ring)]'
+                        : 'border-[var(--border)] hover:border-[var(--primary)]'
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-xs font-bold text-blue-600">
+                        <p className="text-xs font-bold text-[var(--primary)]">
                           Y{y.year}
                         </p>
                         <p className="text-sm font-semibold text-slate-900">
@@ -550,7 +592,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                                 type="button"
                                 disabled={voidingId === r.id}
                                 onClick={() =>
-                                  void voidOrMarkUnpaid(
+                                  openVoidDialog(
                                     'fee',
                                     r.id,
                                     r.exam?.name ?? `Fee #${r.id}`,
@@ -654,7 +696,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                                   type="button"
                                   disabled={voidingId === p.id}
                                   onClick={() =>
-                                    void voidOrMarkUnpaid(
+                                    openVoidDialog(
                                       'payment',
                                       p.id,
                                       p.receiptNumber,
@@ -692,7 +734,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
         {/* Collect sidebar */}
         <aside className="h-fit rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm xl:sticky xl:top-4">
-          <h3 className="text-center text-sm font-bold uppercase tracking-widest text-blue-600">
+          <h3 className="text-center text-xs font-bold uppercase tracking-widest text-[var(--primary)]">
             Collect fee
           </h3>
 
@@ -754,7 +796,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     onClick={() => setPaymentMethod(value)}
                     className={`rounded-lg px-2 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                       paymentMethod === value
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-[var(--primary)] text-white'
                         : 'border border-[var(--border)] bg-white text-slate-600'
                     }`}
                   >
@@ -870,7 +912,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
 function MetaChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-md bg-white/15 px-2 py-0.5 font-medium">
+    <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-0.5 font-medium text-[var(--muted)]">
       <span className="opacity-70">{label}: </span>
       {value}
     </span>

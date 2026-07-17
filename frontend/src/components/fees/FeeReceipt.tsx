@@ -1,6 +1,7 @@
 'use client';
 
 import { Payment } from '@/types/fee';
+import { DocumentHeader } from '@/components/documents/DocumentHeader';
 import { money, moneyPlain } from './money';
 import { buildReceiptVerificationUrl } from '@/lib/receiptVerification';
 
@@ -45,31 +46,17 @@ export function FeeReceipt({
   return (
     <div className="fee-receipt mx-auto bg-white text-black shadow-sm">
       <div className="border border-slate-800 p-4">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded bg-orange-500 text-xs font-bold text-white">
-              EMS
-            </div>
-            <div className="text-[10px] leading-tight text-slate-600">
-              <p className="font-bold text-slate-900">EMS PORTAL</p>
-              <p>Examinations</p>
-            </div>
-          </div>
-          <div className="flex-1 text-center">
-            <h1 className="text-sm font-bold uppercase tracking-wide">
-              {collegeName}
-            </h1>
-            {collegePlace ? (
-              <p className="text-[10px] uppercase text-slate-600">
-                {collegePlace}
-              </p>
-            ) : null}
-          </div>
-          <div className="text-right">
-            <p className="text-sm font-bold uppercase">Fee receipt</p>
-            <p className="text-[10px] text-slate-600">Student copy</p>
-          </div>
-        </div>
+        <DocumentHeader
+          collegeName={collegeName}
+          collegePlace={collegePlace}
+          documentTitle="Fee receipt"
+          subtitle="Student copy"
+          rightSlot={
+            <p className="font-mono text-[11px] font-bold text-slate-800">
+              {payment.receiptNumber}
+            </p>
+          }
+        />
 
         <div className="mt-3 grid grid-cols-3 gap-2 rounded border border-dashed border-slate-400 p-2 text-[10px]">
           <div className="space-y-1 border-r border-dashed border-slate-300 pr-2">

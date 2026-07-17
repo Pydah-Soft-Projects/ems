@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { AuthUser } from '@/lib/auth';
-import { navigation } from '@/config/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { AuthUser, clearAuth } from '@/lib/auth';
+import { findNavItem, navigation } from '@/config/navigation';
 import { NavIcon } from '@/components/icons/NavIcon';
-import { Badge } from '@/components/ui/Badge';
 
 function getInitials(name: string) {
   return name
@@ -18,57 +17,73 @@ function getInitials(name: string) {
 
 interface SidebarProps {
   user: AuthUser;
+  collapsed?: boolean;
   onNavigate?: () => void;
 }
 
-export function Sidebar({ user, onNavigate }: SidebarProps) {
+export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const activeItem = findNavItem(pathname);
+
+  function logout() {
+    clearAuth();
+    router.replace('/login');
+  }
 
   return (
-    <aside className="flex h-full w-[260px] shrink-0 flex-col bg-[var(--sidebar)] text-white">
-      {/* Brand */}
-      <div className="border-b border-[var(--sidebar-border)] px-5 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold shadow-lg shadow-blue-500/20">
+    <aside
+      className={`flex h-full shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] text-[var(--sidebar-text)] transition-[width] duration-200 ${
+        collapsed ? 'w-[84px]' : 'w-[260px]'
+      }`}
+    >
+      <div className={`border-b border-[var(--sidebar-border)] ${collapsed ? 'px-3 py-4' : 'px-4 py-4'}`}>
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+          <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius)] bg-[var(--primary)] text-xs font-bold text-white shadow-[var(--shadow-md)]">
             EMS
           </div>
-          <div>
-            <p className="text-sm font-semibold leading-tight">Examination Portal</p>
-            <p className="text-xs text-slate-400">Management System</p>
-          </div>
+          {!collapsed ? (
+            <div>
+              <p className="text-xs font-semibold leading-tight text-slate-900">
+                Examination Portal
+              </p>
+              <p className="text-xs text-[var(--muted)]">Management System</p>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-4">
+      <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-3">
         {navigation.map((group) => (
-          <div key={group.title} className="mb-5 last:mb-0">
-            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              {group.title}
-            </p>
-            <ul className="space-y-0.5">
+          <div key={group.title} className="mb-4 last:mb-0">
+            {!collapsed ? (
+              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">
+                {group.title}
+              </p>
+            ) : (
+              <div className="mb-2 h-px bg-[var(--sidebar-border)]" />
+            )}
+            <ul className="space-y-1">
               {group.items.map((item) => {
-                const active = item.exact
-                  ? pathname === item.href
-                  : pathname.startsWith(item.href);
+                const active = activeItem?.href === item.href;
                 return (
                   <li key={item.href}>
                     <Link
                       href={item.href}
                       onClick={onNavigate}
-                      className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+                      title={collapsed ? item.label : undefined}
+                      className={`group flex items-center rounded-[var(--radius)] text-xs font-semibold transition ${
+                        collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'
+                      } ${
                         active
-                          ? 'bg-[var(--primary)] text-white shadow-md shadow-blue-500/25'
-                          : 'text-slate-300 hover:bg-[var(--sidebar-hover)] hover:text-white'
+                          ? 'bg-[var(--sidebar-active-soft)] text-[var(--sidebar-active)] shadow-[var(--shadow-sm)]'
+                          : 'hover:bg-[var(--sidebar-hover)] hover:text-[var(--primary)]'
                       }`}
                     >
-                      <span className={active ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>
+                      <span className={active ? 'text-[var(--primary)]' : 'text-[var(--text-subtle)] group-hover:text-[var(--primary)]'}>
                         <NavIcon name={item.icon} />
                       </span>
-                      <span className="truncate">{item.label}</span>
-                      {active && (
-                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white/80" />
-                      )}
+                      {!collapsed ? <span className="truncate">{item.label}</span> : null}
                     </Link>
                   </li>
                 );
@@ -78,20 +93,33 @@ export function Sidebar({ user, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      {/* User */}
-      <div className="border-t border-[var(--sidebar-border)] p-4">
-        <div className="flex items-center gap-3 rounded-xl bg-[var(--sidebar-hover)] p-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-bold">
+      <div className={`border-t border-[var(--sidebar-border)] ${collapsed ? 'p-3' : 'p-4'}`}>
+        <div
+          className={`flex items-center rounded-[var(--radius)] bg-[var(--surface-subtle)] ${
+            collapsed ? 'justify-center p-2' : 'gap-3 p-3'
+          }`}
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-indigo-400 text-sm font-bold text-white">
             {getInitials(user.fullName)}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user.fullName}</p>
-            <p className="truncate text-xs text-slate-400">{user.username}</p>
-            <div className="mt-1.5">
-              <Badge variant="success">Super Admin</Badge>
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-900">
+                {user.fullName}
+              </p>
+              <p className="truncate text-xs text-[var(--muted)]">{user.username}</p>
             </div>
-          </div>
+          ) : null}
         </div>
+        {!collapsed ? (
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-2 w-full rounded-[var(--radius)] px-3 py-2 text-left text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
+          >
+            Sign out
+          </button>
+        ) : null}
       </div>
     </aside>
   );

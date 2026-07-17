@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { HallTicket } from '@/types/exam';
 import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Alert';
+import { LoadingBlock } from '@/components/ui/Spinner';
 import { HallTicketDocument } from '@/components/exams/HallTicketDocument';
 
 export default function StudentHallTicketPage({
@@ -39,16 +41,14 @@ export default function StudentHallTicketPage({
     void load();
   }, [load]);
 
-  if (loading) {
-    return <p className="text-sm text-[var(--muted)]">Loading hall ticket…</p>;
-  }
+  if (loading) return <LoadingBlock label="Loading hall ticket…" />;
 
   if (!ticket) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-[var(--danger)]">{error || 'Not found'}</p>
-        <Link href="/student" className="text-sm text-[var(--primary)]">
-          ← Back
+        <Alert tone="danger">{error || 'Not found'}</Alert>
+        <Link href="/student/documents" className="text-sm text-[var(--primary)]">
+          ← Documents
         </Link>
       </div>
     );
@@ -56,15 +56,19 @@ export default function StudentHallTicketPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <Link
-          href="/student"
-          className="text-xs font-medium text-[var(--primary)] hover:underline"
-        >
-          ← My examinations
-        </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden no-print">
+        <div>
+          <Link
+            href="/student/documents"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
+            ← Documents
+          </Link>
+          <h1 className="mt-1 text-xl font-bold text-slate-900">Hall ticket</h1>
+          <p className="text-sm text-[var(--muted)]">{ticket.examName}</p>
+        </div>
         <Button type="button" onClick={() => window.print()}>
-          Print
+          Print / download
         </Button>
       </div>
       <HallTicketDocument ticket={ticket} />

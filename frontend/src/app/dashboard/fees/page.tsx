@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Alert } from '@/components/ui/Alert';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingBlock } from '@/components/ui/Spinner';
+import { SoftSearchField, StatusFilter, KpiTile } from '@/components/ui/SoftSearch';
 import { ApiError, api } from '@/lib/api';
 import { FeeStatusBadge, money } from '@/components/fees/CollectPaymentModal';
 import { ExamFeeRecord } from '@/types/fee';
@@ -25,55 +27,51 @@ export default function FeesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>('pending');
-  const [filter, setFilter] = useState('');
   const [searchRoll, setSearchRoll] = useState('');
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getFeeRecords(
-        statusTab === 'all' ? {} : { status: statusTab },
-      );
-      setRecords(data);
+      setRecords(await api.getFeeRecords());
     } catch (err) {
       setRecords([]);
       setError(
-        err instanceof ApiError
-          ? err.message
-          : 'Failed to load fee records.',
+        err instanceof ApiError ? err.message : 'Failed to load fee records.',
       );
     } finally {
       setLoading(false);
     }
-  }, [statusTab]);
+  }, []);
 
   useEffect(() => {
     void loadRecords();
   }, [loadRecords]);
 
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return records;
-    return records.filter((r) => {
-      const examName = r.exam?.name?.toLowerCase() ?? '';
-      const scope = [
-        r.exam?.college,
-        r.exam?.course,
-        r.exam?.branch,
-        r.exam?.batch,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return (
-        r.studentName.toLowerCase().includes(q) ||
-        r.studentRollNumber.toLowerCase().includes(q) ||
-        examName.includes(q) ||
-        scope.includes(q)
-      );
-    });
-  }, [records, filter]);
+  const visibleRecords = useMemo(
+    () =>
+      statusTab === 'all'
+        ? records
+        : records.filter((record) => record.status === statusTab),
+    [records, statusTab],
+  );
+
+  const summary = useMemo(() => {
+    const pending = records.filter((record) => record.status === 'pending');
+    const paid = records.filter((record) => record.status === 'paid');
+    return {
+      pendingCount: pending.length,
+      pendingAmount: pending.reduce(
+        (total, record) => total + Number(record.totalAmount || 0),
+        0,
+      ),
+      paidCount: paid.length,
+      paidAmount: paid.reduce(
+        (total, record) => total + Number(record.totalAmount || 0),
+        0,
+      ),
+    };
+  }, [records]);
 
   function openCollect(roll: string) {
     router.push(`/dashboard/fees/collect/${encodeURIComponent(roll)}`);
@@ -90,120 +88,131 @@ export default function FeesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Fees & Payments"
-        description="Select a student to open the fee collection desk, or search by PIN / roll."
+        description="Collect examination fees by student PIN and review payment activity."
       />
 
-      <Card>
-        <CardBody>
+      <Card className="overflow-hidden">
+        <CardBody className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
+              Collection desk
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-slate-900">
+              Find a student to collect fees
+            </h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Enter the exact PIN or roll number to open their fee desk.
+            </p>
+          </div>
           <form
             onSubmit={onQuickSearch}
-            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
           >
-            <div className="flex-1">
-              <Input
-                label="Open collection by PIN / roll"
-                value={searchRoll}
-                onChange={(e) => setSearchRoll(e.target.value)}
-                placeholder="Search Name, Adm No, PIN…"
-              />
-            </div>
-            <Button type="submit" className="sm:mb-0.5">
-              Open desk
+            <SoftSearchField
+              className="flex-1"
+              value={searchRoll}
+              onChange={(e) => setSearchRoll(e.target.value)}
+              placeholder="Student PIN / roll — e.g. 256T1DAH02"
+              aria-label="Student PIN or roll number"
+              autoComplete="off"
+            />
+            <Button type="submit" disabled={!searchRoll.trim()}>
+              View student fees
             </Button>
           </form>
         </CardBody>
       </Card>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {statusTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setStatusTab(tab.id)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-              statusTab === tab.id
-                ? 'bg-[var(--primary)] text-white'
-                : 'border border-[var(--border)] bg-white text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <section className="grid gap-4 sm:grid-cols-2">
+        <KpiTile
+          label="Outstanding"
+          value={money(summary.pendingAmount)}
+          hint={`${summary.pendingCount} record${summary.pendingCount !== 1 ? 's' : ''}`}
+          tone="warning"
+        />
+        <KpiTile
+          label="Collected"
+          value={money(summary.paidAmount)}
+          hint={`${summary.paidCount} record${summary.paidCount !== 1 ? 's' : ''}`}
+          tone="success"
+        />
+      </section>
 
       <Card>
         <CardHeader
-          title="Fee records"
+          title="Payment ledger"
           description={
             loading
               ? 'Loading…'
-              : `${filtered.length} student fee record${filtered.length !== 1 ? 's' : ''}`
+              : `${visibleRecords.length} ${statusTab === 'all' ? '' : `${statusTab} `}record${visibleRecords.length !== 1 ? 's' : ''}`
           }
           action={
-            <Button
-              type="button"
-              variant="secondary"
-              className="!px-3 !py-1.5 text-xs"
-              onClick={() => void loadRecords()}
-              disabled={loading}
-            >
-              Refresh
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <StatusFilter
+                items={statusTabs}
+                value={statusTab}
+                onChange={setStatusTab}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void loadRecords()}
+                disabled={loading}
+              >
+                Refresh
+              </Button>
+            </div>
           }
         />
-        <CardBody className="space-y-4">
-          <Input
-            label="Filter list"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Roll, name, exam, college…"
-          />
-
-          {error && (
-            <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3.5 py-2.5 text-sm text-[var(--danger)]">
-              {error}
-            </div>
-          )}
+        <CardBody className="space-y-4 !pt-0">
+          {error ? <Alert tone="danger">{error}</Alert> : null}
 
           {loading ? (
-            <p className="text-sm text-[var(--muted)]">Loading fee records…</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">
-              No fee records yet. Publish an examination with eligible students
-              to generate fees.
-            </p>
+            <LoadingBlock label="Loading fee records…" />
+          ) : visibleRecords.length === 0 ? (
+            <EmptyState
+              title={
+                records.length === 0
+                  ? 'No payment activity yet'
+                  : `No ${statusTab} fee records`
+              }
+              description={
+                records.length === 0
+                  ? 'Fee records are created when students submit examination applications. Use the collection desk above when a student provides their PIN.'
+                  : `There are currently no fee records with ${statusTab} status.`
+              }
+            />
           ) : (
             <div className="-mx-6 overflow-x-auto">
               <table className="w-full min-w-[880px] text-left text-sm">
                 <thead>
-                  <tr className="border-y border-[var(--border)] bg-slate-50/80 text-xs uppercase tracking-wide text-[var(--muted)]">
+                  <tr className="text-xs uppercase tracking-wide text-[var(--muted)]">
                     <th className="px-6 py-3 font-semibold">Student</th>
                     <th className="px-4 py-3 font-semibold">Examination</th>
                     <th className="px-4 py-3 font-semibold">Base</th>
                     <th className="px-4 py-3 font-semibold">Late</th>
                     <th className="px-4 py-3 font-semibold">Total</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-6 py-3 font-semibold text-right">
-                      Action
-                    </th>
+                    <th className="px-6 py-3 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((record) => (
+                  {visibleRecords.map((record) => (
                     <tr
                       key={record.id}
-                      className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-blue-50/40"
+                      className="cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--primary-soft)]/50"
                       onClick={() => openCollect(record.studentRollNumber)}
                     >
-                      <td className="px-6 py-3.5 align-top">
-                        <p className="font-medium text-slate-900">
+                      <td className="px-6 py-4 align-top">
+                        <p className="font-semibold text-slate-900">
                           {record.studentName}
                         </p>
                         <p className="mt-0.5 text-xs tabular-nums text-[var(--muted)]">
                           {record.studentRollNumber}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-4 align-top">
                         <p className="font-medium text-slate-900">
                           {record.exam?.name ?? `Exam #${record.examId}`}
                         </p>
@@ -213,22 +222,22 @@ export default function FeesPage() {
                             : '—'}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5 align-top tabular-nums">
+                      <td className="px-4 py-4 align-top tabular-nums">
                         {money(record.baseFee)}
                       </td>
-                      <td className="px-4 py-3.5 align-top tabular-nums">
+                      <td className="px-4 py-4 align-top tabular-nums">
                         {money(record.lateFee)}
                       </td>
-                      <td className="px-4 py-3.5 align-top font-semibold tabular-nums">
+                      <td className="px-4 py-4 align-top font-semibold tabular-nums">
                         {money(record.totalAmount)}
                       </td>
-                      <td className="px-4 py-3.5 align-top">
+                      <td className="px-4 py-4 align-top">
                         <FeeStatusBadge status={record.status} />
                       </td>
-                      <td className="px-6 py-3.5 align-top text-right">
+                      <td className="px-6 py-4 align-top text-right">
                         <Button
                           type="button"
-                          className="!px-3 !py-1.5 text-xs"
+                          size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             openCollect(record.studentRollNumber);

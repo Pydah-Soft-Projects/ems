@@ -1,22 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Canvas / surfaces — soft LMS palette */
+  --background: #f7f7fb;
+  --foreground: #1e1b2e;
   --surface: #ffffff;
-  --sidebar: #0c1222;
-  --sidebar-hover: #151d32;
-  --sidebar-border: #1e293b;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-soft: #eff6ff;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --ring: #93c5fd;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
-  --success: #059669;
-  --radius: 0.75rem;
+  --surface-subtle: #faf9fd;
+  --surface-elevated: #ffffff;
+  --surface-muted: #f1eff8;
+
+  /* Soft light rail (not dark navy) */
+  --sidebar: #ffffff;
+  --sidebar-hover: #f3f0ff;
+  --sidebar-border: #ebeaf2;
+  --sidebar-text: #5b5670;
+  --sidebar-active: #6c5ce7;
+  --sidebar-active-soft: #efeaff;
+
+  /* Brand — periwinkle / indigo */
+  --primary: #7367f0;
+  --primary-hover: #6255db;
+  --primary-soft: #f0edff;
+  --primary-foreground: #ffffff;
+
+  /* Secondary accent — vibrant orange (charts / highlights) */
+  --accent: #ff8a1f;
+  --accent-hover: #ed7410;
+  --accent-soft: #fff5e9;
+  --accent-border: #ffd7ae;
+
+  /* Supporting violet */
+  --info: #8b7cf6;
+  --info-soft: #f3f0ff;
+  --info-border: #d9d2ff;
+
+  /* Text */
+  --muted: #7c7890;
+  --text-subtle: #a09bb3;
+  --text-inverse: #f8fafc;
+
+  /* Borders / focus */
+  --border: #ebeaf2;
+  --border-strong: #d8d4e8;
+  --ring: #c4b5fd;
+
+  /* Status */
+  --danger: #e11d48;
+  --danger-soft: #fff1f2;
+  --danger-border: #fecdd3;
+  --success: #10b981;
+  --success-soft: #ecfdf5;
+  --success-border: #a7f3d0;
+  --warning: #f59e0b;
+  --warning-soft: #fffbeb;
+  --warning-border: #fde68a;
+
+  /* Shape / elevation — soft UI */
+  --radius: 0.875rem;
+  --radius-sm: 0.6875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --control-h: 2.5rem;
+  --shadow-sm: 0 2px 8px rgb(30 27 46 / 0.04);
+  --shadow-md: 0 8px 28px rgb(30 27 46 / 0.07);
+  --shadow-lg: 0 16px 48px rgb(30 27 46 / 0.1);
 }
 
 @theme inline {
@@ -25,6 +72,7 @@
   --color-surface: var(--surface);
   --color-sidebar: var(--sidebar);
   --color-primary: var(--primary);
+  --color-accent: var(--accent);
   --color-muted: var(--muted);
   --color-border: var(--border);
   --font-sans: var(--font-geist-sans);
@@ -35,23 +83,65 @@
   box-sizing: border-box;
 }
 
+@media screen {
+  html {
+    /* Compact, legible portal scale matching the reference dashboard. */
+    font-size: 15px;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  text-rendering: optimizeLegibility;
 }
 
-/* Scrollbar — sidebar */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .sidebar-scroll::-webkit-scrollbar {
   width: 4px;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: var(--sidebar-border);
+  background: var(--border-strong);
   border-radius: 4px;
 }
 
-/* Screen preview — A5 landscape width */
 .fee-receipt {
   width: 210mm;
   max-width: 100%;
+}
+
+@media print {
+  .print\:hidden,
+  header,
+  nav,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
 }

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { AuthUser, getStoredUser } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { Sidebar } from './Sidebar';
-import { Topbar } from './Topbar';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -33,7 +32,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     }
-    loadUser();
+    void loadUser();
   }, [router]);
 
   useEffect(() => {
@@ -44,7 +43,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
+          <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
           <p className="text-sm text-[var(--muted)]">Loading portal...</p>
         </div>
       </div>
@@ -55,31 +54,48 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-[260px]">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-[260px]">
         <Sidebar user={user} />
       </div>
 
-      {/* Mobile sidebar overlay */}
-      {mobileOpen && (
+      {mobileOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
           />
-          <div className="absolute inset-y-0 left-0 w-[260px] shadow-2xl">
+          <div className="absolute inset-y-0 left-0 w-[260px] shadow-[var(--shadow-lg)]">
             <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Main content */}
       <div className="flex min-h-screen flex-1 flex-col lg:pl-[260px]">
-        <Topbar onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto max-w-6xl">{children}</div>
+        <main className="flex-1 px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--sidebar-text)] shadow-[var(--shadow-sm)] lg:hidden"
+            aria-label="Open menu"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+              />
+            </svg>
+          </button>
+          <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>
     </div>

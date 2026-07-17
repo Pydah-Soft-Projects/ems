@@ -43,13 +43,25 @@ export const navigation: NavGroup[] = [
       {
         href: '/dashboard/subjects',
         label: 'Subjects',
-        description: 'Subjects and mappings',
+        description: 'Subjects catalog',
+        icon: 'subjects',
+      },
+      {
+        href: '/dashboard/subjects/mappings',
+        label: 'Subject mappings',
+        description: 'Academic scope to subject mappings',
         icon: 'subjects',
       },
       {
         href: '/dashboard/organization',
         label: 'Organization',
-        description: 'Colleges, programs, students (SDMS)',
+        description: 'Colleges and programs (SDMS)',
+        icon: 'organization',
+      },
+      {
+        href: '/dashboard/organization/students',
+        label: 'Students',
+        description: 'SDMS student directory',
         icon: 'organization',
       },
     ],
@@ -85,13 +97,11 @@ export const navigation: NavGroup[] = [
 ];
 
 export function findNavItem(pathname: string): NavItem | undefined {
-  for (const group of navigation) {
-    for (const item of group.items) {
-      const match = item.exact
-        ? pathname === item.href
-        : pathname.startsWith(item.href);
-      if (match) return item;
-    }
-  }
-  return undefined;
+  const flat = navigation.flatMap((g) => g.items);
+  // Prefer longest href match so nested routes highlight correctly
+  const matches = flat.filter((item) =>
+    item.exact ? pathname === item.href : pathname.startsWith(item.href),
+  );
+  matches.sort((a, b) => b.href.length - a.href.length);
+  return matches[0];
 }

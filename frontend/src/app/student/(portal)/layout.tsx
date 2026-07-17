@@ -1,11 +1,11 @@
 'use client';
 
 import { ReactNode, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AuthUser, clearAuth, getStoredUser } from '@/lib/auth';
 import { api } from '@/lib/api';
-import { Button } from '@/components/ui/Button';
+import { StudentShell } from '@/components/student/StudentShell';
+import { LoadingBlock } from '@/components/ui/Spinner';
 
 export default function StudentPortalLayout({
   children,
@@ -43,8 +43,8 @@ export default function StudentPortalLayout({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-[var(--muted)]">
-        Loading…
+      <div className="flex min-h-screen items-center justify-center">
+        <LoadingBlock label="Loading student portal…" />
       </div>
     );
   }
@@ -52,29 +52,8 @@ export default function StudentPortalLayout({
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <header className="border-b border-[var(--border)] bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-          <Link href="/student" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white">
-              EMS
-            </span>
-            <div>
-              <p className="text-sm font-bold text-slate-900">Student Portal</p>
-              <p className="text-xs text-[var(--muted)]">{user.fullName}</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-[var(--muted)] sm:inline">
-              PIN {user.pinNo || user.username}
-            </span>
-            <Button type="button" variant="secondary" onClick={logout}>
-              Sign out
-            </Button>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
-    </div>
+    <StudentShell user={user} onLogout={logout}>
+      {children}
+    </StudentShell>
   );
 }

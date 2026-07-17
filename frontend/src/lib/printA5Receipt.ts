@@ -224,7 +224,7 @@ function buildPrintDocument(payment: Payment, options: PrintReceiptOptions) {
   .brand { display: flex; align-items: center; gap: 1.8mm; min-width: 28mm; }
   .logo {
     width: 8mm; height: 8mm;
-    background: #f97316; color: #fff;
+    background: #6c5ce7; color: #fff;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 7pt; border-radius: 1mm;
   }
