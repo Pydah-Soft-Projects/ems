@@ -73,8 +73,14 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
               <th className="py-2 pr-2" scope="col">
                 Subject
               </th>
-              <th className="py-2" scope="col">
+              <th className="py-2 pr-2" scope="col">
                 Exam date
+              </th>
+              <th className="py-2 pr-2" scope="col">
+                Session
+              </th>
+              <th className="py-2" scope="col">
+                Time
               </th>
             </tr>
           </thead>
@@ -84,7 +90,20 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
                 <td className="py-2.5 pr-2 text-slate-500">{i + 1}</td>
                 <td className="py-2.5 pr-2 font-medium">{p.code}</td>
                 <td className="py-2.5 pr-2">{p.name}</td>
-                <td className="py-2.5">{formatDate(p.examDate)}</td>
+                <td className="py-2.5 pr-2">{formatDate(p.examDate)}</td>
+                <td className="py-2.5 pr-2">
+                  {p.session === 'FN'
+                    ? 'Forenoon'
+                    : p.session === 'AN'
+                      ? 'Afternoon'
+                      : '—'}
+                </td>
+                <td className="py-2.5">
+                  {p.startTime && p.endTime
+                    ? `${p.startTime}–${p.endTime}`
+                    : p.startTime || '—'}
+                  {p.durationMinutes ? ` (${p.durationMinutes} min)` : ''}
+                </td>
               </tr>
             ))}
           </tbody>

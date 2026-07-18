@@ -14,6 +14,7 @@ function registerFeeManagementModels(connection) {
       Transaction: connection.models.Transaction,
       ReceiptSequence: connection.models.ReceiptSequence,
       PaymentConfig: connection.models.PaymentConfig,
+      Settings: connection.models.FeeMgmtSettings,
     };
   }
 
@@ -126,8 +127,17 @@ function registerFeeManagementModels(connection) {
       // EMS cross-reference (extra fields; Fee Mgmt ignores unknown if strict)
       emsPaymentId: { type: Number },
       emsFeeRecordId: { type: Number },
+      emsLineType: { type: String }, // 'exam_fee' | 'late_fee' | 'bank_charges'
       source: { type: String },
     },
+    { timestamps: true, strict: false },
+  );
+
+  // Global portal settings — holds the custom receipt sequence flags:
+  // enableCustomReceiptSequence, receiptSequencePadding,
+  // receiptSequenceSeparator, receiptSequenceResetMonth/Day.
+  const settingsSchema = new connection.base.Schema(
+    {},
     { timestamps: true, strict: false },
   );
 
@@ -137,6 +147,7 @@ function registerFeeManagementModels(connection) {
     Transaction: connection.model('Transaction', transactionSchema),
     ReceiptSequence: connection.model('ReceiptSequence', receiptSequenceSchema),
     PaymentConfig: connection.model('PaymentConfig', paymentConfigSchema),
+    Settings: connection.model('FeeMgmtSettings', settingsSchema, 'settings'),
   };
 }
 

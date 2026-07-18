@@ -57,6 +57,10 @@ const ExamApplication = new EntitySchema({
     examType: { type: 'varchar', length: 30, default: ExamType.REGULAR },
     studentRollNumber: { type: 'varchar', length: 50 },
     studentName: { type: 'varchar', length: 150 },
+    /** Snapshot of the student's branch/section at application time, used to
+     * resolve branch/section-specific papers on the hall ticket. */
+    studentBranch: { type: 'varchar', length: 100, nullable: true },
+    studentSection: { type: 'varchar', length: 64, nullable: true },
     selectedSubjectIds: { type: 'simple-json' },
     feeBreakdown: { type: 'simple-json' },
     declarationAccepted: { type: 'boolean', default: false },

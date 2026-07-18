@@ -12,6 +12,7 @@ import { SoftSearchField, StatusFilter, KpiTile } from '@/components/ui/SoftSear
 import { ApiError, api } from '@/lib/api';
 import { FeeStatusBadge, money } from '@/components/fees/CollectPaymentModal';
 import { ExamFeeRecord } from '@/types/fee';
+import { SdmsStudent } from '@/types/sdms';
 
 type StatusTab = 'all' | 'pending' | 'paid';
 
@@ -28,6 +29,11 @@ export default function FeesPage() {
   const [error, setError] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>('pending');
   const [searchRoll, setSearchRoll] = useState('');
+  const [studentResults, setStudentResults] = useState<SdmsStudent[] | null>(
+    null,
+  );
+  const [searchingStudents, setSearchingStudents] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -77,11 +83,47 @@ export default function FeesPage() {
     router.push(`/dashboard/fees/collect/${encodeURIComponent(roll)}`);
   }
 
-  function onQuickSearch(e: React.FormEvent) {
+  function studentRoll(student: SdmsStudent) {
+    return (student.pinNo || student.admissionNumber || '').trim();
+  }
+
+  async function onQuickSearch(e: React.FormEvent) {
     e.preventDefault();
-    const roll = searchRoll.trim();
-    if (!roll) return;
-    openCollect(roll);
+    const query = searchRoll.trim();
+    if (!query) return;
+    setSearchingStudents(true);
+    setSearchError('');
+    setStudentResults(null);
+    try {
+      const res = await api.getSdmsStudents({ search: query, limit: 25 });
+      const items = res.items.filter((s) => studentRoll(s));
+      // Exact PIN/admission match → open the desk directly
+      const exact = items.find(
+        (s) =>
+          s.pinNo?.toLowerCase() === query.toLowerCase() ||
+          s.admissionNumber?.toLowerCase() === query.toLowerCase(),
+      );
+      if (exact) {
+        openCollect(studentRoll(exact));
+        return;
+      }
+      if (items.length === 1) {
+        openCollect(studentRoll(items[0]));
+        return;
+      }
+      setStudentResults(items);
+      if (items.length === 0) {
+        setSearchError(
+          'No students matched that name, PIN, or admission number.',
+        );
+      }
+    } catch (err) {
+      setSearchError(
+        err instanceof ApiError ? err.message : 'Student search failed.',
+      );
+    } finally {
+      setSearchingStudents(false);
+    }
   }
 
   return (
@@ -101,25 +143,93 @@ export default function FeesPage() {
               Find a student to collect fees
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Enter the exact PIN or roll number to open their fee desk.
+              Search by name, PIN, or admission number to open their fee desk.
             </p>
           </div>
           <form
-            onSubmit={onQuickSearch}
+            onSubmit={(e) => void onQuickSearch(e)}
             className="flex flex-col gap-3 sm:flex-row sm:items-center"
           >
             <SoftSearchField
               className="flex-1"
               value={searchRoll}
               onChange={(e) => setSearchRoll(e.target.value)}
-              placeholder="Student PIN / roll — e.g. 256T1DAH02"
-              aria-label="Student PIN or roll number"
+              placeholder="Name / PIN / admission — e.g. 236T1A0501 or Ganesh"
+              aria-label="Student name, PIN, or admission number"
               autoComplete="off"
             />
-            <Button type="submit" disabled={!searchRoll.trim()}>
-              View student fees
+            <Button
+              type="submit"
+              disabled={!searchRoll.trim()}
+              loading={searchingStudents}
+            >
+              Search student
             </Button>
           </form>
+
+          {searchError ? <Alert tone="warning">{searchError}</Alert> : null}
+
+          {studentResults && studentResults.length > 0 ? (
+            <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
+                    <th className="px-4 py-2.5 font-semibold">Student</th>
+                    <th className="px-4 py-2.5 font-semibold">PIN / Adm. no.</th>
+                    <th className="px-4 py-2.5 font-semibold">Programme</th>
+                    <th className="px-4 py-2.5 font-semibold">Year / Sem</th>
+                    <th className="px-4 py-2.5 font-semibold">Status</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentResults.map((s) => (
+                    <tr
+                      key={s.id}
+                      className="cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--primary-soft)]/50"
+                      onClick={() => openCollect(studentRoll(s))}
+                    >
+                      <td className="px-4 py-3 font-semibold text-slate-900">
+                        {s.studentName}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {s.pinNo || '—'}
+                        <span className="block text-[var(--muted)]">
+                          {s.admissionNumber || ''}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {s.course || '—'} / {s.branch || '—'}
+                        <span className="block text-[var(--muted)]">
+                          {s.college || ''} · {s.batch || ''}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">
+                        Y{s.currentYear} / S{s.currentSemester}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {s.studentStatus || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCollect(studentRoll(s));
+                          }}
+                        >
+                          Open fee desk
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </CardBody>
       </Card>
 

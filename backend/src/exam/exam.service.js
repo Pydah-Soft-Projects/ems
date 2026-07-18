@@ -4,7 +4,6 @@ const { createHmac, timingSafeEqual } = require('crypto');
 const Razorpay = require('razorpay');
 const { AppError } = require('../common/errors');
 const { config } = require('../config');
-const { LateFeeSlab } = require('./schemas/exam.schema');
 const {
     ExamStatus,
     ExamType,
@@ -23,6 +22,9 @@ class ExamService {
         this.paymentRepo = paymentRepo;
         this.examScopeRepo = examScopeRepo;
         this.applicationRepo = applicationRepo;
+        // EntitySchema entities are not constructible classes; use a repo to
+        // instantiate late-fee slab rows.
+        this.lateFeeSlabRepo = examRepo.manager.getRepository('LateFeeSlab');
         this.subjectsService = subjectsService;
         this.regulationsService = regulationsService;
         this.sdms = sdms;
@@ -112,6 +114,72 @@ class ExamService {
             }
         }
     }
+    /**
+     * Subjects may be grouped per branch (and optionally per section):
+     * - entries carrying a `branch` validate against that branch's mappings;
+     * - entries also carrying a `section` validate against mappings that
+     *   apply to that section (mapped to all sections or listing it);
+     * - entries without a branch are common papers and must be mapped for
+     *   every branch in the exam scope.
+     */
+    async validateExamSubjectsPerBranch(regulationId, course, branches, batch, yearOfStudy, semester, subjectFees) {
+        const branchSet = new Set(branches.map((b) => b.trim().toLowerCase()));
+        const common = [];
+        const byBranch = new Map();
+        for (const sf of subjectFees) {
+            const branch = (sf.branch ?? '').trim();
+            if (!branch) {
+                common.push(sf);
+                continue;
+            }
+            if (!branchSet.has(branch.toLowerCase())) {
+                throw AppError.badRequest(`Subject ${sf.subjectId} is grouped under branch "${branch}", which is not in the exam scope`);
+            }
+            const list = byBranch.get(branch) ?? [];
+            list.push(sf);
+            byBranch.set(branch, list);
+        }
+        for (const branch of branches) {
+            const own = byBranch.get(branch) ?? [];
+            const toCheck = [...own, ...common];
+            if (toCheck.length === 0) {
+                throw AppError.badRequest(`No subjects selected for branch "${branch}" — every branch in scope needs at least one paper`);
+            }
+            const entries = await this.subjectsService.getMappedSubjectEntriesForExam({
+                regulationId,
+                course,
+                branch,
+                batch,
+                yearOfStudy,
+                semester,
+            });
+            const allMappedIds = new Set(entries.map((e) => e.subjectId));
+            const idsForSection = (section) => {
+                const wanted = section.trim().toLowerCase();
+                return new Set(entries
+                    .filter((e) => e.sectionMode !== 'selected' ||
+                    (e.sections ?? []).some((x) => x.trim().toLowerCase() === wanted))
+                    .map((e) => e.subjectId));
+            };
+            const sectionIdCache = new Map();
+            for (const sf of toCheck) {
+                const section = (sf.section ?? '').trim();
+                if (!section || !(sf.branch ?? '').trim()) {
+                    if (!allMappedIds.has(sf.subjectId)) {
+                        throw AppError.badRequest(`Subject ${sf.subjectId} is not mapped for ${branch} in this academic scope`);
+                    }
+                    continue;
+                }
+                const key = section.toLowerCase();
+                if (!sectionIdCache.has(key)) {
+                    sectionIdCache.set(key, idsForSection(section));
+                }
+                if (!sectionIdCache.get(key).has(sf.subjectId)) {
+                    throw AppError.badRequest(`Subject ${sf.subjectId} is not mapped for ${branch} section ${section} in this academic scope`);
+                }
+            }
+        }
+    }
     validateDates(dto) {
         if (dto.applicationEndDate &&
             dto.examinationStartDate &&
@@ -128,6 +196,10 @@ class ExamService {
         if (!subjects?.length) {
             throw AppError.badRequest('Select at least one subject');
         }
+        const timeToMinutes = (value) => {
+            const [h, m] = value.split(':').map((x) => parseInt(x, 10));
+            return h * 60 + m;
+        };
         return subjects.map((s) => {
             const examDate = (s.examDate ?? '').trim();
             if (!examDate) {
@@ -136,8 +208,106 @@ class ExamService {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(examDate)) {
                 throw AppError.badRequest(`Invalid exam date for subject ${s.subjectId} (use YYYY-MM-DD)`);
             }
-            return { ...s, examDate };
+            const branch = (s.branch ?? '').trim() || null;
+            const section = (s.section ?? '').trim() || null;
+            if (section && !branch) {
+                throw AppError.badRequest(`Subject ${s.subjectId} has a section but no branch — section-specific papers must be grouped under a branch`);
+            }
+            let session = (s.session ?? '').trim().toUpperCase() || null;
+            if (session && session !== 'FN' && session !== 'AN') {
+                throw AppError.badRequest(`Session for subject ${s.subjectId} must be FN (forenoon) or AN (afternoon)`);
+            }
+            const startTime = (s.startTime ?? '').trim() || null;
+            const endTime = (s.endTime ?? '').trim() || null;
+            for (const [label, value] of [['start', startTime], ['end', endTime]]) {
+                if (value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+                    throw AppError.badRequest(`Invalid ${label} time for subject ${s.subjectId} (use HH:MM, 24-hour)`);
+                }
+            }
+            let durationMinutes = s.durationMinutes != null && s.durationMinutes !== ''
+                ? parseInt(String(s.durationMinutes), 10)
+                : null;
+            if (durationMinutes != null && (Number.isNaN(durationMinutes) || durationMinutes <= 0)) {
+                throw AppError.badRequest(`Duration for subject ${s.subjectId} must be a positive number of minutes`);
+            }
+            if (startTime && endTime) {
+                const diff = timeToMinutes(endTime) - timeToMinutes(startTime);
+                if (diff <= 0) {
+                    throw AppError.badRequest(`End time must be after start time for subject ${s.subjectId}`);
+                }
+                if (durationMinutes == null)
+                    durationMinutes = diff;
+            }
+            if (!session && startTime) {
+                session = timeToMinutes(startTime) < 12 * 60 ? 'FN' : 'AN';
+            }
+            return {
+                ...s,
+                examDate,
+                branch,
+                section,
+                session,
+                startTime,
+                endTime,
+                durationMinutes,
+            };
         });
+    }
+    /**
+     * Normalizes branch/section-wise package fees:
+     * [{ branch, section|null, amount }]. Branch must be in the exam scope.
+     */
+    normalizePackageFees(packageFees, branches) {
+        if (!packageFees)
+            return null;
+        if (!Array.isArray(packageFees)) {
+            throw AppError.badRequest('packageFees must be an array');
+        }
+        const branchSet = new Set(branches.map((b) => b.trim().toLowerCase()));
+        const seen = new Set();
+        const rows = [];
+        for (const pf of packageFees) {
+            const branch = (pf.branch ?? '').trim();
+            if (!branch) {
+                throw AppError.badRequest('Each package fee needs a branch');
+            }
+            if (!branchSet.has(branch.toLowerCase())) {
+                throw AppError.badRequest(`Package fee branch "${branch}" is not in the exam scope`);
+            }
+            const section = (pf.section ?? '').trim() || null;
+            const amount = Number(pf.amount);
+            if (Number.isNaN(amount) || amount < 0) {
+                throw AppError.badRequest(`Package fee for ${branch}${section ? ` / ${section}` : ''} must be a non-negative number`);
+            }
+            const key = `${branch.toLowerCase()}|${(section ?? '').toLowerCase()}`;
+            if (seen.has(key)) {
+                throw AppError.badRequest(`Duplicate package fee for ${branch}${section ? ` / ${section}` : ''}`);
+            }
+            seen.add(key);
+            rows.push({ branch, section, amount });
+        }
+        return rows.length ? rows : null;
+    }
+    /**
+     * Package fee applicable to a student: section-specific first, then
+     * branch-wide, then the exam-level default.
+     */
+    packageFeeForScope(exam, branch, section) {
+        const fees = Array.isArray(exam.packageFees) ? exam.packageFees : [];
+        const b = (branch ?? '').trim().toLowerCase();
+        const s = (section ?? '').trim().toLowerCase();
+        if (b && s) {
+            const exact = fees.find((f) => (f.branch ?? '').trim().toLowerCase() === b &&
+                (f.section ?? '').trim().toLowerCase() === s);
+            if (exact)
+                return Number(exact.amount);
+        }
+        if (b) {
+            const branchWide = fees.find((f) => (f.branch ?? '').trim().toLowerCase() === b && !f.section);
+            if (branchWide)
+                return Number(branchWide.amount);
+        }
+        return exam.packageFee != null ? Number(exam.packageFee) : null;
     }
     assertSubjectDatesInWindow(subjects, examinationStartDate, examinationEndDate) {
         for (const s of subjects) {
@@ -163,11 +333,10 @@ class ExamService {
         }
         return [exam.type ?? ExamType.REGULAR];
     }
-    resolveEnrollmentType(exam, requested) {
-        const allowed = this.getAllowedTypes(exam);
+    resolveEnrollmentType(allowed, requested) {
         if (requested) {
             if (!allowed.includes(requested)) {
-                throw AppError.badRequest(`This examination does not allow enrollment as ${this.typeLabel(requested)}`);
+                throw AppError.badRequest(`This examination does not allow enrollment as ${this.typeLabel(requested)} for this student`);
             }
             return requested;
         }
@@ -238,9 +407,7 @@ class ExamService {
         const scopeInputs = this.resolveCreateScopes(dto);
         const scopeRows = this.expandScopeRows(dto, scopeInputs);
         const uniqueBranches = [...new Set(scopeRows.map((r) => r.branch))];
-        for (const branch of uniqueBranches) {
-            await this.validateExamSubjects(dto.regulationId, dto.course, branch, dto.batch, dto.yearOfStudy, dto.semester, dto.subjects);
-        }
+        await this.validateExamSubjectsPerBranch(dto.regulationId, dto.course, uniqueBranches, dto.batch, dto.yearOfStudy, dto.semester, dto.subjects);
         this.validateDates(dto);
         const subjectFees = this.normalizeSubjectFees(dto.subjects);
         this.assertSubjectDatesInWindow(subjectFees, dto.examinationStartDate, dto.examinationEndDate);
@@ -260,6 +427,7 @@ class ExamService {
             yearOfStudy: dto.yearOfStudy,
             semester: dto.semester,
             packageFee: dto.packageFee,
+            packageFees: this.normalizePackageFees(dto.packageFees, uniqueBranches),
             examinationStartDate: dto.examinationStartDate,
             examinationEndDate: dto.examinationEndDate,
             applicationStartDate: dto.applicationStartDate,
@@ -272,10 +440,16 @@ class ExamService {
             hallTicketsReleasedAt: null,
             examSubjects: subjectFees.map((s) => this.examSubjectRepo.create({
                 subjectId: s.subjectId,
+                branch: s.branch,
+                section: s.section,
                 fee: s.fee,
                 examDate: s.examDate,
+                session: s.session,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                durationMinutes: s.durationMinutes,
             })),
-            lateFeeSlabs: (dto.lateFeeSlabs ?? []).map((slab) => Object.assign(new LateFeeSlab(), slab)),
+            lateFeeSlabs: (dto.lateFeeSlabs ?? []).map((slab) => this.lateFeeSlabRepo.create({ ...slab })),
             scopes: scopeRows.map((row) => this.examScopeRepo.create({ ...row })),
         });
         return this.examRepo.save(exam);
@@ -304,17 +478,21 @@ class ExamService {
                 (exam.scopes?.length
                     ? [...new Set(exam.scopes.map((s) => s.branch))]
                     : [branch]);
-            for (const b of branches) {
-                await this.validateExamSubjects(dto.regulationId ?? exam.regulationId, dto.course ?? exam.course, b, dto.batch ?? exam.batch, dto.yearOfStudy ?? exam.yearOfStudy, dto.semester ?? exam.semester, dto.subjects);
-            }
+            await this.validateExamSubjectsPerBranch(dto.regulationId ?? exam.regulationId, dto.course ?? exam.course, branches, dto.batch ?? exam.batch, dto.yearOfStudy ?? exam.yearOfStudy, dto.semester ?? exam.semester, dto.subjects);
             await this.examSubjectRepo.delete({ examId: id });
             const subjectFees = this.normalizeSubjectFees(dto.subjects);
             this.assertSubjectDatesInWindow(subjectFees, dto.examinationStartDate ?? exam.examinationStartDate, dto.examinationEndDate ?? exam.examinationEndDate);
             exam.examSubjects = subjectFees.map((s) => this.examSubjectRepo.create({
                 examId: id,
                 subjectId: s.subjectId,
+                branch: s.branch,
+                section: s.section,
                 fee: s.fee,
                 examDate: s.examDate,
+                session: s.session,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                durationMinutes: s.durationMinutes,
             }));
         }
         if (dto.scopes?.length) {
@@ -338,7 +516,7 @@ class ExamService {
                     : uniqueBranches.join(', ').slice(0, 100);
         }
         if (dto.lateFeeSlabs) {
-            exam.lateFeeSlabs = dto.lateFeeSlabs.map((slab) => Object.assign(new LateFeeSlab(), { ...slab, examId: id }));
+            exam.lateFeeSlabs = dto.lateFeeSlabs.map((slab) => this.lateFeeSlabRepo.create({ ...slab, examId: id }));
         }
         this.validateDates({
             applicationEndDate: dto.applicationEndDate ?? exam.applicationEndDate,
@@ -372,6 +550,11 @@ class ExamService {
             yearOfStudy: dto.yearOfStudy ?? exam.yearOfStudy,
             semester: dto.semester ?? exam.semester,
             packageFee: dto.packageFee ?? exam.packageFee,
+            packageFees: dto.packageFees !== undefined
+                ? this.normalizePackageFees(dto.packageFees, exam.scopes?.length
+                    ? [...new Set(exam.scopes.map((s) => s.branch))]
+                    : [exam.branch])
+                : exam.packageFees,
             examinationStartDate: dto.examinationStartDate ?? exam.examinationStartDate,
             examinationEndDate: dto.examinationEndDate ?? exam.examinationEndDate,
             applicationStartDate: dto.applicationStartDate ?? exam.applicationStartDate,
@@ -493,6 +676,9 @@ class ExamService {
                 },
             ];
         const byRoll = new Map();
+        // Backlog-style exams (supply etc.) are also open to students who have
+        // moved past the scoped semester, so widen the SDMS query and filter here.
+        const includeAhead = this.getAllowedTypes(exam).some((t) => t !== ExamType.REGULAR);
         const fetchForScope = async (scope) => {
             let page = 1;
             let totalPages = 1;
@@ -502,14 +688,31 @@ class ExamService {
                     course: scope.course || exam.course,
                     branch: scope.branch,
                     batch: scope.batch || exam.batch,
-                    currentYear: scope.yearOfStudy,
-                    currentSemester: scope.semester,
-                    section: scope.section || undefined,
+                    currentYear: includeAhead ? undefined : scope.yearOfStudy,
+                    currentSemester: includeAhead ? undefined : scope.semester,
+                    section: includeAhead ? undefined : scope.section || undefined,
                     page,
                     limit: 200,
                 });
                 totalPages = result.totalPages;
                 for (const s of result.items) {
+                    if (includeAhead) {
+                        const year = Number(s.currentYear);
+                        const sem = Number(s.currentSemester);
+                        const scopeYear = Number(scope.yearOfStudy);
+                        const scopeSem = Number(scope.semester);
+                        const exact = year === scopeYear && sem === scopeSem;
+                        const ahead = year > scopeYear ||
+                            (year === scopeYear && sem > scopeSem);
+                        if (!exact && !ahead)
+                            continue;
+                        if (exact &&
+                            scope.section &&
+                            (s.section ?? '').trim().toLowerCase() !==
+                                scope.section.trim().toLowerCase()) {
+                            continue;
+                        }
+                    }
                     const roll = (s.pinNo || s.admissionNumber || '').trim();
                     if (!roll)
                         continue;
@@ -587,6 +790,23 @@ class ExamService {
             total: students.length,
         };
     }
+    /**
+     * The papers a given student sits for: common papers (no branch), their
+     * branch's papers (no section), and their section's papers.
+     */
+    examSubjectsForBranch(exam, branch, section) {
+        const wantedBranch = (branch ?? '').trim().toLowerCase();
+        const wantedSection = (section ?? '').trim().toLowerCase();
+        return (exam.examSubjects ?? []).filter((es) => {
+            const b = (es.branch ?? '').trim().toLowerCase();
+            const s = (es.section ?? '').trim().toLowerCase();
+            if (b && wantedBranch && b !== wantedBranch)
+                return false;
+            if (s && s !== wantedSection)
+                return false;
+            return true;
+        });
+    }
     examScopeRows(exam) {
         if (exam.scopes?.length) {
             return exam.scopes.map((s) => ({
@@ -611,7 +831,14 @@ class ExamService {
             },
         ];
     }
-    studentMatchesExam(exam, student) {
+    /**
+     * Where the student stands relative to the exam's scope rows:
+     * - exact: same year/semester (and section when scoped)
+     * - ahead: past the exam's semester — may hold backlogs from it
+     * Section is ignored for "ahead" students since their current section
+     * belongs to their current semester, not the scoped one.
+     */
+    studentScopePosition(exam, student) {
         const scopes = this.examScopeRows(exam);
         const studentBranch = (student.branch ?? '').trim().toLowerCase();
         const studentCourse = (student.course ?? '').trim().toLowerCase();
@@ -619,29 +846,54 @@ class ExamService {
         const studentSection = (student.section ?? '').trim().toLowerCase();
         const year = Number(student.currentYear);
         const sem = Number(student.currentSemester);
-        return scopes.some((s) => {
+        let exact = false;
+        let ahead = false;
+        for (const s of scopes) {
             if (s.course?.trim() &&
                 studentCourse &&
                 s.course.trim().toLowerCase() !== studentCourse) {
-                return false;
+                continue;
             }
             if (s.batch?.trim() &&
                 studentBatch &&
                 s.batch.trim().toLowerCase() !== studentBatch) {
-                return false;
+                continue;
             }
             if (s.branch.trim().toLowerCase() !== studentBranch)
-                return false;
-            if (Number(s.yearOfStudy) !== year)
-                return false;
-            if (Number(s.semester) !== sem)
-                return false;
-            if (s.section) {
-                if (s.section.trim().toLowerCase() !== studentSection)
-                    return false;
+                continue;
+            const scopeYear = Number(s.yearOfStudy);
+            const scopeSem = Number(s.semester);
+            if (scopeYear === year && scopeSem === sem) {
+                if (s.section &&
+                    s.section.trim().toLowerCase() !== studentSection) {
+                    continue;
+                }
+                exact = true;
             }
-            return true;
-        });
+            else if (year > scopeYear ||
+                (year === scopeYear && sem > scopeSem)) {
+                ahead = true;
+            }
+        }
+        return { exact, ahead };
+    }
+    /**
+     * Exam types this specific student may enroll as. Students exactly in
+     * the scoped semester get every allowed type; students in a higher
+     * semester get only the backlog-style types (supply / improvement /
+     * special supply), never regular.
+     */
+    eligibleTypesForStudent(exam, student) {
+        const allowed = this.getAllowedTypes(exam);
+        const { exact, ahead } = this.studentScopePosition(exam, student);
+        if (exact)
+            return allowed;
+        if (ahead)
+            return allowed.filter((t) => t !== ExamType.REGULAR);
+        return [];
+    }
+    studentMatchesExam(exam, student) {
+        return this.eligibleTypesForStudent(exam, student).length > 0;
     }
     assertApplicationWindow(exam) {
         const today = new Date().toISOString().slice(0, 10);
@@ -704,7 +956,7 @@ class ExamService {
         }
         return inScope.map((exam) => {
             const apps = appsByExam.get(exam.id) ?? [];
-            const allowedTypes = this.getAllowedTypes(exam);
+            const allowedTypes = this.eligibleTypesForStudent(exam, student);
             const appliedTypes = apps.map((a) => a.examType);
             const openTypes = allowedTypes.filter((t) => !appliedTypes.includes(t));
             return {
@@ -722,8 +974,8 @@ class ExamService {
                 applicationEndDate: exam.applicationEndDate,
                 examinationStartDate: exam.examinationStartDate,
                 examinationEndDate: exam.examinationEndDate,
-                packageFee: exam.packageFee,
-                subjectCount: exam.examSubjects?.length ?? 0,
+                packageFee: this.packageFeeForScope(exam, student.branch, student.section),
+                subjectCount: this.examSubjectsForBranch(exam, student.branch, student.section).length,
                 alreadyApplied: openTypes.length === 0,
                 openTypes,
                 applications: apps.map((a) => ({
@@ -751,13 +1003,17 @@ class ExamService {
             .where('a.examId = :examId', { examId })
             .andWhere('LOWER(a.studentRollNumber) = LOWER(:roll)', { roll })
             .getMany();
-        const allowedTypes = this.getAllowedTypes(exam);
+        const allowedTypes = this.eligibleTypesForStudent(exam, student);
         const appliedTypes = applications.map((a) => a.examType);
         const openTypes = allowedTypes.filter((t) => !appliedTypes.includes(t));
-        const subjects = (exam.examSubjects ?? []).map((es) => ({
+        const subjects = this.examSubjectsForBranch(exam, student.branch, student.section).map((es) => ({
             subjectId: es.subjectId,
             fee: Number(es.fee),
             examDate: es.examDate,
+            session: es.session ?? null,
+            startTime: es.startTime ?? null,
+            endTime: es.endTime ?? null,
+            durationMinutes: es.durationMinutes ?? null,
             code: es.subject?.code ?? String(es.subjectId),
             name: es.subject?.name ?? '',
         }));
@@ -773,7 +1029,7 @@ class ExamService {
                 batch: exam.batch,
                 yearOfStudy: exam.yearOfStudy,
                 semester: exam.semester,
-                packageFee: exam.packageFee,
+                packageFee: this.packageFeeForScope(exam, student.branch, student.section),
                 applicationStartDate: exam.applicationStartDate,
                 applicationEndDate: exam.applicationEndDate,
                 examinationStartDate: exam.examinationStartDate,
@@ -812,11 +1068,12 @@ class ExamService {
         if (exam.status !== ExamStatus.PUBLISHED) {
             throw AppError.badRequest('Examination is not published');
         }
-        if (!this.studentMatchesExam(exam, student)) {
+        const eligibleTypes = this.eligibleTypesForStudent(exam, student);
+        if (eligibleTypes.length === 0) {
             throw AppError.forbidden('You are not in the scope of this examination');
         }
         this.assertApplicationWindow(exam);
-        const examType = this.resolveEnrollmentType(exam, dto.examType);
+        const examType = this.resolveEnrollmentType(eligibleTypes, dto.examType);
         const roll = this.resolveRoll(student);
         const existing = await this.applicationRepo
             .createQueryBuilder('a')
@@ -836,7 +1093,10 @@ class ExamService {
         if (existingFee) {
             throw AppError.badRequest(`A fee record already exists for ${this.typeLabel(examType)}`);
         }
-        const allIds = exam.examSubjects.map((es) => es.subjectId);
+        // Students only sit for the papers grouped under their own branch
+        // (and section, when papers are section-specific).
+        const branchSubjects = this.examSubjectsForBranch(exam, student.branch, student.section);
+        const allIds = [...new Set(branchSubjects.map((es) => es.subjectId))];
         let selectedSubjectIds = dto.selectedSubjectIds?.filter((id) => allIds.includes(id)) ?? [];
         if (selectedSubjectIds.length === 0) {
             selectedSubjectIds = [...allIds];
@@ -844,7 +1104,7 @@ class ExamService {
         if (selectedSubjectIds.length === 0) {
             throw AppError.badRequest('No subjects available for this examination');
         }
-        const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds);
+        const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds, branchSubjects, this.packageFeeForScope(exam, student.branch, student.section));
         const feeRecord = await this.feeRecordRepo.save(this.feeRecordRepo.create({
             examId,
             examType,
@@ -863,6 +1123,8 @@ class ExamService {
             examType,
             studentRollNumber: roll,
             studentName: student.studentName,
+            studentBranch: student.branch ?? null,
+            studentSection: student.section ?? null,
             selectedSubjectIds,
             feeBreakdown: breakdown,
             declarationAccepted: true,
@@ -884,7 +1146,21 @@ class ExamService {
         };
     }
     buildHallTicketPayload(exam, application, feeRecord) {
-        const bySubjectId = new Map((exam.examSubjects ?? []).map((es) => [es.subjectId, es]));
+        // Prefer the paper row scoped to the applicant's branch/section so
+        // branch- or section-specific schedules print correctly.
+        const scoped = this.examSubjectsForBranch(exam, application.studentBranch, application.studentSection)
+            .slice()
+            .sort((a, b) => {
+            const rank = (es) => (es.section ? 2 : es.branch ? 1 : 0);
+            return rank(b) - rank(a);
+        });
+        const bySubjectId = new Map();
+        for (const list of [scoped, exam.examSubjects ?? []]) {
+            for (const es of list) {
+                if (!bySubjectId.has(es.subjectId))
+                    bySubjectId.set(es.subjectId, es);
+            }
+        }
         const papers = (application.selectedSubjectIds ?? [])
             .map((sid) => {
             const es = bySubjectId.get(sid);
@@ -895,6 +1171,10 @@ class ExamService {
                 code: es.subject?.code ?? String(sid),
                 name: es.subject?.name ?? '',
                 examDate: es.examDate,
+                session: es.session ?? null,
+                startTime: es.startTime ?? null,
+                endTime: es.endTime ?? null,
+                durationMinutes: es.durationMinutes ?? null,
                 fee: Number(es.fee),
             };
         })
@@ -1017,9 +1297,25 @@ class ExamService {
         const pendingPayRolls = new Set(feeRecords
             .filter((f) => f.status === FeeStatus.PENDING)
             .map((f) => f.studentRollNumber.toLowerCase()));
-        const allSubjectIds = exam.examSubjects.map((es) => es.subjectId);
-        const fullFee = this.calculateFee(exam, allSubjectIds);
-        const estimatedPerStudent = fullFee.baseFee;
+        // Estimate per student against their own branch's papers (subjects may
+        // be grouped per branch, so the union across branches would overcount).
+        const branchFeeCache = new Map();
+        const estimateForBranch = (branch, section) => {
+            const key = `${(branch ?? '').trim().toLowerCase()}|${(section ?? '').trim().toLowerCase()}`;
+            if (branchFeeCache.has(key))
+                return branchFeeCache.get(key);
+            const subjects = this.examSubjectsForBranch(exam, branch, section);
+            const ids = [...new Set(subjects.map((es) => es.subjectId))];
+            const fee = ids.length
+                ? this.calculateFee(exam, ids, subjects, this.packageFeeForScope(exam, branch, section)).baseFee
+                : 0;
+            branchFeeCache.set(key, fee);
+            return fee;
+        };
+        const estimatedPerStudent = eligible.students.length
+            ? this.roundMoney(eligible.students.reduce((sum, s) => sum + estimateForBranch(s.branch, s.section), 0) /
+                eligible.students.length)
+            : estimateForBranch(null, null);
         const eligibleCount = eligible.total;
         const enrolledCount = enrolledRolls.size;
         const paidCount = paidRolls.size;
@@ -1047,7 +1343,7 @@ class ExamService {
                 buckets.set(key, b);
             }
             b.eligible += 1;
-            b.estimatedRevenue += estimatedPerStudent;
+            b.estimatedRevenue += estimateForBranch(s.branch, s.section);
             const roll = s.rollNumber.toLowerCase();
             if (enrolledRolls.has(roll))
                 b.enrolled += 1;
@@ -1079,31 +1375,48 @@ class ExamService {
             pendingPaymentCount,
             notEnrolledCount,
             estimatedPerStudent,
-            estimatedRevenue: this.roundMoney(estimatedPerStudent * eligibleCount),
+            estimatedRevenue: this.roundMoney([...buckets.values()].reduce((sum, b) => sum + b.estimatedRevenue, 0)),
             collectedRevenue: this.roundMoney(collectedRevenue),
             byScope: Array.from(buckets.values()).sort((a, b) => `${a.course}${a.branch}`.localeCompare(`${b.course}${b.branch}`)),
         };
     }
-    calculateFee(exam, selectedSubjectIds) {
-        const allExamSubjectIds = exam.examSubjects.map((es) => es.subjectId);
+    calculateFee(exam, selectedSubjectIds, scopeSubjects, packageFeeOverride) {
+        const pool = scopeSubjects ?? exam.examSubjects;
+        const allExamSubjectIds = [...new Set(pool.map((es) => es.subjectId))];
         for (const sid of selectedSubjectIds) {
             if (!allExamSubjectIds.includes(sid)) {
                 throw AppError.badRequest(`Subject ${sid} is not part of this exam`);
             }
         }
-        const breakdown = exam.examSubjects
-            .filter((es) => selectedSubjectIds.includes(es.subjectId))
+        const seen = new Set();
+        const breakdown = pool
+            .filter((es) => {
+            if (!selectedSubjectIds.includes(es.subjectId) || seen.has(es.subjectId)) {
+                return false;
+            }
+            seen.add(es.subjectId);
+            return true;
+        })
             .map((es) => ({
             subjectId: es.subjectId,
             subjectCode: es.subject?.code ?? String(es.subjectId),
             fee: Number(es.fee),
         }));
         const subjectWiseTotal = breakdown.reduce((sum, b) => sum + b.fee, 0);
+        // Package fee applies when the student takes every paper in their scope
+        // (their branch's papers, not the union across all branches).
         const allSelected = selectedSubjectIds.length === allExamSubjectIds.length &&
             allExamSubjectIds.every((sid) => selectedSubjectIds.includes(sid));
         let baseFee = subjectWiseTotal;
-        if (allSelected && exam.packageFee != null) {
-            baseFee = Math.min(subjectWiseTotal, Number(exam.packageFee));
+        const packageFee = packageFeeOverride !== undefined
+            ? packageFeeOverride
+            : exam.packageFee != null
+                ? Number(exam.packageFee)
+                : null;
+        // Package fee is the flat bundle price when every paper is selected —
+        // it replaces the subject-wise total (whether lower or higher).
+        if (allSelected && packageFee != null && !Number.isNaN(packageFee)) {
+            baseFee = packageFee;
         }
         return { breakdown, baseFee };
     }
@@ -1255,6 +1568,8 @@ class ExamService {
 
     /**
      * Post exam-fee collection to Fee Management (append-only).
+     * Exam-fee payments split into Exam Fee (EXM01) + Late Fee (LTF) lines;
+     * UPI convenience-fee companion payments post under Bank Charges (BNKCH).
      * Updates EMS payment receipt to the Fee Mgmt sequence receipt when posted.
      * Never voids or modifies Fee Management transactions.
      */
@@ -1263,9 +1578,7 @@ class ExamService {
             return null;
         }
         const gw = this.parseGateway(payment.gatewayResponse) ?? {};
-        if (gw.lineType === 'convenience_fee') {
-            return null;
-        }
+        const isBankCharges = gw.lineType === 'convenience_fee';
         let student = null;
         try {
             student = await this.sdms.findStudentByPin(feeRecord.studentRollNumber);
@@ -1273,7 +1586,7 @@ class ExamService {
             student = null;
         }
         try {
-            const result = await this.feeManagement.postExamFeeTransaction({
+            const payload = {
                 emsPaymentId: payment.id,
                 emsFeeRecordId: feeRecord.id,
                 amount: Number(payment.amountPaid),
@@ -1289,7 +1602,13 @@ class ExamService {
                 gatewayPaymentId: extras.gatewayPaymentId || payment.transactionReference || undefined,
                 bankName: extras.bankName || gw.bankName || undefined,
                 remarks: payment.remarks,
-            });
+            };
+            const result = isBankCharges
+                ? await this.feeManagement.postBankChargesTransaction(payload)
+                : await this.feeManagement.postExamFeeTransaction({
+                    ...payload,
+                    lateFeeAmount: Number(feeRecord.lateFee || 0),
+                });
             if (result?.receiptNumber && !result.skipped) {
                 payment.receiptNumber = result.receiptNumber;
                 payment.gatewayResponse = JSON.stringify({
@@ -1698,6 +2017,15 @@ class ExamService {
             await this.syncPaymentToFeeManagement(refreshed, feeRecord, {
                 gatewayPaymentId: meta.paymentId,
             });
+            // Convenience-fee companion posts to Fee Mgmt as Bank Charges
+            if (companionId) {
+                const companionRow = await this.getLinkedPayment(companionId);
+                if (companionRow && companionRow.status === PaymentStatus.SUCCESS) {
+                    await this.syncPaymentToFeeManagement(companionRow, feeRecord, {
+                        gatewayPaymentId: meta.paymentId,
+                    });
+                }
+            }
         }
     }
     async markRazorpaySuccess(payment, meta) {

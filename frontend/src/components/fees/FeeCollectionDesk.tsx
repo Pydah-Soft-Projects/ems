@@ -13,9 +13,11 @@ import {
   Payment,
   PaymentMethod,
 } from '@/types/fee';
+import { StudentExamListItem } from '@/types/exam';
 import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
+import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
 import { calcUpiConvenienceFee, paymentLineLabel } from '@/lib/upiConvenienceFee';
 
 type CollectChannel = PaymentMethod | 'razorpay';
@@ -49,6 +51,23 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [razorpayRecord, setRazorpayRecord] = useState<ExamFeeRecord | null>(
     null,
   );
+  const [eligibleExams, setEligibleExams] = useState<StudentExamListItem[]>([]);
+  const [eligibleError, setEligibleError] = useState('');
+  const [applyExam, setApplyExam] = useState<StudentExamListItem | null>(null);
+
+  const loadEligibleExams = async (studentId: number) => {
+    setEligibleError('');
+    try {
+      setEligibleExams(await api.getStudentExamsForStaff(studentId));
+    } catch (err) {
+      setEligibleExams([]);
+      setEligibleError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not load eligible examinations.',
+      );
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -76,15 +95,27 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       }
 
       try {
-        const res = await api.getSdmsStudents({ pinNo: rollNumber, limit: 5 });
+        // search matches name, PIN, and admission number (2026 batch has no PIN yet)
+        const res = await api.getSdmsStudents({
+          search: rollNumber,
+          limit: 10,
+        });
         const exact =
           res.items.find(
-            (s) => s.pinNo?.toLowerCase() === rollNumber.toLowerCase(),
+            (s) =>
+              s.pinNo?.toLowerCase() === rollNumber.toLowerCase() ||
+              s.admissionNumber?.toLowerCase() === rollNumber.toLowerCase(),
           ) ?? res.items[0] ?? null;
         setSdms(exact);
         if (exact?.studentName) setStudentName(exact.studentName);
+        if (exact) {
+          await loadEligibleExams(exact.id);
+        } else {
+          setEligibleExams([]);
+        }
       } catch {
         setSdms(null);
+        setEligibleExams([]);
       }
     } catch (err) {
       setError(
@@ -276,6 +307,20 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         }}
       />
 
+      {sdms && applyExam ? (
+        <StaffApplyModal
+          open={applyExam != null}
+          student={sdms}
+          examId={applyExam.id}
+          examName={applyExam.name}
+          onClose={() => setApplyExam(null)}
+          onApplied={() => {
+            setApplyExam(null);
+            void load();
+          }}
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <Link
@@ -401,6 +446,99 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {/* Eligible examinations — apply on behalf of the student */}
+          {sdms && (
+            <div className="rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+                <div>
+                  <h3 className="font-semibold text-slate-900">
+                    Eligible examinations
+                  </h3>
+                  <p className="text-xs text-[var(--muted)]">
+                    Published exams in this student&apos;s scope — apply here
+                    on their behalf, then collect the fee below
+                  </p>
+                </div>
+              </div>
+              {eligibleError ? (
+                <p className="px-5 py-4 text-sm text-[var(--danger)]">
+                  {eligibleError}
+                </p>
+              ) : eligibleExams.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-[var(--muted)]">
+                  No published examinations match this student&apos;s
+                  college/course/branch/year/semester scope.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-left text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <th className="px-4 py-3">Examination</th>
+                        <th className="px-4 py-3">Application window</th>
+                        <th className="px-4 py-3">Applied</th>
+                        <th className="px-4 py-3">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eligibleExams.map((exam) => (
+                        <tr
+                          key={exam.id}
+                          className="border-t border-[var(--border)]"
+                        >
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-slate-900">
+                              {exam.name}
+                            </p>
+                            <p className="text-xs text-[var(--muted)]">
+                              Y{exam.yearOfStudy} / S{exam.semester} ·{' '}
+                              {exam.subjectCount} subject
+                              {exam.subjectCount !== 1 ? 's' : ''}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                            {exam.applicationStartDate ?? '—'} →{' '}
+                            {exam.applicationEndDate ?? '—'}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {exam.applications.length === 0 ? (
+                              <span className="text-[var(--muted)]">—</span>
+                            ) : (
+                              exam.applications.map((a) => (
+                                <span
+                                  key={a.id}
+                                  className="mr-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 capitalize"
+                                >
+                                  {a.examType.replace(/_/g, ' ')} (
+                                  {a.feeStatus ?? '—'})
+                                </span>
+                              ))
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {exam.openTypes.length > 0 ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => setApplyExam(exam)}
+                              >
+                                Apply
+                              </Button>
+                            ) : (
+                              <span className="text-xs font-semibold text-emerald-600">
+                                Fully applied
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

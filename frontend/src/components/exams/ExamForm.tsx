@@ -8,9 +8,12 @@ import {
   Exam,
   CreateExamInput,
   ExamType,
+  ExamSession,
+  ExamSubjectFeeInput,
   LateFeeSlabInput,
+  PackageFeeEntry,
 } from '@/types/exam';
-import { Subject, SubjectMappingEntry } from '@/types/subject';
+import { Subject } from '@/types/subject';
 import { SdmsBranch, SdmsBranchYearSemesters, SdmsSection } from '@/types/sdms';
 import { api } from '@/lib/api';
 
@@ -36,6 +39,67 @@ interface ExamFormProps {
 }
 
 type Step = 1 | 2 | 3 | 4;
+
+interface SubjectRowState {
+  selected: boolean;
+  fee: string;
+  examDate: string;
+  session: ExamSession | '';
+  startTime: string;
+  endTime: string;
+  duration: string;
+}
+
+const EMPTY_ROW: SubjectRowState = {
+  selected: false,
+  fee: '180',
+  examDate: '',
+  session: '',
+  startTime: '',
+  endTime: '',
+  duration: '',
+};
+
+/** Section-specific subject groups per branch; '' = all sections */
+type SectionGroups = Record<string, Subject[]>;
+
+function rowKey(branchName: string, section: string, subjectId: number) {
+  return `${branchName}|${section}|${subjectId}`;
+}
+
+function parseRowKey(key: string): {
+  branch: string;
+  section: string;
+  subjectId: number;
+} {
+  const idSep = key.lastIndexOf('|');
+  const subjectId = parseInt(key.slice(idSep + 1), 10);
+  const rest = key.slice(0, idSep);
+  const secSep = rest.lastIndexOf('|');
+  return {
+    branch: rest.slice(0, secSep),
+    section: rest.slice(secSep + 1),
+    subjectId,
+  };
+}
+
+/** Key for package-fee inputs; '' section = whole branch */
+function pkgKey(branchName: string, section: string) {
+  return `${branchName}|${section}`;
+}
+
+function parsePkgKey(key: string): { branch: string; section: string } {
+  const sep = key.lastIndexOf('|');
+  return { branch: key.slice(0, sep), section: key.slice(sep + 1) };
+}
+
+function computeDuration(start: string, end: string): number | null {
+  if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  const diff = eh * 60 + em - (sh * 60 + sm);
+  return diff > 0 ? diff : null;
+}
 
 function examTypeLabel(t: ExamType): string {
   return ALL_EXAM_TYPES.find((x) => x.value === t)?.label ?? t;
@@ -111,11 +175,22 @@ export function ExamForm({
 
   const [branches, setBranches] = useState<SdmsBranch[]>([]);
   const [yearSem, setYearSem] = useState<SdmsBranchYearSemesters | null>(null);
-  const [mappedEntries, setMappedEntries] = useState<SubjectMappingEntry[]>([]);
+  /** Mapped subjects grouped per branch name, then per section ('' = all sections) */
+  const [mappedByBranch, setMappedByBranch] = useState<
+    Record<string, SectionGroups>
+  >({});
+  /** Row state keyed by `${branchName}|${section}|${subjectId}` */
   const [selectedFees, setSelectedFees] = useState<
-    Record<number, { selected: boolean; fee: string; examDate: string }>
+    Record<string, SubjectRowState>
   >({});
   const [packageFee, setPackageFee] = useState('');
+  /** Branch/section package fees keyed by `${branchName}|${section}` ('' section = whole branch) */
+  const [packageFeeByScope, setPackageFeeByScope] = useState<
+    Record<string, string>
+  >({});
+  /** Bulk helpers: type once, apply everywhere, then fine-tune per row */
+  const [bulkSubjectFee, setBulkSubjectFee] = useState('');
+  const [bulkPackageFee, setBulkPackageFee] = useState('');
 
   const [applicationStartDate, setApplicationStartDate] = useState('');
   const [applicationEndDate, setApplicationEndDate] = useState('');
@@ -157,17 +232,48 @@ export function ExamForm({
 
   const firstBranchId = selectedBranchIds[0] ?? null;
 
-  const mappedSubjects = useMemo(() => {
-    const byId = new Map<number, Subject>();
-    for (const entry of mappedEntries) {
-      if (entry.subject && !byId.has(entry.subject.id)) {
-        byId.set(entry.subject.id, entry.subject);
+  /** Row keys visible in the current branch/section groups */
+  const visibleRowKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const [branchName, groups] of Object.entries(mappedByBranch)) {
+      for (const [section, subjects] of Object.entries(groups)) {
+        for (const s of subjects) set.add(rowKey(branchName, section, s.id));
       }
     }
-    return Array.from(byId.values()).sort((a, b) =>
-      a.code.localeCompare(b.code),
-    );
-  }, [mappedEntries]);
+    return set;
+  }, [mappedByBranch]);
+
+  /** Package fee scopes: one per branch, plus one per section-specific group */
+  const packageScopes = useMemo(() => {
+    const rows: { branch: string; section: string }[] = [];
+    for (const b of selectedBranches) {
+      rows.push({ branch: b.name, section: '' });
+      // Sections that have their own subject groups (section-specific
+      // mappings) plus sections explicitly scoped in step 1 — each gets its
+      // own package fee row.
+      const sections = new Set<string>(
+        Object.keys(mappedByBranch[b.name] ?? {}).filter(Boolean),
+      );
+      for (const sec of branchSections[b.id] ?? []) {
+        if (sec.trim()) sections.add(sec.trim());
+      }
+      for (const section of [...sections].sort((a, z) => a.localeCompare(z))) {
+        rows.push({ branch: b.name, section });
+      }
+    }
+    return rows;
+  }, [selectedBranches, mappedByBranch, branchSections]);
+
+  const totalMappedCount = useMemo(
+    () =>
+      Object.values(mappedByBranch).reduce(
+        (sum, groups) =>
+          sum +
+          Object.values(groups).reduce((s, list) => s + list.length, 0),
+        0,
+      ),
+    [mappedByBranch],
+  );
 
   useEffect(() => {
     if (initial) {
@@ -202,18 +308,25 @@ export function ExamForm({
             }))
           : [{ fromDay: 1, toDay: 3, amount: 100 }],
       );
-      const fees: Record<
-        number,
-        { selected: boolean; fee: string; examDate: string }
-      > = {};
+      const fees: Record<string, SubjectRowState> = {};
       for (const es of initial.examSubjects ?? []) {
-        fees[es.subjectId] = {
+        fees[rowKey(es.branch ?? '', es.section ?? '', es.subjectId)] = {
           selected: true,
           fee: String(es.fee),
           examDate: es.examDate ?? '',
+          session: (es.session as ExamSession | null) ?? '',
+          startTime: es.startTime ?? '',
+          endTime: es.endTime ?? '',
+          duration:
+            es.durationMinutes != null ? String(es.durationMinutes) : '',
         };
       }
       setSelectedFees(fees);
+      const pkgFees: Record<string, string> = {};
+      for (const pf of initial.packageFees ?? []) {
+        pkgFees[pkgKey(pf.branch, pf.section ?? '')] = String(pf.amount);
+      }
+      setPackageFeeByScope(pkgFees);
       setSelectedBranchIds([]);
       setBranchSections({});
       setStep(1);
@@ -247,6 +360,9 @@ export function ExamForm({
       setYearSem(null);
       setSelectedFees({});
       setPackageFee('');
+      setPackageFeeByScope({});
+      setBulkSubjectFee('');
+      setBulkPackageFee('');
       setApplicationStartDate('');
       setApplicationEndDate('');
       setExaminationStartDate('');
@@ -349,73 +465,86 @@ export function ExamForm({
       !yearOfStudy ||
       !semester
     ) {
-      setMappedEntries([]);
+      setMappedByBranch({});
       return;
     }
     let cancelled = false;
     setLoadingScope(true);
     Promise.all(
-      selectedBranches.map((b) =>
-        api.getSubjectMappings({
-          regulationId: parseInt(regulationId, 10),
-          course: courseName,
-          branch: b.name,
-          batch,
-          yearOfStudy: parseInt(yearOfStudy, 10),
-          semester: parseInt(semester, 10),
-        }),
-      ),
+      selectedBranches.map(async (b) => {
+        try {
+          const entries = await api.getSubjectMappings({
+            regulationId: parseInt(regulationId, 10),
+            course: courseName,
+            branch: b.name,
+            batch,
+            yearOfStudy: parseInt(yearOfStudy, 10),
+            semester: parseInt(semester, 10),
+          });
+          // Sections chosen for this branch in step 1; empty = all sections.
+          const scopeSections = branchSections[b.id] ?? [];
+          const groups: Record<string, Map<number, Subject>> = {};
+          const put = (section: string, subject: Subject) => {
+            const g = (groups[section] ??= new Map<number, Subject>());
+            if (!g.has(subject.id)) g.set(subject.id, subject);
+          };
+          for (const e of entries) {
+            if (!e.subject) continue;
+            if (e.sectionMode !== 'selected' || !e.sections?.length) {
+              put('', e.subject);
+              continue;
+            }
+            for (const sec of e.sections) {
+              if (
+                scopeSections.length > 0 &&
+                !scopeSections.some(
+                  (x) => x.toLowerCase() === sec.toLowerCase(),
+                )
+              ) {
+                continue;
+              }
+              put(sec, e.subject);
+            }
+          }
+          const sectionGroups: SectionGroups = {};
+          for (const [section, byId] of Object.entries(groups)) {
+            sectionGroups[section] = Array.from(byId.values()).sort((x, y) =>
+              x.code.localeCompare(y.code),
+            );
+          }
+          return [b.name, sectionGroups] as const;
+        } catch {
+          return [b.name, {} as SectionGroups] as const;
+        }
+      }),
     )
       .then((results) => {
         if (cancelled) return;
-        if (results.length === 0) {
-          setMappedEntries([]);
-          return;
+        const grouped: Record<string, SectionGroups> = {};
+        for (const [branchName, sectionGroups] of results) {
+          grouped[branchName] = sectionGroups;
         }
-        const idSets = results.map(
-          (entries) =>
-            new Set(
-              entries
-                .filter((e) => e.subject)
-                .map((e) => e.subject!.id),
-            ),
-        );
-        let intersection = idSets[0];
-        for (let i = 1; i < idSets.length; i++) {
-          intersection = new Set(
-            [...intersection].filter((id) => idSets[i].has(id)),
-          );
-        }
-        const byId = new Map<number, SubjectMappingEntry>();
-        for (const entries of results) {
-          for (const e of entries) {
-            if (
-              e.subject &&
-              intersection.has(e.subject.id) &&
-              !byId.has(e.subject.id)
-            ) {
-              byId.set(e.subject.id, e);
-            }
-          }
-        }
-        const intersected = Array.from(byId.values());
-        setMappedEntries(intersected);
+        setMappedByBranch(grouped);
         setSelectedFees((prev) => {
           const next = { ...prev };
-          for (const e of intersected) {
-            if (e.subject && next[e.subject.id] === undefined) {
-              next[e.subject.id] = {
-                selected: false,
-                fee: '180',
-                examDate: '',
-              };
+          for (const [branchName, sectionGroups] of results) {
+            for (const [section, subjects] of Object.entries(sectionGroups)) {
+              for (const subject of subjects) {
+                const key = rowKey(branchName, section, subject.id);
+                // Edit mode may have stored the row under a broader scope
+                // (legacy common '' branch, or branch-wide when the mapping
+                // has since become section-specific) — migrate it here.
+                const legacy =
+                  next[rowKey('', '', subject.id)] ??
+                  (section ? next[rowKey(branchName, '', subject.id)] : undefined);
+                if (next[key] === undefined) {
+                  next[key] = legacy ? { ...legacy } : { ...EMPTY_ROW };
+                }
+              }
             }
           }
           return next;
         });
-      })
-      .catch(() => {
-        if (!cancelled) setMappedEntries([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingScope(false);
@@ -427,6 +556,7 @@ export function ExamForm({
     regulationId,
     courseName,
     selectedBranches,
+    branchSections,
     batch,
     yearOfStudy,
     semester,
@@ -509,20 +639,66 @@ export function ExamForm({
     }
     if (current === 2) {
       const selected = Object.entries(selectedFees).filter(
-        ([, v]) => v.selected,
+        ([key, v]) => v.selected && visibleRowKeys.has(key),
       );
       if (selected.length === 0) {
         setError('Select at least one mapped subject and set fees.');
         return false;
       }
-      for (const [, v] of selected) {
+      for (const b of selectedBranches) {
+        const groups = mappedByBranch[b.name] ?? {};
+        const hasAny = Object.entries(groups).some(([section, subjects]) =>
+          subjects.some(
+            (s) => selectedFees[rowKey(b.name, section, s.id)]?.selected,
+          ),
+        );
+        if (!hasAny) {
+          setError(
+            `Select at least one subject for the ${b.name} group — students of every scoped branch need papers.`,
+          );
+          return false;
+        }
+      }
+      for (const [key, v] of selected) {
+        const { branch, section } = parseRowKey(key);
+        const label = section
+          ? `${branch} · Section ${section}`
+          : branch || 'common';
         const fee = parseFloat(v.fee);
         if (isNaN(fee) || fee < 0) {
-          setError('Subject fees must be valid non-negative numbers.');
+          setError(
+            `Subject fees must be valid non-negative numbers (${label} group).`,
+          );
           return false;
         }
         if (!v.examDate) {
-          setError('Set an exam date for every selected subject.');
+          setError(`Set an exam date for every selected subject (${label} group).`);
+          return false;
+        }
+        if (v.startTime && v.endTime) {
+          if (computeDuration(v.startTime, v.endTime) == null) {
+            setError(
+              `End time must be after start time (${label} group).`,
+            );
+            return false;
+          }
+        }
+        if (v.duration) {
+          const d = parseInt(v.duration, 10);
+          if (isNaN(d) || d <= 0) {
+            setError(`Duration must be a positive number of minutes (${label} group).`);
+            return false;
+          }
+        }
+      }
+      for (const [key, raw] of Object.entries(packageFeeByScope)) {
+        if (!raw.trim()) continue;
+        const amount = parseFloat(raw);
+        if (isNaN(amount) || amount < 0) {
+          const { branch, section } = parsePkgKey(key);
+          setError(
+            `Package fee for ${branch}${section ? ` Section ${section}` : ''} must be a valid non-negative number.`,
+          );
           return false;
         }
       }
@@ -565,19 +741,45 @@ export function ExamForm({
       return;
     }
 
-    const subjects = Object.entries(selectedFees)
-      .filter(([, v]) => v.selected)
-      .map(([id, v]) => ({
-        subjectId: parseInt(id, 10),
-        fee: parseFloat(v.fee),
-        examDate: v.examDate,
-      }));
+    const subjects: ExamSubjectFeeInput[] = Object.entries(selectedFees)
+      .filter(([key, v]) => v.selected && visibleRowKeys.has(key))
+      .map(([key, v]) => {
+        const { branch: branchName, section, subjectId } = parseRowKey(key);
+        const duration = v.duration
+          ? parseInt(v.duration, 10)
+          : (computeDuration(v.startTime, v.endTime) ?? undefined);
+        return {
+          subjectId,
+          branch: branchName || undefined,
+          section: section || undefined,
+          fee: parseFloat(v.fee),
+          examDate: v.examDate,
+          session: v.session || undefined,
+          startTime: v.startTime || undefined,
+          endTime: v.endTime || undefined,
+          durationMinutes: duration,
+        };
+      });
 
     const pkg = packageFee ? parseFloat(packageFee) : undefined;
     if (packageFee && (isNaN(pkg!) || pkg! < 0)) {
       setError('Package fee must be valid.');
       return;
     }
+
+    const scopeKeys = new Set(
+      packageScopes.map((s) => pkgKey(s.branch, s.section)),
+    );
+    const packageFees: PackageFeeEntry[] = Object.entries(packageFeeByScope)
+      .filter(([key, raw]) => scopeKeys.has(key) && raw.trim() !== '')
+      .map(([key, raw]) => {
+        const { branch: branchName, section } = parsePkgKey(key);
+        return {
+          branch: branchName,
+          section: section || undefined,
+          amount: parseFloat(raw),
+        };
+      });
 
     const scopesPayload = selectedBranches.map((b) => ({
       branch: b.name,
@@ -603,6 +805,7 @@ export function ExamForm({
           scopes: scopesPayload,
           subjects,
           packageFee: pkg,
+          packageFees,
           applicationStartDate: applicationStartDate || undefined,
           applicationEndDate: applicationEndDate || undefined,
           examinationStartDate: examinationStartDate || undefined,
@@ -628,6 +831,7 @@ export function ExamForm({
           scopes: scopesPayload,
           subjects,
           packageFee: pkg,
+          packageFees,
           applicationStartDate: applicationStartDate || undefined,
           applicationEndDate: applicationEndDate || undefined,
           examinationStartDate: examinationStartDate || undefined,
@@ -649,9 +853,41 @@ export function ExamForm({
     (y) => y.yearOfStudy === parseInt(yearOfStudy, 10),
   );
 
-  const selectedCount = Object.values(selectedFees).filter(
-    (v) => v.selected,
+  const selectedCount = Object.entries(selectedFees).filter(
+    ([key, v]) => v.selected && visibleRowKeys.has(key),
   ).length;
+
+  function applyFeeToAllSubjects() {
+    const fee = bulkSubjectFee.trim();
+    if (!fee || isNaN(parseFloat(fee)) || parseFloat(fee) < 0) {
+      setError('Enter a valid amount to apply to all subjects.');
+      return;
+    }
+    setError('');
+    setSelectedFees((prev) => {
+      const next = { ...prev };
+      for (const key of visibleRowKeys) {
+        next[key] = { ...(next[key] ?? EMPTY_ROW), fee };
+      }
+      return next;
+    });
+  }
+
+  function applyFeeToAllPackages() {
+    const fee = bulkPackageFee.trim();
+    if (!fee || isNaN(parseFloat(fee)) || parseFloat(fee) < 0) {
+      setError('Enter a valid amount to apply to all package fees.');
+      return;
+    }
+    setError('');
+    setPackageFeeByScope((prev) => {
+      const next = { ...prev };
+      for (const s of packageScopes) {
+        next[pkgKey(s.branch, s.section)] = fee;
+      }
+      return next;
+    });
+  }
 
   const reviewTypes = types;
 
@@ -991,100 +1227,368 @@ export function ExamForm({
         <div className="space-y-4">
           {loadingScope ? (
             <p className="text-sm text-[var(--muted)]">
-              Loading mapped subjects (intersection across branches)...
+              Loading mapped subjects per branch…
             </p>
-          ) : mappedSubjects.length === 0 ? (
+          ) : totalMappedCount === 0 ? (
             <p className="text-sm text-[var(--muted)]">
-              No common subject mappings for the selected branches /
-              regulation / programme / batch / year / semester. Create
-              mappings first.
+              No subject mappings for the selected branches / regulation /
+              programme / batch / year / semester. Create mappings first.
             </p>
           ) : (
-            <div className="max-h-80 space-y-2 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] p-3">
-              <p className="mb-2 text-xs text-[var(--muted)]">
-                Select subjects, set fee, and the date that paper will be held.
+            <>
+            <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/60 px-3 py-2.5">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  Fee for all subjects (₹)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={bulkSubjectFee}
+                  onChange={(e) => setBulkSubjectFee(e.target.value)}
+                  className="w-full rounded-[var(--radius)] border border-[var(--border)] px-2.5 py-1.5 text-sm"
+                  placeholder="e.g. 180"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-3 !py-1.5 text-xs"
+                onClick={applyFeeToAllSubjects}
+              >
+                Apply to all subjects
+              </Button>
+              <p className="basis-full text-xs text-[var(--muted)]">
+                Fills every subject&apos;s fee with one click — you can still
+                edit any subject individually afterwards.
               </p>
-              {mappedSubjects.map((subject) => {
-                const row = selectedFees[subject.id] ?? {
-                  selected: false,
-                  fee: '180',
-                  examDate: '',
-                };
+            </div>
+            <div className="max-h-[28rem] space-y-4 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] p-3">
+              <p className="text-xs text-[var(--muted)]">
+                Subjects are grouped per branch and, where mappings are
+                section-specific, per section — students only see the papers of
+                their own branch and section. Set fee, exam date, session
+                (FN/AN), and timings for each selected paper.
+              </p>
+              {selectedBranches.map((b) => {
+                const groups = mappedByBranch[b.name] ?? {};
+                const sectionKeys = Object.keys(groups).sort((x, y) =>
+                  x === '' ? -1 : y === '' ? 1 : x.localeCompare(y),
+                );
+                const allRows = sectionKeys.flatMap((section) =>
+                  (groups[section] ?? []).map((s) => rowKey(b.name, section, s.id)),
+                );
+                const groupSelected = allRows.filter(
+                  (key) => selectedFees[key]?.selected,
+                ).length;
                 return (
-                  <label
-                    key={subject.id}
-                    className="flex flex-wrap items-center gap-3 rounded-md px-2 py-2 hover:bg-slate-50"
+                  <div
+                    key={b.id}
+                    className="rounded-lg border border-[var(--border)]"
                   >
-                    <input
-                      type="checkbox"
-                      checked={row.selected}
-                      onChange={(e) =>
-                        setSelectedFees((prev) => ({
-                          ...prev,
-                          [subject.id]: {
-                            ...row,
-                            selected: e.target.checked,
-                          },
-                        }))
-                      }
-                    />
-                    <span className="min-w-[10rem] flex-1 text-sm">
-                      <span className="font-medium">{subject.code}</span>
-                      <span className="text-[var(--muted)]">
-                        {' '}
-                        — {subject.name}
-                      </span>
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      step="1"
-                      value={row.fee}
-                      disabled={!row.selected}
-                      onChange={(e) =>
-                        setSelectedFees((prev) => ({
-                          ...prev,
-                          [subject.id]: { ...row, fee: e.target.value },
-                        }))
-                      }
-                      className="w-24 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm disabled:bg-slate-50"
-                      placeholder="Fee"
-                      aria-label={`Fee ${subject.code}`}
-                    />
-                    <input
-                      type="date"
-                      value={row.examDate}
-                      disabled={!row.selected}
-                      onChange={(e) =>
-                        setSelectedFees((prev) => ({
-                          ...prev,
-                          [subject.id]: {
-                            ...row,
-                            examDate: e.target.value,
-                          },
-                        }))
-                      }
-                      className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm disabled:bg-slate-50"
-                      aria-label={`Exam date ${subject.code}`}
-                    />
-                  </label>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-slate-50 px-3 py-2">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {b.name}
+                        <span className="ml-2 text-xs font-normal text-[var(--muted)]">
+                          {groupSelected}/{allRows.length} selected
+                        </span>
+                      </p>
+                      {allRows.length > 0 && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-[var(--primary)] hover:underline"
+                          onClick={() =>
+                            setSelectedFees((prev) => {
+                              const next = { ...prev };
+                              const allOn = allRows.every(
+                                (key) => next[key]?.selected,
+                              );
+                              for (const key of allRows) {
+                                next[key] = {
+                                  ...(next[key] ?? EMPTY_ROW),
+                                  selected: !allOn,
+                                };
+                              }
+                              return next;
+                            })
+                          }
+                        >
+                          Toggle all
+                        </button>
+                      )}
+                    </div>
+                    {allRows.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-[var(--muted)]">
+                        No subjects mapped for this branch in the selected
+                        scope.
+                      </p>
+                    ) : (
+                      sectionKeys.map((section) => {
+                      const subjects = groups[section] ?? [];
+                      const showSectionHeader =
+                        section !== '' || sectionKeys.length > 1;
+                      return (
+                      <div key={section || '__all__'}>
+                        {showSectionHeader && (
+                          <p className="border-b border-dashed border-[var(--border)] bg-slate-50/50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                            {section
+                              ? `Section ${section}`
+                              : 'All sections (common)'}
+                          </p>
+                        )}
+                        <div className="space-y-1 p-2">
+                        {subjects.map((subject) => {
+                          const key = rowKey(b.name, section, subject.id);
+                          const row = selectedFees[key] ?? EMPTY_ROW;
+                          const update = (patch: Partial<SubjectRowState>) =>
+                            setSelectedFees((prev) => ({
+                              ...prev,
+                              [key]: { ...row, ...patch },
+                            }));
+                          const autoDuration = computeDuration(
+                            row.startTime,
+                            row.endTime,
+                          );
+                          return (
+                            <div
+                              key={key}
+                              className="rounded-md px-2 py-2 hover:bg-slate-50"
+                            >
+                              <div className="flex flex-wrap items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={row.selected}
+                                  onChange={(e) =>
+                                    update({ selected: e.target.checked })
+                                  }
+                                  aria-label={`Select ${subject.code}`}
+                                />
+                                <span className="min-w-[10rem] flex-1 text-sm">
+                                  <span className="font-medium">
+                                    {subject.code}
+                                  </span>
+                                  <span className="text-[var(--muted)]">
+                                    {' '}
+                                    — {subject.name}
+                                  </span>
+                                </span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="1"
+                                  value={row.fee}
+                                  disabled={!row.selected}
+                                  onChange={(e) =>
+                                    update({ fee: e.target.value })
+                                  }
+                                  className="w-24 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm disabled:bg-slate-50"
+                                  placeholder="Fee ₹"
+                                  aria-label={`Fee ${subject.code}`}
+                                />
+                                <input
+                                  type="date"
+                                  value={row.examDate}
+                                  disabled={!row.selected}
+                                  onChange={(e) =>
+                                    update({ examDate: e.target.value })
+                                  }
+                                  className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm disabled:bg-slate-50"
+                                  aria-label={`Exam date ${subject.code}`}
+                                />
+                              </div>
+                              {row.selected && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-xs">
+                                  <select
+                                    value={row.session}
+                                    onChange={(e) =>
+                                      update({
+                                        session: e.target.value as
+                                          | ExamSession
+                                          | '',
+                                      })
+                                    }
+                                    className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-xs"
+                                    aria-label={`Session ${subject.code}`}
+                                  >
+                                    <option value="">Session (auto)</option>
+                                    <option value="FN">Forenoon (FN)</option>
+                                    <option value="AN">Afternoon (AN)</option>
+                                  </select>
+                                  <label className="flex items-center gap-1 text-[var(--muted)]">
+                                    Start
+                                    <input
+                                      type="time"
+                                      value={row.startTime}
+                                      onChange={(e) => {
+                                        const startTime = e.target.value;
+                                        const d = computeDuration(
+                                          startTime,
+                                          row.endTime,
+                                        );
+                                        update({
+                                          startTime,
+                                          duration:
+                                            d != null ? String(d) : row.duration,
+                                        });
+                                      }}
+                                      className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs"
+                                      aria-label={`Start time ${subject.code}`}
+                                    />
+                                  </label>
+                                  <label className="flex items-center gap-1 text-[var(--muted)]">
+                                    End
+                                    <input
+                                      type="time"
+                                      value={row.endTime}
+                                      onChange={(e) => {
+                                        const endTime = e.target.value;
+                                        const d = computeDuration(
+                                          row.startTime,
+                                          endTime,
+                                        );
+                                        update({
+                                          endTime,
+                                          duration:
+                                            d != null ? String(d) : row.duration,
+                                        });
+                                      }}
+                                      className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs"
+                                      aria-label={`End time ${subject.code}`}
+                                    />
+                                  </label>
+                                  <label className="flex items-center gap-1 text-[var(--muted)]">
+                                    Duration
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={row.duration}
+                                      onChange={(e) =>
+                                        update({ duration: e.target.value })
+                                      }
+                                      className="w-20 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs"
+                                      placeholder={
+                                        autoDuration != null
+                                          ? String(autoDuration)
+                                          : 'mins'
+                                      }
+                                      aria-label={`Duration ${subject.code}`}
+                                    />
+                                    min
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        </div>
+                      </div>
+                      );
+                      })
+                    )}
+                  </div>
                 );
               })}
             </div>
+
+            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-3">
+              <p className="text-sm font-semibold text-slate-900">
+                Package fees
+                <span className="ml-2 text-xs font-normal text-[var(--muted)]">
+                  Applied when a student selects all papers of their branch /
+                  section
+                </span>
+              </p>
+              <Input
+                label="Default package fee (optional)"
+                type="number"
+                min={0}
+                value={packageFee}
+                onChange={(e) => setPackageFee(e.target.value)}
+                placeholder="Used when no branch/section package fee is set"
+              />
+              {packageScopes.length > 0 && (
+                <>
+                  <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius)] bg-slate-50/60 px-3 py-2.5">
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        Fee for all packages (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="1"
+                        value={bulkPackageFee}
+                        onChange={(e) => setBulkPackageFee(e.target.value)}
+                        className="w-full rounded-[var(--radius)] border border-[var(--border)] px-2.5 py-1.5 text-sm"
+                        placeholder="e.g. 1500"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="!px-3 !py-1.5 text-xs"
+                      onClick={applyFeeToAllPackages}
+                    >
+                      Apply to all packages
+                    </Button>
+                    <p className="basis-full text-xs text-[var(--muted)]">
+                      Fills every branch / section package fee — edit any of
+                      them individually afterwards. Section fees override the
+                      branch fee; the branch fee overrides the default.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {packageScopes.map((scope) => {
+                      const key = pkgKey(scope.branch, scope.section);
+                      return (
+                        <label
+                          key={key}
+                          className="flex items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--border)] px-3 py-2 text-sm"
+                        >
+                          <span className="text-slate-700">
+                            {scope.branch}
+                            {scope.section ? (
+                              <span className="text-[var(--muted)]">
+                                {' '}
+                                · Section {scope.section}
+                              </span>
+                            ) : (
+                              <span className="text-[var(--muted)]">
+                                {' '}
+                                · whole branch
+                              </span>
+                            )}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="1"
+                            value={packageFeeByScope[key] ?? ''}
+                            onChange={(e) =>
+                              setPackageFeeByScope((prev) => ({
+                                ...prev,
+                                [key]: e.target.value,
+                              }))
+                            }
+                            className="w-28 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm"
+                            placeholder="₹ (unset)"
+                            aria-label={`Package fee ${scope.branch}${scope.section ? ` section ${scope.section}` : ''}`}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+            </>
           )}
-          <Input
-            label="Package fee (optional)"
-            type="number"
-            min={0}
-            value={packageFee}
-            onChange={(e) => setPackageFee(e.target.value)}
-            placeholder="Applied when all subjects selected"
-          />
           <p className="text-xs text-[var(--muted)]">
-            {selectedCount} subject{selectedCount !== 1 ? 's' : ''} selected
-            {selectedBranches.length > 1
-              ? ` · common to ${selectedBranches.length} branches`
-              : ''}
+            {selectedCount} paper{selectedCount !== 1 ? 's' : ''} selected
+            across {selectedBranches.length} branch
+            {selectedBranches.length !== 1 ? 'es' : ''} — each student sees
+            only their own branch and section&apos;s papers.
           </p>
         </div>
       )}
@@ -1256,7 +1760,13 @@ export function ExamForm({
             </div>
             <p className="mt-2">
               Subjects: <strong>{selectedCount}</strong>
-              {packageFee ? ` · Package fee: ${packageFee}` : ''}
+              {packageFee ? ` · Default package fee: ${packageFee}` : ''}
+              {(() => {
+                const n = packageScopes.filter(
+                  (s) => (packageFeeByScope[pkgKey(s.branch, s.section)] ?? '').trim() !== '',
+                ).length;
+                return n > 0 ? ` · ${n} branch/section package fee${n !== 1 ? 's' : ''}` : '';
+              })()}
             </p>
             <p className="mt-1 text-[var(--muted)]">
               App: {applicationStartDate || '—'} → {applicationEndDate || '—'}

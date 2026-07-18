@@ -18,6 +18,8 @@ const {
   Payment,
   ExamApplication,
 } = require('../exam/schemas/fee.schema');
+const { ResultUpload, SubjectResult } = require('../exam/schemas/result.schema');
+const { ResultsService } = require('../exam/results.service');
 const {
   PaymentGatewaySettings,
 } = require('../settings/payment-gateway-settings.entity');
@@ -76,9 +78,26 @@ function createServices(dataSource, studentDataSource) {
     feeManagement,
   );
 
+  const results = new ResultsService(
+    dataSource.getRepository(ResultUpload),
+    dataSource.getRepository(SubjectResult),
+    dataSource.getRepository(Exam),
+    dataSource.getRepository(ExamApplication),
+    sdms,
+  );
+
   const auth = new AuthService(sdms);
 
-  return { auth, regulations, subjects, exam, sdms, settings, feeManagement };
+  return {
+    auth,
+    regulations,
+    subjects,
+    exam,
+    sdms,
+    settings,
+    feeManagement,
+    results,
+  };
 }
 
 module.exports = { createServices };

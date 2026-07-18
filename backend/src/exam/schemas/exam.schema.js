@@ -25,6 +25,8 @@ const Exam = new EntitySchema({
     applicationEndDate: { type: 'date', nullable: true },
     lateFeeStartDate: { type: 'date', nullable: true },
     packageFee: { type: 'decimal', precision: 10, scale: 2, nullable: true },
+    /** Branch/section-wise package fees: [{ branch, section|null, amount }] */
+    packageFees: { type: 'simple-json', nullable: true },
     instructions: { type: 'text', nullable: true },
     rejectionRemarks: { type: 'text', nullable: true },
     approvedBy: { type: 'varchar', length: 100, nullable: true },
@@ -97,8 +99,17 @@ const ExamSubject = new EntitySchema({
     id: { type: 'int', primary: true, generated: true },
     examId: { type: 'int' },
     subjectId: { type: 'int' },
+    /** Branch this paper belongs to; null = common to all scoped branches */
+    branch: { type: 'varchar', length: 100, nullable: true },
+    /** Section within the branch; null = all sections of the branch */
+    section: { type: 'varchar', length: 64, nullable: true },
     fee: { type: 'decimal', precision: 10, scale: 2 },
     examDate: { type: 'date', nullable: true },
+    /** 'FN' (forenoon) or 'AN' (afternoon) */
+    session: { type: 'varchar', length: 2, nullable: true },
+    startTime: { type: 'varchar', length: 5, nullable: true },
+    endTime: { type: 'varchar', length: 5, nullable: true },
+    durationMinutes: { type: 'int', nullable: true },
   },
   relations: {
     exam: {

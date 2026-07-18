@@ -18,12 +18,13 @@ import {
   ExamOverviewPanel,
   ExamSubjectsPanel,
 } from '@/components/exams/ExamDetailPanels';
+import { ExamResultsPanel } from '@/components/exams/ExamResultsPanel';
 import { PublishExamModal } from '@/components/exams/PublishExamModal';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { TextareaField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 
-type DetailTab = 'overview' | 'subjects' | 'analytics' | 'hall-tickets';
+type DetailTab = 'overview' | 'subjects' | 'analytics' | 'hall-tickets' | 'results';
 
 export default function ExamDetailPage() {
   const params = useParams<{ examId: string }>();
@@ -185,7 +186,7 @@ export default function ExamDetailPage() {
     <div className="space-y-6">
       <PageHeader
         title={exam.name}
-        description="Overview, subjects, analytics, and hall tickets."
+        description="Overview, subjects, analytics, hall tickets, and results."
         action={
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
@@ -264,6 +265,11 @@ export default function ExamDetailPage() {
             label: 'Hall tickets',
             href: `/dashboard/exams/${exam.id}?tab=hall-tickets`,
           },
+          {
+            id: 'results',
+            label: 'Results',
+            href: `/dashboard/exams/${exam.id}?tab=results`,
+          },
         ]}
       />
 
@@ -281,6 +287,7 @@ export default function ExamDetailPage() {
           {tabParam === 'hall-tickets' ? (
             <ExamHallTicketsTab exam={exam} />
           ) : null}
+          {tabParam === 'results' ? <ExamResultsPanel exam={exam} /> : null}
         </CardBody>
       </Card>
 

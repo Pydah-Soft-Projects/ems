@@ -14,7 +14,11 @@ const {
   createSubjectsRoutes,
   createSubjectMappingRoutes,
 } = require('./subjects/subjects.routes');
-const { createExamRoutes, createFeesRoutes } = require('./exam/exam.routes');
+const {
+  createExamRoutes,
+  createFeesRoutes,
+  createResultsRoutes,
+} = require('./exam/exam.routes');
 const { createSdmsRoutes } = require('./sdms/sdms.routes');
 const { createSettingsRoutes } = require('./settings/settings.routes');
 
@@ -156,6 +160,16 @@ function createApp(services) {
   );
 
   api.get(
+    '/student/results',
+    asyncHandler(async (req, res) => {
+      if (req.user?.role !== 'student' || !req.user.studentId) {
+        throw AppError.unauthorized('Student access only');
+      }
+      res.json(await services.results.getStudentResults(req.user.studentId));
+    }),
+  );
+
+  api.get(
     '/student/hall-tickets',
     asyncHandler(async (req, res) => {
       if (req.user?.role !== 'student' || !req.user.studentId) {
@@ -223,6 +237,7 @@ function createApp(services) {
   api.use('/subject-mappings', createSubjectMappingRoutes(services));
   api.use('/exams', createExamRoutes(services));
   api.use('/fees', createFeesRoutes(services));
+  api.use('/results', createResultsRoutes(services));
   api.use('/sdms', createSdmsRoutes(services));
   api.use('/settings', createSettingsRoutes(services));
 

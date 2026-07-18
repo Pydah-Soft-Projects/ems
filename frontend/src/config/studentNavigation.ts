@@ -2,7 +2,7 @@ export type StudentNavItem = {
   href: string;
   label: string;
   exact?: boolean;
-  icon: 'home' | 'exams' | 'applications' | 'documents' | 'profile';
+  icon: 'home' | 'exams' | 'applications' | 'documents' | 'results' | 'profile';
 };
 
 export const studentNavigation: StudentNavItem[] = [
@@ -10,6 +10,7 @@ export const studentNavigation: StudentNavItem[] = [
   { href: '/student/exams', label: 'Exams', icon: 'exams' },
   { href: '/student/applications', label: 'Applications', icon: 'applications' },
   { href: '/student/documents', label: 'Documents', icon: 'documents' },
+  { href: '/student/results', label: 'Results', icon: 'results' },
   { href: '/student/profile', label: 'Profile', icon: 'profile' },
 ];
 

@@ -13,6 +13,23 @@ const EXAM_FEE_HEAD = {
   description: 'Examination processing fee',
 };
 
+const LATE_FEE_HEAD = {
+  name: 'Late Fee',
+  code: 'LTF',
+  description: 'Examination late fee',
+};
+
+const BANK_CHARGES_HEAD = {
+  name: 'Bank Charges',
+  code: 'BNKCH',
+  description: 'Bank / payment gateway charges',
+};
+
+// Exact-name matchers. Anchored so "Library Late Fee" / "Bus Late Fee"
+// or "XYZ Bank Charges" never match — only the generic heads do.
+const LATE_FEE_NAME_REGEX = /^(exam\s*)?late\s*fee$/i;
+const BANK_CHARGES_NAME_REGEX = /^bank\s*charges?$/i;
+
 /**
  * Maps EMS payment method → Fee Management paymentMode enum.
  */
@@ -34,11 +51,16 @@ function mapPaymentMode(emsMethod) {
   }
 }
 
-/** Indian FY: Apr–Mar → e.g. "2025-26" */
-function getFinancialYear(date = new Date()) {
+/**
+ * Financial year label, e.g. "2026-27". Boundary defaults to Apr 1 but
+ * honours the portal's receiptSequenceResetMonth/Day settings (1-based month).
+ */
+function getFinancialYear(date = new Date(), resetMonth = 4, resetDay = 1) {
   const year = date.getFullYear();
-  const month = date.getMonth();
-  if (month >= 3) {
+  const month = date.getMonth() + 1;
+  const afterReset =
+    month > resetMonth || (month === resetMonth && date.getDate() >= resetDay);
+  if (afterReset) {
     return `${year}-${String(year + 1).slice(-2)}`;
   }
   return `${year - 1}-${String(year).slice(-2)}`;
@@ -61,17 +83,54 @@ class FeeManagementService {
     return registerFeeManagementModels(conn);
   }
 
-  async ensureExamFeeHead() {
+  /**
+   * Find-or-create a FeeHead. Matches by code first, then by exact-name
+   * regex. Handles the create race (E11000) by re-reading.
+   */
+  async ensureHead({ code, nameRegex, spec }) {
     const { FeeHead } = this.getModels();
-    const code = config.feeManagement.examFeeHeadCode || EXAM_FEE_HEAD.code;
     let head = await FeeHead.findOne({ code });
     if (head) return head;
-    head = await FeeHead.findOne({ name: EXAM_FEE_HEAD.name });
+    head = await FeeHead.findOne({ name: nameRegex });
     if (head) return head;
-    return FeeHead.create({
-      name: EXAM_FEE_HEAD.name,
+    try {
+      return await FeeHead.create(spec);
+    } catch (err) {
+      if (err.code === 11000) {
+        head =
+          (await FeeHead.findOne({ code })) ||
+          (await FeeHead.findOne({ name: nameRegex }));
+        if (head) return head;
+      }
+      throw err;
+    }
+  }
+
+  async ensureExamFeeHead() {
+    const code = config.feeManagement.examFeeHeadCode || EXAM_FEE_HEAD.code;
+    return this.ensureHead({
       code,
-      description: EXAM_FEE_HEAD.description,
+      nameRegex: new RegExp(
+        `^${EXAM_FEE_HEAD.name.replace(/\s+/g, '\\s*')}$`,
+        'i',
+      ),
+      spec: { ...EXAM_FEE_HEAD, code },
+    });
+  }
+
+  async ensureLateFeeHead() {
+    return this.ensureHead({
+      code: LATE_FEE_HEAD.code,
+      nameRegex: LATE_FEE_NAME_REGEX,
+      spec: { ...LATE_FEE_HEAD },
+    });
+  }
+
+  async ensureBankChargesHead() {
+    return this.ensureHead({
+      code: BANK_CHARGES_HEAD.code,
+      nameRegex: BANK_CHARGES_NAME_REGEX,
+      spec: { ...BANK_CHARGES_HEAD },
     });
   }
 
@@ -151,17 +210,38 @@ class FeeManagementService {
     );
   }
 
-  async generateReceiptNumber(feeHeadId, collegeCode, courseCode, paymentConfig) {
+  /**
+   * The Fee Management portal keeps the custom receipt sequence flags in the
+   * global `settings` collection (enableCustomReceiptSequence,
+   * receiptSequencePadding, receiptSequenceSeparator, reset month/day).
+   */
+  async getReceiptSettings() {
+    const { Settings } = this.getModels();
+    return Settings.findOne({}).sort({ updatedAt: -1 });
+  }
+
+  async generateReceiptNumber(feeHeadId, collegeCode, courseCode, paymentConfig, settings) {
     const { FeeGroup, ReceiptSequence } = this.getModels();
-    const enableCustom =
-      paymentConfig?.enableCustom === true ||
-      paymentConfig?.enableCustomReceipt === true;
+    if (settings === undefined) {
+      settings = await this.getReceiptSettings();
+    }
+    const enableCustom = this.isCustomReceiptEnabled(paymentConfig, settings);
     const padding = Number(
-      paymentConfig?.padding ?? paymentConfig?.receiptPadding ?? 6,
+      settings?.receiptSequencePadding ??
+        paymentConfig?.padding ??
+        paymentConfig?.receiptPadding ??
+        6,
     );
     const separator =
-      paymentConfig?.separator ?? paymentConfig?.receiptSeparator ?? '-';
-    const financialYear = getFinancialYear();
+      settings?.receiptSequenceSeparator ??
+      paymentConfig?.separator ??
+      paymentConfig?.receiptSeparator ??
+      '-';
+    const financialYear = getFinancialYear(
+      new Date(),
+      Number(settings?.receiptSequenceResetMonth ?? 4),
+      Number(settings?.receiptSequenceResetDay ?? 1),
+    );
 
     if (!enableCustom) {
       const timestamp = Date.now().toString().slice(-6);
@@ -200,88 +280,23 @@ class FeeManagementService {
     return `${collegeCode}${separator}${courseCode}${separator}${groupCode}${separator}${paddedNum}`;
   }
 
-  /**
-   * Create a Fee Management Transaction for a successful EMS exam-fee payment.
-   * Never cancels or updates existing Fee Mgmt transactions (append-only from EMS).
-   */
-  async postExamFeeTransaction(payload) {
-    if (!this.isEnabled()) {
-      return { skipped: true, reason: 'fee_management_not_connected' };
-    }
-
-    const { Transaction } = this.getModels();
-    const feeHead = await this.ensureExamFeeHead();
-
-    // Idempotent: same EMS payment must not create duplicate Fee Mgmt rows
-    if (payload.emsPaymentId) {
-      const existing = await Transaction.findOne({
-        emsPaymentId: payload.emsPaymentId,
-        source: 'ems',
-      });
-      if (existing) {
-        return {
-          skipped: false,
-          alreadyPosted: true,
-          transactionId: String(existing._id),
-          receiptNumber: existing.receiptNumber,
-        };
-      }
-    }
-    if (payload.gatewayPaymentId) {
-      const byGateway = await Transaction.findOne({
-        gatewayPaymentId: payload.gatewayPaymentId,
-      });
-      if (byGateway) {
-        return {
-          skipped: false,
-          alreadyPosted: true,
-          transactionId: String(byGateway._id),
-          receiptNumber: byGateway.receiptNumber,
-        };
-      }
-    }
-
-    const codes = await this.resolveCollegeCourseCodes(
-      payload.student,
-      payload.exam,
-    );
-    const paymentConfig = await this.findPaymentConfig(
-      codes.collegeCode,
-      codes.courseCode,
-      codes.collegeName,
-      codes.courseName,
-    );
-
-    const receiptNumber = await this.generateReceiptNumber(
-      feeHead._id,
-      codes.collegeCode,
-      codes.courseCode,
-      paymentConfig,
-    );
-
+  /** Common Transaction document fields shared by all EMS-posted lines. */
+  buildTransactionDoc(payload, overrides = {}) {
     const studentId =
       payload.student?.admissionNumber?.trim() ||
       payload.student?.pinNo?.trim() ||
       payload.studentRollNumber;
 
-    const doc = await Transaction.create({
+    return {
       studentId,
       studentName:
-        payload.student?.studentName ||
-        payload.studentName ||
-        undefined,
-      feeHead: feeHead._id,
-      amount: Number(payload.amount),
+        payload.student?.studentName || payload.studentName || undefined,
       paymentDate: payload.paymentDate || new Date(),
       transactionType: 'DEBIT',
       paymentMode: mapPaymentMode(payload.paymentMethod),
       bankName: payload.bankName || undefined,
       referenceNo: payload.referenceNo || undefined,
       referenceDate: payload.referenceDate || undefined,
-      gatewayPaymentId: payload.gatewayPaymentId || undefined,
-      remarks:
-        payload.remarks ||
-        (payload.exam?.name ? `Exam fee — ${payload.exam.name}` : 'Exam fee'),
       semester:
         payload.exam?.semester != null
           ? String(payload.exam.semester)
@@ -294,15 +309,288 @@ class FeeManagementService {
           : payload.student?.currentYear != null
             ? String(payload.student.currentYear)
             : undefined,
-      receiptNumber,
       collectedBy: payload.collectorUsername || payload.collectedBy || undefined,
       collectedByName: payload.collectedBy || undefined,
-      paymentConfigId: paymentConfig?._id,
       status: 'active',
       emsPaymentId: payload.emsPaymentId,
       emsFeeRecordId: payload.emsFeeRecordId,
       source: 'ems',
-    });
+      ...overrides,
+    };
+  }
+
+  async resolveReceiptContext(payload, feeHeadId) {
+    const codes = await this.resolveCollegeCourseCodes(
+      payload.student,
+      payload.exam,
+    );
+    const paymentConfig = await this.findPaymentConfig(
+      codes.collegeCode,
+      codes.courseCode,
+      codes.collegeName,
+      codes.courseName,
+    );
+    const settings = await this.getReceiptSettings();
+    const receiptNumber = await this.generateReceiptNumber(
+      feeHeadId,
+      codes.collegeCode,
+      codes.courseCode,
+      paymentConfig,
+      settings,
+    );
+    return { codes, paymentConfig, settings, receiptNumber };
+  }
+
+  isCustomReceiptEnabled(paymentConfig, settings) {
+    return (
+      settings?.enableCustomReceiptSequence === true ||
+      paymentConfig?.enableCustom === true ||
+      paymentConfig?.enableCustomReceipt === true
+    );
+  }
+
+  /**
+   * Two heads share a receipt when they resolve to the same fee group —
+   * matching the Fee Mgmt sequence generator, which buckets heads without
+   * a group under 'GEN'.
+   */
+  async headsShareFeeGroup(headIdA, headIdB) {
+    const { FeeGroup } = this.getModels();
+    const [groupA, groupB] = await Promise.all([
+      FeeGroup.findOne({ feeHeads: headIdA }),
+      FeeGroup.findOne({ feeHeads: headIdB }),
+    ]);
+    const keyA = groupA ? String(groupA._id) : 'GEN';
+    const keyB = groupB ? String(groupB._id) : 'GEN';
+    return keyA === keyB;
+  }
+
+  /**
+   * Create Fee Management Transaction(s) for a successful EMS exam-fee payment.
+   * The exam fee posts under the Exam Fee head; any late-fee portion posts as
+   * a separate Transaction under the Late Fee head.
+   *
+   * Receipt rule (mirrors Fee Mgmt behaviour):
+   * - Custom receipts enabled: the fee groups decide. Same group → shared
+   *   receipt (one sequence number); different groups → each line gets its
+   *   own receipt from its own group sequence.
+   * - Custom receipts disabled: single shared receipt (REC… fallback).
+   *
+   * Append-only: never cancels or updates existing rows.
+   */
+  async postExamFeeTransaction(payload) {
+    if (!this.isEnabled()) {
+      return { skipped: true, reason: 'fee_management_not_connected' };
+    }
+
+    const { Transaction } = this.getModels();
+    const feeHead = await this.ensureExamFeeHead();
+
+    const total = Number(payload.amount);
+    const lateFeeAmount = Math.max(
+      0,
+      Math.min(Number(payload.lateFeeAmount || 0), total),
+    );
+    const baseAmount = total - lateFeeAmount;
+
+    // Idempotent: same EMS payment must not create duplicate Fee Mgmt rows.
+    // A payment can own two rows (exam_fee + late_fee), so check per line.
+    let existingRows = [];
+    if (payload.emsPaymentId) {
+      existingRows = await Transaction.find({
+        emsPaymentId: payload.emsPaymentId,
+        source: 'ems',
+      });
+    }
+    let mainTxn =
+      existingRows.find(
+        (t) => !t.emsLineType || t.emsLineType === 'exam_fee',
+      ) || null;
+    let lateTxn =
+      existingRows.find((t) => t.emsLineType === 'late_fee') || null;
+
+    if (!mainTxn && payload.gatewayPaymentId) {
+      mainTxn = await Transaction.findOne({
+        gatewayPaymentId: payload.gatewayPaymentId,
+      });
+    }
+
+    const lateFeeNeeded = lateFeeAmount > 0 && !lateTxn;
+
+    if (mainTxn && !lateFeeNeeded) {
+      return {
+        skipped: false,
+        alreadyPosted: true,
+        transactionId: String(mainTxn._id),
+        receiptNumber: mainTxn.receiptNumber,
+        feeHeadCode: feeHead.code,
+      };
+    }
+
+    const codes = await this.resolveCollegeCourseCodes(
+      payload.student,
+      payload.exam,
+    );
+    const paymentConfig = await this.findPaymentConfig(
+      codes.collegeCode,
+      codes.courseCode,
+      codes.collegeName,
+      codes.courseName,
+    );
+    const settings = await this.getReceiptSettings();
+
+    // Decide receipt sharing before generating anything, so we consume the
+    // right number of sequence slots.
+    let lateFeeHead = null;
+    let shareReceipt = true;
+    if (lateFeeNeeded) {
+      lateFeeHead = await this.ensureLateFeeHead();
+      if (this.isCustomReceiptEnabled(paymentConfig, settings)) {
+        shareReceipt = await this.headsShareFeeGroup(
+          feeHead._id,
+          lateFeeHead._id,
+        );
+      }
+    }
+
+    let receiptNumber = mainTxn?.receiptNumber || null;
+    if (!receiptNumber) {
+      receiptNumber = await this.generateReceiptNumber(
+        feeHead._id,
+        codes.collegeCode,
+        codes.courseCode,
+        paymentConfig,
+        settings,
+      );
+    }
+
+    const alreadyPosted = Boolean(mainTxn);
+    if (!mainTxn) {
+      mainTxn = await Transaction.create(
+        this.buildTransactionDoc(payload, {
+          feeHead: feeHead._id,
+          amount: baseAmount,
+          gatewayPaymentId: payload.gatewayPaymentId || undefined,
+          receiptNumber,
+          paymentConfigId: paymentConfig?._id,
+          remarks:
+            payload.remarks ||
+            (payload.exam?.name
+              ? `Exam fee — ${payload.exam.name}`
+              : 'Exam fee'),
+          emsLineType: 'exam_fee',
+        }),
+      );
+    }
+
+    let lateFee = null;
+    if (lateFeeNeeded) {
+      let lateReceiptNumber = receiptNumber;
+      if (!shareReceipt) {
+        // Different fee group → its own receipt from its own group sequence
+        lateReceiptNumber = await this.generateReceiptNumber(
+          lateFeeHead._id,
+          codes.collegeCode,
+          codes.courseCode,
+          paymentConfig,
+          settings,
+        );
+      }
+      // No gatewayPaymentId here — that field is unique in Fee Mgmt and
+      // belongs to the exam-fee row; keep the gateway ref in referenceNo.
+      lateTxn = await Transaction.create(
+        this.buildTransactionDoc(payload, {
+          feeHead: lateFeeHead._id,
+          amount: lateFeeAmount,
+          receiptNumber: lateReceiptNumber,
+          paymentConfigId: paymentConfig?._id,
+          referenceNo:
+            payload.gatewayPaymentId || payload.referenceNo || undefined,
+          remarks: payload.exam?.name
+            ? `Exam late fee — ${payload.exam.name}`
+            : 'Exam late fee',
+          emsLineType: 'late_fee',
+        }),
+      );
+      lateFee = {
+        transactionId: String(lateTxn._id),
+        feeHeadCode: lateFeeHead.code,
+        amount: lateFeeAmount,
+        receiptNumber: lateReceiptNumber,
+        sharedReceipt: shareReceipt,
+      };
+    } else if (lateTxn) {
+      lateFee = {
+        transactionId: String(lateTxn._id),
+        amount: Number(lateTxn.amount),
+        receiptNumber: lateTxn.receiptNumber,
+        alreadyPosted: true,
+      };
+    }
+
+    return {
+      skipped: false,
+      alreadyPosted,
+      transactionId: String(mainTxn._id),
+      receiptNumber: mainTxn.receiptNumber,
+      feeHeadId: String(feeHead._id),
+      feeHeadCode: feeHead.code,
+      baseAmount,
+      lateFee,
+    };
+  }
+
+  /**
+   * Create a Fee Management Transaction for the UPI convenience / bank
+   * charges companion payment, under the Bank Charges (BNKCH) head.
+   */
+  async postBankChargesTransaction(payload) {
+    if (!this.isEnabled()) {
+      return { skipped: true, reason: 'fee_management_not_connected' };
+    }
+
+    const { Transaction } = this.getModels();
+
+    if (payload.emsPaymentId) {
+      const existing = await Transaction.findOne({
+        emsPaymentId: payload.emsPaymentId,
+        source: 'ems',
+      });
+      if (existing) {
+        return {
+          skipped: false,
+          alreadyPosted: true,
+          transactionId: String(existing._id),
+          receiptNumber: existing.receiptNumber,
+          feeHeadCode: BANK_CHARGES_HEAD.code,
+        };
+      }
+    }
+
+    const feeHead = await this.ensureBankChargesHead();
+    const { paymentConfig, receiptNumber } = await this.resolveReceiptContext(
+      payload,
+      feeHead._id,
+    );
+
+    // gatewayPaymentId stays on the exam-fee row (unique field in Fee Mgmt);
+    // the companion keeps the gateway ref in referenceNo instead.
+    const doc = await Transaction.create(
+      this.buildTransactionDoc(payload, {
+        feeHead: feeHead._id,
+        amount: Number(payload.amount),
+        receiptNumber,
+        paymentConfigId: paymentConfig?._id,
+        referenceNo:
+          payload.gatewayPaymentId || payload.referenceNo || undefined,
+        remarks:
+          payload.remarks ||
+          (payload.exam?.name
+            ? `Bank charges — ${payload.exam.name}`
+            : 'Bank charges (online payment)'),
+        emsLineType: 'bank_charges',
+      }),
+    );
 
     return {
       skipped: false,
@@ -320,4 +608,6 @@ module.exports = {
   mapPaymentMode,
   getFinancialYear,
   EXAM_FEE_HEAD,
+  LATE_FEE_HEAD,
+  BANK_CHARGES_HEAD,
 };

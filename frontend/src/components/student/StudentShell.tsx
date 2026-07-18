@@ -89,7 +89,7 @@ export function StudentShell({
         className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-white/95 px-2 py-2 backdrop-blur-xl lg:hidden print:hidden"
         aria-label="Student mobile"
       >
-        <ul className="mx-auto grid max-w-6xl grid-cols-5 gap-1">
+        <ul className="mx-auto grid max-w-6xl grid-cols-6 gap-1">
           {studentNavigation.map((item) => {
             const active = isStudentNavActive(pathname, item);
             return (

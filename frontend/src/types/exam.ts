@@ -11,17 +11,34 @@ export type ExamStatus =
   | 'rejected'
   | 'published';
 
+export type ExamSession = 'FN' | 'AN';
+
 export interface ExamSubject {
   id: number;
   examId: number;
   subjectId: number;
+  /** Branch this paper belongs to; null = common to all scoped branches */
+  branch?: string | null;
+  /** Section within the branch; null = all sections of the branch */
+  section?: string | null;
   fee: number | string;
   examDate?: string | null;
+  session?: ExamSession | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  durationMinutes?: number | null;
   subject?: {
     id: number;
     code: string;
     name: string;
   };
+}
+
+export interface PackageFeeEntry {
+  branch: string;
+  /** null/undefined = applies to the whole branch */
+  section?: string | null;
+  amount: number;
 }
 
 export interface LateFeeSlab {
@@ -64,6 +81,8 @@ export interface Exam {
   applicationEndDate: string | null;
   lateFeeStartDate: string | null;
   packageFee: number | string | null;
+  /** Branch/section-wise package fees; section null = whole branch */
+  packageFees?: PackageFeeEntry[] | null;
   instructions: string | null;
   rejectionRemarks: string | null;
   approvedBy: string | null;
@@ -79,8 +98,14 @@ export interface Exam {
 
 export interface ExamSubjectFeeInput {
   subjectId: number;
+  branch?: string;
+  section?: string;
   fee: number;
   examDate: string;
+  session?: ExamSession;
+  startTime?: string;
+  endTime?: string;
+  durationMinutes?: number;
 }
 
 export interface LateFeeSlabInput {
@@ -111,6 +136,7 @@ export interface CreateExamInput {
   scopes?: ExamScopeInput[];
   subjects: ExamSubjectFeeInput[];
   packageFee?: number;
+  packageFees?: PackageFeeEntry[];
   examinationStartDate?: string;
   examinationEndDate?: string;
   applicationStartDate?: string;
@@ -212,6 +238,10 @@ export interface StudentExamDetail {
       subjectId: number;
       fee: number;
       examDate?: string | null;
+      session?: ExamSession | null;
+      startTime?: string | null;
+      endTime?: string | null;
+      durationMinutes?: number | null;
       code: string;
       name: string;
     }[];
@@ -275,6 +305,10 @@ export interface HallTicketPaper {
   code: string;
   name: string;
   examDate: string | null;
+  session?: ExamSession | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  durationMinutes?: number | null;
   fee: number;
 }
 

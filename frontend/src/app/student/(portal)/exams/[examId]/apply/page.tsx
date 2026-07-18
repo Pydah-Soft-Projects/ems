@@ -108,8 +108,9 @@ export default function StudentExamApplyPage({
       ids.length === subjects.length &&
       subjects.every((s) => ids.includes(s.subjectId));
     const pkg = detail.exam.packageFee != null ? Number(detail.exam.packageFee) : null;
+    // Package fee is the flat bundle price when all papers are selected.
     if (allSelected && pkg != null && !Number.isNaN(pkg)) {
-      return Math.min(sum, pkg);
+      return pkg;
     }
     return sum;
   }, [detail, selected, subjects]);
@@ -369,6 +370,20 @@ export default function StudentExamApplyPage({
                       <span>
                         <span className="font-medium">{s.code}</span>
                         {s.name ? ` — ${s.name}` : ''}
+                        {(s.examDate || s.startTime) && (
+                          <span className="block text-xs text-[var(--muted)]">
+                            {s.examDate ? formatDate(s.examDate) : ''}
+                            {s.session
+                              ? ` · ${s.session === 'FN' ? 'Forenoon' : 'Afternoon'}`
+                              : ''}
+                            {s.startTime && s.endTime
+                              ? ` · ${s.startTime}–${s.endTime}`
+                              : ''}
+                            {s.durationMinutes
+                              ? ` (${s.durationMinutes} min)`
+                              : ''}
+                          </span>
+                        )}
                       </span>
                     </span>
                     <span className="tabular-nums text-[var(--muted)]">

@@ -40,6 +40,12 @@ import {
   PaymentMethod,
 } from '@/types/fee';
 import {
+  ExamResultsResponse,
+  ResultRowInput,
+  ResultUploadResponse,
+  StudentResultsResponse,
+} from '@/types/results';
+import {
   SdmsCollege,
   SdmsCourse,
   SdmsBranch,
@@ -432,6 +438,30 @@ export const api = {
     return request<ExamAnalytics>(`/exams/${id}/analytics`);
   },
 
+  uploadExamResults(
+    examId: number,
+    data: { fileName?: string; rows: ResultRowInput[] },
+  ) {
+    return request<ResultUploadResponse>(`/exams/${examId}/results`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getExamResults(examId: number) {
+    return request<ExamResultsResponse>(`/exams/${examId}/results`);
+  },
+
+  getResultsByRoll(rollNumber: string) {
+    return request<StudentResultsResponse>(
+      `/results/roll/${encodeURIComponent(rollNumber.trim())}`,
+    );
+  },
+
+  getStudentResults() {
+    return request<StudentResultsResponse>('/student/results');
+  },
+
   getStudentExams() {
     return request<StudentExamListItem[]>('/student/exams');
   },
@@ -463,6 +493,38 @@ export const api = {
   lookupFeeCollection(rollNumber: string) {
     const q = encodeURIComponent(rollNumber.trim());
     return request<FeeCollectionLookup>(`/fees/collection?rollNumber=${q}`);
+  },
+
+  // ── Staff: apply for an exam on behalf of a student (same student flow) ──
+  getStudentExamsForStaff(studentId: number) {
+    return request<StudentExamListItem[]>(`/fees/students/${studentId}/exams`);
+  },
+
+  getStudentExamForStaff(studentId: number, examId: number) {
+    return request<StudentExamDetail>(
+      `/fees/students/${studentId}/exams/${examId}`,
+    );
+  },
+
+  applyExamForStudent(
+    studentId: number,
+    examId: number,
+    data: CreateExamApplicationInput,
+  ) {
+    return request<{
+      application: {
+        id: number;
+        examId: number;
+        selectedSubjectIds: number[];
+        feeBreakdown: FeeBreakdownItem[];
+        feeRecordId: number;
+        submittedAt: string;
+      };
+      feeRecord: ExamFeeRecord;
+    }>(`/fees/students/${studentId}/exams/${examId}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   getFeeRecords(

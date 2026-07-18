@@ -364,7 +364,7 @@ class SubjectsService {
         const mapping = await this.findMapping(id);
         await this.mappingRepo.remove(mapping);
     }
-    async getMappedSubjectsForExam(params) {
+    async getMappedSubjectEntriesForExam(params) {
         const entries = await this.mappingRepo.find({
             where: {
                 regulationId: params.regulationId,
@@ -379,6 +379,10 @@ class SubjectsService {
         if (entries.length === 0) {
             throw AppError.badRequest('Subject mapping not found for the selected academic scope');
         }
+        return entries;
+    }
+    async getMappedSubjectsForExam(params) {
+        const entries = await this.getMappedSubjectEntriesForExam(params);
         const byId = new Map();
         for (const entry of entries) {
             if (entry.subject)

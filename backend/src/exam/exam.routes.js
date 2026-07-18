@@ -53,6 +53,37 @@ function createExamRoutes(services) {
     router.post('/:id/generate-fees', asyncHandler(async (req, res) => {
         res.json(await services.exam.generateFees(parseId(req.params.id), req.body));
     }));
+    router.post('/:id/results', asyncHandler(async (req, res) => {
+        if (req.user?.role === 'student') {
+            res.status(403).json({ message: 'Staff only' });
+            return;
+        }
+        const uploadedBy = req.user?.fullName?.trim() || req.user?.username?.trim() || null;
+        // Validation failures come back as { success: false, errors } with 200
+        // so the client can render the row-level report.
+        const result = await services.results.uploadResults(parseId(req.params.id), req.body, uploadedBy);
+        res.status(result.success ? 201 : 200).json(result);
+    }));
+    router.get('/:id/results', asyncHandler(async (req, res) => {
+        if (req.user?.role === 'student') {
+            res.status(403).json({ message: 'Staff only' });
+            return;
+        }
+        res.json(await services.results.getExamResults(parseId(req.params.id)));
+    }));
+    return router;
+}
+
+function createResultsRoutes(services) {
+    const router = Router();
+    // Staff: a student's full semester-wise result history by roll / PIN
+    router.get('/roll/:rollNumber', asyncHandler(async (req, res) => {
+        if (req.user?.role === 'student') {
+            res.status(403).json({ message: 'Staff only' });
+            return;
+        }
+        res.json(await services.results.getStudentResultsByRoll(decodeURIComponent(req.params.rollNumber)));
+    }));
     return router;
 }
 
@@ -72,6 +103,33 @@ function createFeesRoutes(services) {
             return;
         }
         res.json(await services.exam.lookupForCollection(rollNumber));
+    }));
+    // ── Staff: apply on behalf of a student (same flow/checks as student) ──
+    router.get('/students/:studentId/exams', asyncHandler(async (req, res) => {
+        if (req.user?.role === 'student') {
+            res.status(403).json({ message: 'Staff only' });
+            return;
+        }
+        res.json(await services.exam.listPublishedExamsForStudent(parseId(req.params.studentId)));
+    }));
+    router.get('/students/:studentId/exams/:examId', asyncHandler(async (req, res) => {
+        if (req.user?.role === 'student') {
+            res.status(403).json({ message: 'Staff only' });
+            return;
+        }
+        res.json(await services.exam.getPublishedExamForStudent(parseId(req.params.examId), parseId(req.params.studentId)));
+    }));
+    router.post('/students/:studentId/exams/:examId/apply', asyncHandler(async (req, res) => {
+        if (req.user?.role === 'student') {
+            res.status(403).json({ message: 'Staff only' });
+            return;
+        }
+        res.status(201).json(await services.exam.createStudentApplication(parseId(req.params.examId), parseId(req.params.studentId), {
+            examType: req.body?.examType,
+            selectedSubjectIds: req.body?.selectedSubjectIds,
+            declarationAccepted: req.body?.declarationAccepted === true,
+            consentAccepted: req.body?.consentAccepted === true,
+        }));
     }));
     router.get('/payments', asyncHandler(async (req, res) => {
         if (req.query.rollNumber) {
@@ -149,4 +207,4 @@ function createFeesRoutes(services) {
     return router;
 }
 
-module.exports = { createExamRoutes, createFeesRoutes };
+module.exports = { createExamRoutes, createFeesRoutes, createResultsRoutes };
