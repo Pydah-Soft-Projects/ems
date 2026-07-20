@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { HallTicketDocument } from '@/components/exams/HallTicketDocument';
+import { printA5HallTicket } from '@/lib/printA5HallTicket';
 
 export default function StudentHallTicketPage({
   params,
@@ -67,11 +68,25 @@ export default function StudentHallTicketPage({
           <h1 className="mt-1 text-xl font-bold text-slate-900">Hall ticket</h1>
           <p className="text-sm text-[var(--muted)]">{ticket.examName}</p>
         </div>
-        <Button type="button" onClick={() => window.print()}>
-          Print / download
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            type="button"
+            onClick={() =>
+              printA5HallTicket(ticket, {
+                collegeName: ticket.college || undefined,
+              })
+            }
+          >
+            Print
+          </Button>
+          <p className="text-[10px] text-[var(--muted)]">
+            A5 on A4 · same padding as fee receipt
+          </p>
+        </div>
       </div>
-      <HallTicketDocument ticket={ticket} />
+      <div className="overflow-auto rounded-xl border border-[var(--border)] bg-slate-100 p-4 print:border-0 print:bg-white print:p-0">
+        <HallTicketDocument ticket={ticket} />
+      </div>
     </div>
   );
 }

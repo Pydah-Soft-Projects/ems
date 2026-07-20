@@ -95,7 +95,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               />
             </svg>
           </button>
-          <div className="mx-auto max-w-7xl">{children}</div>
+          <div className="w-full">{children}</div>
         </main>
       </div>
     </div>

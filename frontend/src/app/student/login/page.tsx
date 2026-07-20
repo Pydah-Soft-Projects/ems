@@ -8,6 +8,7 @@ import { setAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 export default function StudentLoginPage() {
   const router = useRouter();
@@ -44,8 +45,8 @@ export default function StudentLoginPage() {
 
       <div className="relative w-full max-w-[440px]">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-[var(--primary)] text-lg font-bold text-white shadow-[var(--shadow-lg)]">
-            EMS
+          <div className="mx-auto mb-4 flex justify-center">
+            <BrandLogo size="lg" className="rounded-[1.25rem] shadow-[var(--shadow-lg)]" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Student Portal

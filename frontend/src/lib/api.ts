@@ -58,6 +58,20 @@ import {
   SdmsStudent,
   SdmsStudentFilters,
 } from '@/types/sdms';
+import {
+  Professional,
+  CreateProfessionalInput,
+  UpdateProfessionalInput,
+  RemunerationBill,
+  CreateRemunerationBillInput,
+  UpdateRemunerationBillInput,
+  RemunerationMeta,
+  ExamBillSubject,
+  ExamBillBranch,
+  RemunerationBillType,
+  RemunerationBillStatus,
+  RemunerationSimulateResult,
+} from '@/types/remuneration';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -666,5 +680,106 @@ export const api = {
         body: JSON.stringify(data),
       },
     );
+  },
+
+  // —— Professionals (external setters / evaluators) ——
+
+  getProfessionals(search?: string) {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return request<Professional[]>(`/professionals${query}`);
+  },
+
+  suggestProfessionals(q: string, limit = 10) {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    return request<Professional[]>(`/professionals/suggest?${params}`);
+  },
+
+  getProfessional(id: number) {
+    return request<Professional>(`/professionals/${id}`);
+  },
+
+  createProfessional(data: CreateProfessionalInput) {
+    return request<Professional>('/professionals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateProfessional(id: number, data: UpdateProfessionalInput) {
+    return request<Professional>(`/professionals/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteProfessional(id: number) {
+    return request<void>(`/professionals/${id}`, { method: 'DELETE' });
+  },
+
+  // —— Remuneration bills ——
+
+  getRemunerationMeta() {
+    return request<RemunerationMeta>('/remuneration/meta');
+  },
+
+  getRemunerationBills(filters: {
+    examId?: number;
+    billType?: RemunerationBillType;
+    status?: RemunerationBillStatus;
+    search?: string;
+  } = {}) {
+    const params = new URLSearchParams();
+    if (filters.examId) params.set('examId', String(filters.examId));
+    if (filters.billType) params.set('billType', filters.billType);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request<RemunerationBill[]>(`/remuneration${query}`);
+  },
+
+  getRemunerationBill(id: number) {
+    return request<RemunerationBill>(`/remuneration/${id}`);
+  },
+
+  createRemunerationBill(data: CreateRemunerationBillInput) {
+    return request<RemunerationBill>('/remuneration', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateRemunerationBill(id: number, data: UpdateRemunerationBillInput) {
+    return request<RemunerationBill>(`/remuneration/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateRemunerationBillStatus(id: number, status: RemunerationBillStatus) {
+    return request<RemunerationBill>(`/remuneration/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  deleteRemunerationBill(id: number) {
+    return request<void>(`/remuneration/${id}`, { method: 'DELETE' });
+  },
+
+  getRemunerationExamSubjects(examId: number, branch?: string) {
+    const query = branch ? `?branch=${encodeURIComponent(branch)}` : '';
+    return request<ExamBillSubject[]>(
+      `/remuneration/exam-subjects/${examId}${query}`,
+    );
+  },
+
+  getRemunerationExamBranches(examId: number) {
+    return request<ExamBillBranch[]>(`/remuneration/exam-branches/${examId}`);
+  },
+
+  simulateRemuneration() {
+    return request<RemunerationSimulateResult>('/remuneration/simulate', {
+      method: 'POST',
+    });
   },
 };

@@ -70,7 +70,7 @@ function buildReceiptBlock(
     <div class="frame">
       <div class="header">
         <div class="brand">
-          <div class="logo">EMS</div>
+          <img class="logo" src="/logo.png" alt="EMS" width="36" height="36" />
           <div class="brand-text"><b>EMS PORTAL</b>Examinations</div>
         </div>
         <div class="college">
@@ -224,9 +224,10 @@ function buildPrintDocument(payment: Payment, options: PrintReceiptOptions) {
   .brand { display: flex; align-items: center; gap: 1.8mm; min-width: 28mm; }
   .logo {
     width: 8mm; height: 8mm;
-    background: #6c5ce7; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 7pt; border-radius: 1mm;
+    object-fit: contain;
+    border-radius: 1mm;
+    background: #0f172a;
+    display: block;
   }
   .brand-text { font-size: 6pt; color: #64748b; line-height: 1.2; }
   .brand-text b { display: block; color: #0f172a; font-size: 7pt; }

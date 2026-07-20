@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Exam, ExamAnalytics } from '@/types/exam';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Tabs } from '@/components/ui/Tabs';
@@ -182,12 +180,27 @@ export default function ExamDetailPage() {
 
   const canEdit = exam.status === 'draft' || exam.status === 'rejected';
 
+  const types = exam.allowedTypes?.length ? exam.allowedTypes : [exam.type];
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={exam.name}
-        description="Overview, subjects, analytics, hall tickets, and results."
-        action={
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-6 text-white shadow-[var(--shadow-md)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <StatusBadge status={exam.status} />
+              <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                {types.map((t) => t.replace(/_/g, ' ')).join(' · ')}
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {exam.name}
+            </h1>
+            <p className="mt-2 text-sm text-indigo-100">
+              {exam.college ?? '—'} · {exam.course} · Batch {exam.batch} · Y
+              {exam.yearOfStudy} S{exam.semester}
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
               Back
@@ -232,11 +245,7 @@ export default function ExamDetailPage() {
               </Button>
             ) : null}
           </div>
-        }
-      />
-
-      <div className="flex items-center gap-2">
-        <StatusBadge status={exam.status} />
+        </div>
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -273,8 +282,7 @@ export default function ExamDetailPage() {
         ]}
       />
 
-      <Card>
-        <CardBody>
+      <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] sm:p-6">
           {tabParam === 'overview' ? <ExamOverviewPanel exam={exam} /> : null}
           {tabParam === 'subjects' ? <ExamSubjectsPanel exam={exam} /> : null}
           {tabParam === 'analytics' ? (
@@ -288,8 +296,7 @@ export default function ExamDetailPage() {
             <ExamHallTicketsTab exam={exam} />
           ) : null}
           {tabParam === 'results' ? <ExamResultsPanel exam={exam} /> : null}
-        </CardBody>
-      </Card>
+      </div>
 
       <ConfirmDialog
         open={rejectOpen}

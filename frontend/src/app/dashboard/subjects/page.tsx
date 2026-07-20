@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Regulation } from '@/types/regulation';
@@ -81,7 +80,7 @@ export default function SubjectsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Subjects"
-        description="Create subjects under a regulation, then map academic scopes on the Subject mappings page."
+        description="Create subjects under a regulation, then map them to academic scopes using the Subject mappings tab."
         action={
           <Button onClick={() => router.push('/dashboard/subjects/new')}>
             New subject
@@ -114,12 +113,6 @@ export default function SubjectsPage() {
             </option>
           ))}
         </select>
-        <Link
-          href="/dashboard/subjects/mappings"
-          className="text-sm font-medium text-[var(--primary)] hover:underline"
-        >
-          Manage mappings →
-        </Link>
       </div>
 
       {actionError && !deleteOpen ? (

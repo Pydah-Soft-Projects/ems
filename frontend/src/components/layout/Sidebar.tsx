@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { AuthUser, clearAuth } from '@/lib/auth';
 import { findNavItem, navigation } from '@/config/navigation';
 import { NavIcon } from '@/components/icons/NavIcon';
+import { BrandLockup } from '@/components/brand/BrandLogo';
 
 function getInitials(name: string) {
   return name
@@ -37,20 +38,14 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
         collapsed ? 'w-[84px]' : 'w-[260px]'
       }`}
     >
-      <div className={`border-b border-[var(--sidebar-border)] ${collapsed ? 'px-3 py-4' : 'px-4 py-4'}`}>
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-          <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius)] bg-[var(--primary)] text-xs font-bold text-white shadow-[var(--shadow-md)]">
-            EMS
-          </div>
-          {!collapsed ? (
-            <div>
-              <p className="text-xs font-semibold leading-tight text-slate-900">
-                Examination Portal
-              </p>
-              <p className="text-xs text-[var(--muted)]">Management System</p>
-            </div>
-          ) : null}
-        </div>
+      <div
+        className={`border-b border-[var(--sidebar-border)] ${collapsed ? 'px-3 py-4' : 'px-4 py-4'}`}
+      >
+        <BrandLockup
+          title="Examination Portal"
+          subtitle="Management System"
+          collapsed={collapsed}
+        />
       </div>
 
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-3">

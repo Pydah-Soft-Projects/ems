@@ -44,7 +44,8 @@ export interface PackageFeeEntry {
 export interface LateFeeSlab {
   id?: number;
   fromDay: number;
-  toDay: number;
+  /** null on the last slab = until application end date */
+  toDay: number | null;
   amount: number | string;
 }
 
@@ -110,7 +111,8 @@ export interface ExamSubjectFeeInput {
 
 export interface LateFeeSlabInput {
   fromDay: number;
-  toDay: number;
+  /** Omit or null on the last slab only — applies until application end */
+  toDay?: number | null;
   amount: number;
 }
 

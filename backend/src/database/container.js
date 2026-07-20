@@ -27,6 +27,16 @@ const { SettingsService } = require('../settings/settings.service');
 const {
   FeeManagementService,
 } = require('../fee-management/fee-management.service');
+const { Professional } = require('../remuneration/schemas/professional.schema');
+const {
+  RemunerationBill,
+} = require('../remuneration/schemas/remuneration-bill.schema');
+const {
+  ProfessionalsService,
+} = require('../remuneration/professionals.service');
+const {
+  RemunerationService,
+} = require('../remuneration/remuneration.service');
 
 function createSdmsStub() {
   const unavailable = async () => {
@@ -88,6 +98,18 @@ function createServices(dataSource, studentDataSource) {
 
   const auth = new AuthService(sdms);
 
+  const professionals = new ProfessionalsService(
+    dataSource.getRepository(Professional),
+  );
+
+  const remuneration = new RemunerationService(
+    dataSource.getRepository(RemunerationBill),
+    dataSource.getRepository(Professional),
+    dataSource.getRepository(Exam),
+    dataSource.getRepository(Regulation),
+    professionals,
+  );
+
   return {
     auth,
     regulations,
@@ -97,6 +119,8 @@ function createServices(dataSource, studentDataSource) {
     settings,
     feeManagement,
     results,
+    professionals,
+    remuneration,
   };
 }
 

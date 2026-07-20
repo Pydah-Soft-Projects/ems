@@ -21,6 +21,10 @@ const {
 } = require('./exam/exam.routes');
 const { createSdmsRoutes } = require('./sdms/sdms.routes');
 const { createSettingsRoutes } = require('./settings/settings.routes');
+const {
+  createProfessionalsRoutes,
+  createRemunerationRoutes,
+} = require('./remuneration/remuneration.routes');
 
 function createApp(services) {
   const app = express();
@@ -240,6 +244,8 @@ function createApp(services) {
   api.use('/results', createResultsRoutes(services));
   api.use('/sdms', createSdmsRoutes(services));
   api.use('/settings', createSettingsRoutes(services));
+  api.use('/professionals', createProfessionalsRoutes(services));
+  api.use('/remuneration', createRemunerationRoutes(services));
 
   app.use(`/${config.apiPrefix}`, api);
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));

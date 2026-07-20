@@ -449,7 +449,7 @@ class ExamService {
                 endTime: s.endTime,
                 durationMinutes: s.durationMinutes,
             })),
-            lateFeeSlabs: (dto.lateFeeSlabs ?? []).map((slab) => this.lateFeeSlabRepo.create({ ...slab })),
+            lateFeeSlabs: this.normalizeLateFeeSlabs(dto.lateFeeSlabs ?? []).map((slab) => this.lateFeeSlabRepo.create({ ...slab })),
             scopes: scopeRows.map((row) => this.examScopeRepo.create({ ...row })),
         });
         return this.examRepo.save(exam);
@@ -516,7 +516,7 @@ class ExamService {
                     : uniqueBranches.join(', ').slice(0, 100);
         }
         if (dto.lateFeeSlabs) {
-            exam.lateFeeSlabs = dto.lateFeeSlabs.map((slab) => this.lateFeeSlabRepo.create({ ...slab, examId: id }));
+            exam.lateFeeSlabs = this.normalizeLateFeeSlabs(dto.lateFeeSlabs).map((slab) => this.lateFeeSlabRepo.create({ ...slab, examId: id }));
         }
         this.validateDates({
             applicationEndDate: dto.applicationEndDate ?? exam.applicationEndDate,
@@ -1188,7 +1188,7 @@ class ExamService {
             examType: application.examType,
             college: exam.college,
             course: exam.course,
-            branch: exam.branch,
+            branch: application.studentBranch || exam.branch,
             batch: exam.batch,
             yearOfStudy: exam.yearOfStudy,
             semester: exam.semester,
@@ -1453,6 +1453,65 @@ class ExamService {
         }
         return records;
     }
+    /**
+     * Last slab may omit toDay (null) — late fee applies from fromDay until
+     * application end. Earlier slabs must have an explicit toDay.
+     */
+    normalizeLateFeeSlabs(slabs) {
+        if (!Array.isArray(slabs) || slabs.length === 0)
+            return [];
+        const normalized = slabs.map((s) => {
+            const fromDay = Number(s.fromDay);
+            const rawTo = s.toDay;
+            const toDay = rawTo === '' || rawTo === null || rawTo === undefined
+                ? null
+                : Number(rawTo);
+            const amount = Number(s.amount);
+            return { fromDay, toDay, amount };
+        });
+        normalized.sort((a, b) => a.fromDay - b.fromDay);
+        for (let i = 0; i < normalized.length; i += 1) {
+            const s = normalized[i];
+            const isLast = i === normalized.length - 1;
+            if (!Number.isFinite(s.fromDay) || s.fromDay < 1) {
+                throw AppError.badRequest('Late fee slab "from day" must be at least 1');
+            }
+            if (!Number.isFinite(s.amount) || s.amount < 0) {
+                throw AppError.badRequest('Late fee slab amount must be a non-negative number');
+            }
+            if (!isLast && s.toDay == null) {
+                throw AppError.badRequest('Only the last late fee slab may leave "to day" empty (until application end)');
+            }
+            if (s.toDay != null) {
+                if (!Number.isFinite(s.toDay) || s.toDay < 1) {
+                    throw AppError.badRequest('Late fee slab "to day" must be at least 1 when set');
+                }
+                if (s.fromDay > s.toDay) {
+                    throw AppError.badRequest('Late fee slab "from day" cannot be after "to day"');
+                }
+            }
+        }
+        return normalized;
+    }
+    /** Day number (1-based) of application end relative to late-fee start. */
+    lateFeeMaxDay(exam) {
+        if (!exam.lateFeeStartDate || !exam.applicationEndDate)
+            return null;
+        const start = new Date(`${exam.lateFeeStartDate}T00:00:00`);
+        const end = new Date(`${exam.applicationEndDate}T00:00:00`);
+        if (end.getTime() < start.getTime())
+            return 0;
+        return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    }
+    slabEffectiveToDay(slab, isLast, exam) {
+        if (slab.toDay != null)
+            return Number(slab.toDay);
+        if (isLast) {
+            const maxDay = this.lateFeeMaxDay(exam);
+            return maxDay != null ? maxDay : Number.POSITIVE_INFINITY;
+        }
+        return null;
+    }
     calculateLateFee(exam, asOf = new Date()) {
         if (!exam.lateFeeStartDate || !exam.lateFeeSlabs?.length) {
             return { daysLate: 0, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
@@ -1464,24 +1523,25 @@ class ExamService {
             return { daysLate: 0, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
         }
         const daysLate = Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
-        const slabs = [...exam.lateFeeSlabs].sort((a, b) => a.fromDay - b.fromDay);
-        const matched = slabs.find((s) => daysLate >= s.fromDay && daysLate <= s.toDay);
-        if (matched) {
-            return {
-                daysLate,
-                lateFee: Number(matched.amount),
-                matchedSlab: matched,
-                beyondLastSlab: false,
-            };
+        const maxDay = this.lateFeeMaxDay(exam);
+        if (maxDay != null && daysLate > maxDay) {
+            return { daysLate, lateFee: 0, matchedSlab: null, beyondLastSlab: true };
         }
-        const last = slabs[slabs.length - 1];
-        if (daysLate > last.toDay) {
-            return {
-                daysLate,
-                lateFee: Number(last.amount),
-                matchedSlab: last,
-                beyondLastSlab: true,
-            };
+        const slabs = [...exam.lateFeeSlabs].sort((a, b) => a.fromDay - b.fromDay);
+        for (let i = 0; i < slabs.length; i += 1) {
+            const s = slabs[i];
+            const isLast = i === slabs.length - 1;
+            const endDay = this.slabEffectiveToDay(s, isLast, exam);
+            if (endDay == null || Number.isNaN(endDay))
+                continue;
+            if (daysLate >= s.fromDay && daysLate <= endDay) {
+                return {
+                    daysLate,
+                    lateFee: Number(s.amount),
+                    matchedSlab: s,
+                    beyondLastSlab: false,
+                };
+            }
         }
         return { daysLate, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
     }

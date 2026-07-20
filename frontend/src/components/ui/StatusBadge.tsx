@@ -16,6 +16,7 @@ const statusMap: Record<
   approved: { label: 'Approved', variant: 'success' },
   rejected: { label: 'Rejected', variant: 'danger' },
   submitted: { label: 'Submitted', variant: 'primary' },
+  passed: { label: 'Passed', variant: 'success' },
 };
 
 export function StatusBadge({ status }: { status: string }) {

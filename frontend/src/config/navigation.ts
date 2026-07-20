@@ -10,6 +10,7 @@ export type NavItem = {
     | 'organization'
     | 'exams'
     | 'fees'
+    | 'remuneration'
     | 'settings';
 };
 
@@ -43,25 +44,13 @@ export const navigation: NavGroup[] = [
       {
         href: '/dashboard/subjects',
         label: 'Subjects',
-        description: 'Subjects catalog',
-        icon: 'subjects',
-      },
-      {
-        href: '/dashboard/subjects/mappings',
-        label: 'Subject mappings',
-        description: 'Academic scope to subject mappings',
+        description: 'Subjects catalog and academic scope mappings',
         icon: 'subjects',
       },
       {
         href: '/dashboard/organization',
         label: 'Organization',
-        description: 'Colleges and programs (SDMS)',
-        icon: 'organization',
-      },
-      {
-        href: '/dashboard/organization/students',
-        label: 'Students',
-        description: 'SDMS student directory',
+        description: 'Colleges, programmes, and students (SDMS)',
         icon: 'organization',
       },
     ],
@@ -75,6 +64,12 @@ export const navigation: NavGroup[] = [
         description: 'Create and manage exams',
         icon: 'exams',
       },
+      {
+        href: '/dashboard/remuneration',
+        label: 'Remuneration',
+        description: 'Bills for external setters, evaluators & examiners',
+        icon: 'remuneration',
+      },
     ],
   },
   {
@@ -85,6 +80,12 @@ export const navigation: NavGroup[] = [
         label: 'Fees & Payments',
         description: 'Fee records and collections',
         icon: 'fees',
+      },
+      {
+        href: '/dashboard/professionals',
+        label: 'Professionals',
+        description: 'External paper setters & examiners directory',
+        icon: 'organization',
       },
       {
         href: '/dashboard/settings',

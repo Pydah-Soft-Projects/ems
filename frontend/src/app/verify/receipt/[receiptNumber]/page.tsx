@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import { money } from '@/components/fees/money';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 type VerifyResult = {
   valid: boolean;
@@ -71,8 +72,8 @@ export default function VerifyReceiptPage({
     <div className="min-h-screen bg-slate-100 px-4 py-10">
       <div className="mx-auto max-w-lg">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary)] text-sm font-bold text-white">
-            EMS
+          <div className="mx-auto mb-3 flex justify-center">
+            <BrandLogo size="md" className="rounded-2xl" />
           </div>
           <h1 className="text-xl font-bold text-slate-900">
             Receipt verification

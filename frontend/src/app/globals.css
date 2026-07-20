@@ -122,7 +122,8 @@ body {
   border-radius: 4px;
 }
 
-.fee-receipt {
+.fee-receipt,
+.hall-ticket-preview {
   width: 210mm;
   max-width: 100%;
 }

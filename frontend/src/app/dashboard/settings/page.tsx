@@ -84,7 +84,7 @@ export default function SettingsPage() {
           {loading ? (
             <p className="text-sm text-[var(--muted)]">Loading…</p>
           ) : (
-            <form onSubmit={(e) => void onSubmit(e)} className="max-w-xl space-y-5">
+            <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
               <label className="flex items-center gap-3 text-sm font-medium text-slate-800">
                 <input
                   type="checkbox"

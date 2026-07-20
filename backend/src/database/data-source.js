@@ -30,6 +30,10 @@ const {
 const {
   PaymentGatewaySettings,
 } = require('../settings/payment-gateway-settings.entity');
+const { Professional } = require('../remuneration/schemas/professional.schema');
+const {
+  RemunerationBill,
+} = require('../remuneration/schemas/remuneration-bill.schema');
 
 const entities = [
   Regulation,
@@ -46,6 +50,8 @@ const entities = [
   ResultUpload,
   SubjectResult,
   PaymentGatewaySettings,
+  Professional,
+  RemunerationBill,
 ];
 
 function createExamPortalDataSource() {

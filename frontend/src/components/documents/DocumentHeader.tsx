@@ -1,14 +1,8 @@
 import { ReactNode } from 'react';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 export function DocumentBrandMark({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  const box = size === 'sm' ? 'h-9 w-9 text-[10px]' : 'h-11 w-11 text-xs';
-  return (
-    <div
-      className={`flex ${box} items-center justify-center rounded-2xl bg-[var(--primary)] font-bold text-white shadow-[var(--shadow-sm)]`}
-    >
-      EMS
-    </div>
-  );
+  return <BrandLogo size={size} />;
 }
 
 export function DocumentHeader({
@@ -26,7 +20,7 @@ export function DocumentHeader({
 }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-3">
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-[88px] items-center gap-2">
         <DocumentBrandMark />
         <div className="text-[10px] leading-tight text-slate-600">
           <p className="font-bold text-slate-900">EMS PORTAL</p>

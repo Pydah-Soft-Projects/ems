@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Regulation, RegulationScope } from '@/types/regulation';
@@ -59,6 +59,26 @@ const EMPTY_ROW: SubjectRowState = {
   endTime: '',
   duration: '',
 };
+
+const compactInputClass =
+  'w-full min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--ring)] disabled:bg-slate-50 disabled:text-slate-500';
+
+function ConfigField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block min-w-0 space-y-1">
+      <span className="block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
 
 /** Section-specific subject groups per branch; '' = all sections */
 type SectionGroups = Record<string, Subject[]>;
@@ -197,9 +217,9 @@ export function ExamForm({
   const [examinationStartDate, setExaminationStartDate] = useState('');
   const [examinationEndDate, setExaminationEndDate] = useState('');
   const [lateFeeStartDate, setLateFeeStartDate] = useState('');
-  const [slabs, setSlabs] = useState<LateFeeSlabInput[]>([
-    { fromDay: 1, toDay: 3, amount: 100 },
-  ]);
+  const [slabs, setSlabs] = useState<
+    { fromDay: number; toDay: number | null; amount: number }[]
+  >([{ fromDay: 1, toDay: null, amount: 100 }]);
   const [instructions, setInstructions] = useState('');
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const [error, setError] = useState('');
@@ -303,10 +323,10 @@ export function ExamForm({
         initial.lateFeeSlabs?.length
           ? initial.lateFeeSlabs.map((s) => ({
               fromDay: Number(s.fromDay),
-              toDay: Number(s.toDay),
+              toDay: s.toDay == null ? null : Number(s.toDay),
               amount: Number(s.amount),
             }))
-          : [{ fromDay: 1, toDay: 3, amount: 100 }],
+          : [{ fromDay: 1, toDay: null, amount: 100 }],
       );
       const fees: Record<string, SubjectRowState> = {};
       for (const es of initial.examSubjects ?? []) {
@@ -368,7 +388,7 @@ export function ExamForm({
       setExaminationStartDate('');
       setExaminationEndDate('');
       setLateFeeStartDate('');
-      setSlabs([{ fromDay: 1, toDay: 3, amount: 100 }]);
+      setSlabs([{ fromDay: 1, toDay: null, amount: 100 }]);
       setInstructions('');
       setSubmitForApproval(false);
       setStep(1);
@@ -720,6 +740,30 @@ export function ExamForm({
         setError('Examination start cannot be after end date.');
         return false;
       }
+      if (slabs.length > 0) {
+        for (let i = 0; i < slabs.length; i += 1) {
+          const s = slabs[i];
+          const isLast = i === slabs.length - 1;
+          if (s.fromDay < 1) {
+            setError('Late fee slab "from day" must be at least 1.');
+            return false;
+          }
+          if (!isLast && (s.toDay == null || s.toDay < 1)) {
+            setError(
+              'Only the last late fee slab may leave "To day" empty (until application end).',
+            );
+            return false;
+          }
+          if (s.toDay != null && s.fromDay > s.toDay) {
+            setError('Late fee slab "from day" cannot be after "to day".');
+            return false;
+          }
+          if (s.amount < 0) {
+            setError('Late fee slab amount must be non-negative.');
+            return false;
+          }
+        }
+      }
     }
     setError('');
     return true;
@@ -811,9 +855,7 @@ export function ExamForm({
           examinationStartDate: examinationStartDate || undefined,
           examinationEndDate: examinationEndDate || undefined,
           lateFeeStartDate: lateFeeStartDate || undefined,
-          lateFeeSlabs: slabs.filter(
-            (s) => s.fromDay > 0 && s.toDay > 0 && s.amount >= 0,
-          ),
+          lateFeeSlabs: slabs.filter((s) => s.fromDay > 0 && s.amount >= 0),
           instructions: instructions.trim() || undefined,
         });
       } else {
@@ -837,9 +879,7 @@ export function ExamForm({
           examinationStartDate: examinationStartDate || undefined,
           examinationEndDate: examinationEndDate || undefined,
           lateFeeStartDate: lateFeeStartDate || undefined,
-          lateFeeSlabs: slabs.filter(
-            (s) => s.fromDay > 0 && s.toDay > 0 && s.amount >= 0,
-          ),
+          lateFeeSlabs: slabs.filter((s) => s.fromDay > 0 && s.amount >= 0),
           instructions: instructions.trim() || undefined,
           submitForApproval,
         });
@@ -1085,7 +1125,7 @@ export function ExamForm({
                 No SDMS branches for this programme.
               </p>
             ) : (
-              <div className="max-h-72 space-y-3 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] p-3">
+              <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-3">
                 {branches.map((b) => {
                   const checked = selectedBranchIds.includes(b.id);
                   const available = sectionsByBranch[b.id] ?? [];
@@ -1236,8 +1276,8 @@ export function ExamForm({
             </p>
           ) : (
             <>
-            <div className="flex flex-wrap items-end gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/60 px-3 py-2.5">
-              <div className="flex-1">
+            <div className="flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/60 px-4 py-3">
+              <div className="w-full sm:w-48">
                 <label className="mb-1 block text-xs font-medium text-slate-700">
                   Fee for all subjects (₹)
                 </label>
@@ -1247,7 +1287,7 @@ export function ExamForm({
                   step="1"
                   value={bulkSubjectFee}
                   onChange={(e) => setBulkSubjectFee(e.target.value)}
-                  className="w-full rounded-[var(--radius)] border border-[var(--border)] px-2.5 py-1.5 text-sm"
+                  className={compactInputClass}
                   placeholder="e.g. 180"
                 />
               </div>
@@ -1259,18 +1299,19 @@ export function ExamForm({
               >
                 Apply to all subjects
               </Button>
-              <p className="basis-full text-xs text-[var(--muted)]">
-                Fills every subject&apos;s fee with one click — you can still
-                edit any subject individually afterwards.
+              <p className="w-full text-xs text-[var(--muted)]">
+                Fills every subject fee in one click — you can still edit any
+                paper individually.
               </p>
             </div>
-            <div className="max-h-[28rem] space-y-4 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] p-3">
-              <p className="text-xs text-[var(--muted)]">
-                Subjects are grouped per branch and, where mappings are
-                section-specific, per section — students only see the papers of
-                their own branch and section. Set fee, exam date, session
-                (FN/AN), and timings for each selected paper.
-              </p>
+
+            <p className="text-xs text-[var(--muted)]">
+              Papers are grouped by branch and section. Students only see their
+              own branch and section. Select a paper to set fee, date, session,
+              and timings.
+            </p>
+
+            <div className="grid gap-4 xl:grid-cols-2">
               {selectedBranches.map((b) => {
                 const groups = mappedByBranch[b.name] ?? {};
                 const sectionKeys = Object.keys(groups).sort((x, y) =>
@@ -1285,9 +1326,9 @@ export function ExamForm({
                 return (
                   <div
                     key={b.id}
-                    className="rounded-lg border border-[var(--border)]"
+                    className="rounded-[var(--radius)] border border-[var(--border)] bg-white"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-slate-50 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-slate-50 px-4 py-2.5">
                       <p className="text-sm font-semibold text-slate-900">
                         {b.name}
                         <span className="ml-2 text-xs font-normal text-[var(--muted)]">
@@ -1314,184 +1355,195 @@ export function ExamForm({
                             })
                           }
                         >
-                          Toggle all
+                          {groupSelected === allRows.length
+                            ? 'Deselect all'
+                            : 'Select all'}
                         </button>
                       )}
                     </div>
                     {allRows.length === 0 ? (
-                      <p className="px-3 py-3 text-sm text-[var(--muted)]">
+                      <p className="px-4 py-4 text-sm text-[var(--muted)]">
                         No subjects mapped for this branch in the selected
                         scope.
                       </p>
                     ) : (
-                      sectionKeys.map((section) => {
-                      const subjects = groups[section] ?? [];
-                      const showSectionHeader =
-                        section !== '' || sectionKeys.length > 1;
-                      return (
-                      <div key={section || '__all__'}>
-                        {showSectionHeader && (
-                          <p className="border-b border-dashed border-[var(--border)] bg-slate-50/50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                            {section
-                              ? `Section ${section}`
-                              : 'All sections (common)'}
-                          </p>
-                        )}
-                        <div className="space-y-1 p-2">
-                        {subjects.map((subject) => {
-                          const key = rowKey(b.name, section, subject.id);
-                          const row = selectedFees[key] ?? EMPTY_ROW;
-                          const update = (patch: Partial<SubjectRowState>) =>
-                            setSelectedFees((prev) => ({
-                              ...prev,
-                              [key]: { ...row, ...patch },
-                            }));
-                          const autoDuration = computeDuration(
-                            row.startTime,
-                            row.endTime,
-                          );
+                      <div className="space-y-4 p-4">
+                        {sectionKeys.map((section) => {
+                          const subjects = groups[section] ?? [];
+                          const showSectionHeader =
+                            section !== '' || sectionKeys.length > 1;
                           return (
-                            <div
-                              key={key}
-                              className="rounded-md px-2 py-2 hover:bg-slate-50"
-                            >
-                              <div className="flex flex-wrap items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={row.selected}
-                                  onChange={(e) =>
-                                    update({ selected: e.target.checked })
-                                  }
-                                  aria-label={`Select ${subject.code}`}
-                                />
-                                <span className="min-w-[10rem] flex-1 text-sm">
-                                  <span className="font-medium">
-                                    {subject.code}
-                                  </span>
-                                  <span className="text-[var(--muted)]">
-                                    {' '}
-                                    — {subject.name}
-                                  </span>
-                                </span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="1"
-                                  value={row.fee}
-                                  disabled={!row.selected}
-                                  onChange={(e) =>
-                                    update({ fee: e.target.value })
-                                  }
-                                  className="w-24 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm disabled:bg-slate-50"
-                                  placeholder="Fee ₹"
-                                  aria-label={`Fee ${subject.code}`}
-                                />
-                                <input
-                                  type="date"
-                                  value={row.examDate}
-                                  disabled={!row.selected}
-                                  onChange={(e) =>
-                                    update({ examDate: e.target.value })
-                                  }
-                                  className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm disabled:bg-slate-50"
-                                  aria-label={`Exam date ${subject.code}`}
-                                />
-                              </div>
-                              {row.selected && (
-                                <div className="mt-2 flex flex-wrap items-center gap-2 pl-7 text-xs">
-                                  <select
-                                    value={row.session}
-                                    onChange={(e) =>
-                                      update({
-                                        session: e.target.value as
-                                          | ExamSession
-                                          | '',
-                                      })
-                                    }
-                                    className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-xs"
-                                    aria-label={`Session ${subject.code}`}
-                                  >
-                                    <option value="">Session (auto)</option>
-                                    <option value="FN">Forenoon (FN)</option>
-                                    <option value="AN">Afternoon (AN)</option>
-                                  </select>
-                                  <label className="flex items-center gap-1 text-[var(--muted)]">
-                                    Start
-                                    <input
-                                      type="time"
-                                      value={row.startTime}
-                                      onChange={(e) => {
-                                        const startTime = e.target.value;
-                                        const d = computeDuration(
-                                          startTime,
-                                          row.endTime,
-                                        );
-                                        update({
-                                          startTime,
-                                          duration:
-                                            d != null ? String(d) : row.duration,
-                                        });
-                                      }}
-                                      className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs"
-                                      aria-label={`Start time ${subject.code}`}
-                                    />
-                                  </label>
-                                  <label className="flex items-center gap-1 text-[var(--muted)]">
-                                    End
-                                    <input
-                                      type="time"
-                                      value={row.endTime}
-                                      onChange={(e) => {
-                                        const endTime = e.target.value;
-                                        const d = computeDuration(
-                                          row.startTime,
-                                          endTime,
-                                        );
-                                        update({
-                                          endTime,
-                                          duration:
-                                            d != null ? String(d) : row.duration,
-                                        });
-                                      }}
-                                      className="rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs"
-                                      aria-label={`End time ${subject.code}`}
-                                    />
-                                  </label>
-                                  <label className="flex items-center gap-1 text-[var(--muted)]">
-                                    Duration
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      value={row.duration}
-                                      onChange={(e) =>
-                                        update({ duration: e.target.value })
-                                      }
-                                      className="w-20 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1 text-xs"
-                                      placeholder={
-                                        autoDuration != null
-                                          ? String(autoDuration)
-                                          : 'mins'
-                                      }
-                                      aria-label={`Duration ${subject.code}`}
-                                    />
-                                    min
-                                  </label>
-                                </div>
+                            <div key={section || '__all__'} className="space-y-2">
+                              {showSectionHeader && (
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                                  {section
+                                    ? `Section ${section}`
+                                    : 'All sections (common)'}
+                                </p>
                               )}
+                              <div className="space-y-2">
+                                {subjects.map((subject) => {
+                                  const key = rowKey(b.name, section, subject.id);
+                                  const row = selectedFees[key] ?? EMPTY_ROW;
+                                  const update = (patch: Partial<SubjectRowState>) =>
+                                    setSelectedFees((prev) => ({
+                                      ...prev,
+                                      [key]: { ...row, ...patch },
+                                    }));
+                                  const autoDuration = computeDuration(
+                                    row.startTime,
+                                    row.endTime,
+                                  );
+                                  return (
+                                    <div
+                                      key={key}
+                                      className={`rounded-[var(--radius)] border px-3 py-2.5 transition ${
+                                        row.selected
+                                          ? 'border-[var(--primary)]/25 bg-[var(--primary-soft)]/20'
+                                          : 'border-[var(--border)] bg-slate-50/40'
+                                      }`}
+                                    >
+                                      <label className="flex cursor-pointer items-start gap-3">
+                                        <input
+                                          type="checkbox"
+                                          className="mt-0.5"
+                                          checked={row.selected}
+                                          onChange={(e) =>
+                                            update({ selected: e.target.checked })
+                                          }
+                                          aria-label={`Select ${subject.code}`}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-sm font-semibold text-slate-900">
+                                            {subject.code}
+                                          </p>
+                                          <p className="text-xs leading-snug text-[var(--muted)]">
+                                            {subject.name}
+                                          </p>
+                                        </div>
+                                      </label>
+                                      {row.selected ? (
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+                                          <ConfigField label="Fee (₹)">
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              step="1"
+                                              value={row.fee}
+                                              onChange={(e) =>
+                                                update({ fee: e.target.value })
+                                              }
+                                              className={compactInputClass}
+                                              aria-label={`Fee ${subject.code}`}
+                                            />
+                                          </ConfigField>
+                                          <ConfigField label="Exam date">
+                                            <input
+                                              type="date"
+                                              value={row.examDate}
+                                              onChange={(e) =>
+                                                update({ examDate: e.target.value })
+                                              }
+                                              className={compactInputClass}
+                                              aria-label={`Exam date ${subject.code}`}
+                                            />
+                                          </ConfigField>
+                                          <ConfigField label="Session">
+                                            <select
+                                              value={row.session}
+                                              onChange={(e) =>
+                                                update({
+                                                  session: e.target.value as
+                                                    | ExamSession
+                                                    | '',
+                                                })
+                                              }
+                                              className={compactInputClass}
+                                              aria-label={`Session ${subject.code}`}
+                                            >
+                                              <option value="">Auto</option>
+                                              <option value="FN">Forenoon</option>
+                                              <option value="AN">Afternoon</option>
+                                            </select>
+                                          </ConfigField>
+                                          <ConfigField label="Start time">
+                                            <input
+                                              type="time"
+                                              value={row.startTime}
+                                              onChange={(e) => {
+                                                const startTime = e.target.value;
+                                                const d = computeDuration(
+                                                  startTime,
+                                                  row.endTime,
+                                                );
+                                                update({
+                                                  startTime,
+                                                  duration:
+                                                    d != null
+                                                      ? String(d)
+                                                      : row.duration,
+                                                });
+                                              }}
+                                              className={compactInputClass}
+                                              aria-label={`Start time ${subject.code}`}
+                                            />
+                                          </ConfigField>
+                                          <ConfigField label="End time">
+                                            <input
+                                              type="time"
+                                              value={row.endTime}
+                                              onChange={(e) => {
+                                                const endTime = e.target.value;
+                                                const d = computeDuration(
+                                                  row.startTime,
+                                                  endTime,
+                                                );
+                                                update({
+                                                  endTime,
+                                                  duration:
+                                                    d != null
+                                                      ? String(d)
+                                                      : row.duration,
+                                                });
+                                              }}
+                                              className={compactInputClass}
+                                              aria-label={`End time ${subject.code}`}
+                                            />
+                                          </ConfigField>
+                                          <ConfigField label="Duration (min)">
+                                            <input
+                                              type="number"
+                                              min={1}
+                                              value={row.duration}
+                                              onChange={(e) =>
+                                                update({ duration: e.target.value })
+                                              }
+                                              className={compactInputClass}
+                                              placeholder={
+                                                autoDuration != null
+                                                  ? String(autoDuration)
+                                                  : 'mins'
+                                              }
+                                              aria-label={`Duration ${subject.code}`}
+                                            />
+                                          </ConfigField>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           );
                         })}
-                        </div>
                       </div>
-                      );
-                      })
                     )}
                   </div>
                 );
               })}
             </div>
 
-            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-3">
+            <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-4">
               <p className="text-sm font-semibold text-slate-900">
                 Package fees
                 <span className="ml-2 text-xs font-normal text-[var(--muted)]">
@@ -1538,15 +1590,15 @@ export function ExamForm({
                       branch fee; the branch fee overrides the default.
                     </p>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {packageScopes.map((scope) => {
                       const key = pkgKey(scope.branch, scope.section);
                       return (
                         <label
                           key={key}
-                          className="flex items-center justify-between gap-2 rounded-[var(--radius)] border border-[var(--border)] px-3 py-2 text-sm"
+                          className="flex min-w-0 flex-col gap-1.5 rounded-[var(--radius)] border border-[var(--border)] bg-white px-3 py-2.5 text-sm"
                         >
-                          <span className="text-slate-700">
+                          <span className="text-xs font-medium text-slate-700">
                             {scope.branch}
                             {scope.section ? (
                               <span className="text-[var(--muted)]">
@@ -1571,7 +1623,7 @@ export function ExamForm({
                                 [key]: e.target.value,
                               }))
                             }
-                            className="w-28 rounded-[var(--radius)] border border-[var(--border)] px-2 py-1.5 text-sm"
+                            className={compactInputClass}
                             placeholder="₹ (unset)"
                             aria-label={`Package fee ${scope.branch}${scope.section ? ` section ${scope.section}` : ''}`}
                           />
@@ -1628,17 +1680,28 @@ export function ExamForm({
             />
           </div>
 
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-700">Late fee slabs</p>
+          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/50 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Late fee slabs</p>
+                <p className="text-xs text-[var(--muted)]">
+                  Days are counted from the late fee start date. Only the{' '}
+                  <strong>last slab</strong> may leave &quot;To day&quot; empty —
+                  that applies the amount until the application end date.
+                </p>
+              </div>
               <Button
                 type="button"
                 variant="secondary"
                 className="!px-3 !py-1.5 text-xs"
                 onClick={() =>
                   setSlabs((prev) => [
-                    ...prev,
-                    { fromDay: 1, toDay: 3, amount: 100 },
+                    ...prev.map((s, i) =>
+                      i === prev.length - 1 && s.toDay == null
+                        ? { ...s, toDay: 3 }
+                        : s,
+                    ),
+                    { fromDay: 4, toDay: null, amount: 100 },
                   ])
                 }
               >
@@ -1646,72 +1709,115 @@ export function ExamForm({
               </Button>
             </div>
             <div className="space-y-2">
-              {slabs.map((slab, idx) => (
-                <div key={idx} className="grid grid-cols-4 gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    value={slab.fromDay}
-                    onChange={(e) =>
-                      setSlabs((rows) =>
-                        rows.map((r, i) =>
-                          i === idx
-                            ? { ...r, fromDay: parseInt(e.target.value, 10) || 0 }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={selectClass}
-                    placeholder="From day"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={slab.toDay}
-                    onChange={(e) =>
-                      setSlabs((rows) =>
-                        rows.map((r, i) =>
-                          i === idx
-                            ? { ...r, toDay: parseInt(e.target.value, 10) || 0 }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={selectClass}
-                    placeholder="To day"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={slab.amount}
-                    onChange={(e) =>
-                      setSlabs((rows) =>
-                        rows.map((r, i) =>
-                          i === idx
-                            ? {
-                                ...r,
-                                amount: parseFloat(e.target.value) || 0,
-                              }
-                            : r,
-                        ),
-                      )
-                    }
-                    className={selectClass}
-                    placeholder="Amount"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="!text-red-600"
-                    onClick={() =>
-                      setSlabs((rows) => rows.filter((_, i) => i !== idx))
-                    }
-                    disabled={slabs.length <= 1}
+              {slabs.map((slab, idx) => {
+                const isLast = idx === slabs.length - 1;
+                return (
+                  <div
+                    key={idx}
+                    className="grid gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-white p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
                   >
-                    Remove
-                  </Button>
-                </div>
-              ))}
+                    <label className="block min-w-0">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        From day
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={slab.fromDay}
+                        onChange={(e) =>
+                          setSlabs((rows) =>
+                            rows.map((r, i) =>
+                              i === idx
+                                ? {
+                                    ...r,
+                                    fromDay: parseInt(e.target.value, 10) || 0,
+                                  }
+                                : r,
+                            ),
+                          )
+                        }
+                        className={compactInputClass}
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        To day {isLast ? '(optional)' : ''}
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={slab.toDay ?? ''}
+                        placeholder={isLast ? 'Until application end' : 'Required'}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          setSlabs((rows) =>
+                            rows.map((r, i) => {
+                              if (i !== idx) return r;
+                              if (!isLast) {
+                                return {
+                                  ...r,
+                                  toDay: parseInt(raw, 10) || 0,
+                                };
+                              }
+                              return {
+                                ...r,
+                                toDay: raw === '' ? null : parseInt(raw, 10) || 0,
+                              };
+                            }),
+                          );
+                        }}
+                        className={compactInputClass}
+                      />
+                    </label>
+                    <label className="block min-w-0">
+                      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                        Amount (₹)
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={slab.amount}
+                        onChange={(e) =>
+                          setSlabs((rows) =>
+                            rows.map((r, i) =>
+                              i === idx
+                                ? {
+                                    ...r,
+                                    amount: parseFloat(e.target.value) || 0,
+                                  }
+                                : r,
+                            ),
+                          )
+                        }
+                        className={compactInputClass}
+                      />
+                    </label>
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="!text-red-600"
+                        onClick={() =>
+                          setSlabs((rows) => {
+                            const next = rows.filter((_, i) => i !== idx);
+                            if (next.length === 0) return next;
+                            const lastIdx = next.length - 1;
+                            if (next[lastIdx].toDay != null && lastIdx > 0) {
+                              // keep explicit to on new last if it had one
+                            } else if (next.length === 1) {
+                              next[0] = { ...next[0], toDay: null };
+                            }
+                            return next;
+                          })
+                        }
+                        disabled={slabs.length <= 1}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
