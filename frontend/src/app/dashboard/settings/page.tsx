@@ -140,7 +140,7 @@ export default function SettingsPage() {
                 </div>
               )}
               {success && (
-                <div className="rounded-[var(--radius)] bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">
+                <div className="rounded-[var(--radius)] bg-[var(--success-soft)] px-3.5 py-2.5 text-sm text-[var(--success)]">
                   {success}
                 </div>
               )}

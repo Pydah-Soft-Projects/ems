@@ -31,7 +31,7 @@ function AttemptHistory({ subject }: { subject: StudentSubjectResult }) {
           Attempt {a.attemptNumber}
           {a.examType ? ` · ${a.examType.replace(/_/g, ' ')}` : ''}
           {a.examName ? ` · ${a.examName}` : ''}: {a.grade} —{' '}
-          <span className={a.passed ? 'text-emerald-600' : 'text-rose-600'}>
+          <span className={a.passed ? 'text-[var(--success)]' : 'text-rose-600'}>
             {a.passed ? 'Pass' : 'Fail'}
           </span>
         </p>
@@ -123,7 +123,7 @@ export default function StudentResultsPage() {
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
                         sem.status === 'passed'
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-[var(--success-soft)] text-[var(--success)]'
                           : 'bg-rose-100 text-rose-800'
                       }`}
                     >
@@ -163,7 +163,7 @@ export default function StudentResultsPage() {
                                   <span
                                     className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                       sub.passed
-                                        ? 'bg-emerald-50 text-emerald-700'
+                                        ? 'bg-[var(--success-soft)] text-[var(--success)]'
                                         : 'bg-rose-50 text-rose-700'
                                     }`}
                                   >

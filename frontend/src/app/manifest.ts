@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Examination management portal',
     start_url: '/dashboard',
     display: 'standalone',
-    background_color: '#000000',
-    theme_color: '#0f172a',
+    background_color: '#ffffff',
+    theme_color: '#0d1b3d',
     icons: [
       {
         src: '/favicon-32.png',

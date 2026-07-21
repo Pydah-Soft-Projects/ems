@@ -170,6 +170,7 @@ function buildPrintDocument(
 <meta charset="utf-8" />
 <title>Hall Ticket — ${esc(ticket.studentRollNumber)}</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
   @page {
     size: A4 portrait;
     margin: 0;
@@ -181,8 +182,8 @@ function buildPrintDocument(
     margin: 0;
     padding: 0;
     background: #fff;
-    color: #0f172a;
-    font-family: Arial, Helvetica, sans-serif;
+    color: #0d1b3d;
+    font-family: 'Poppins', Arial, Helvetica, sans-serif;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -205,7 +206,7 @@ function buildPrintDocument(
   .frame {
     width: 100%;
     height: 100%;
-    border: 1.5px solid #0f172a;
+    border: 1.5px solid #0d1b3d;
     padding: 3mm 4mm;
     display: flex;
     flex-direction: column;
@@ -216,18 +217,16 @@ function buildPrintDocument(
     justify-content: space-between;
     gap: 3mm;
     padding-bottom: 1.8mm;
-    border-bottom: 1.5px solid #0f172a;
+    border-bottom: 1.5px solid #0d1b3d;
   }
   .brand { display: flex; align-items: center; gap: 1.8mm; min-width: 28mm; }
   .logo {
     width: 8mm; height: 8mm;
     object-fit: contain;
-    border-radius: 1mm;
-    background: #0f172a;
     display: block;
   }
   .brand-text { font-size: 6pt; color: #64748b; line-height: 1.2; }
-  .brand-text b { display: block; color: #0f172a; font-size: 7pt; }
+  .brand-text b { display: block; color: #0d1b3d; font-size: 7pt; }
   .college { flex: 1; text-align: center; }
   .college h1 {
     font-size: 11pt; font-weight: 700; text-transform: uppercase;
@@ -275,7 +274,7 @@ function buildPrintDocument(
     margin-top: 1.8mm;
     font-size: 7pt;
   }
-  th, td { border: 1px solid #0f172a; padding: 1mm 1.6mm; vertical-align: top; }
+  th, td { border: 1px solid #0d1b3d; padding: 1mm 1.6mm; vertical-align: top; }
   th { background: #f1f5f9; text-align: left; font-size: 6.5pt; }
   .sno { width: 8mm; text-align: center; }
   .date { width: 24mm; white-space: nowrap; }
@@ -299,7 +298,7 @@ function buildPrintDocument(
   .mid.full { padding-right: 2mm; }
   .sign { text-align: center; }
   .sign-line {
-    border-bottom: 1px solid #0f172a;
+    border-bottom: 1px solid #0d1b3d;
     height: 6.5mm;
     margin-bottom: 0.8mm;
   }

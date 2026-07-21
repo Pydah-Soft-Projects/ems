@@ -112,7 +112,7 @@ export default function RemunerationBillDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-gradient-to-br from-slate-800 via-slate-900 to-indigo-950 p-6 text-white shadow-[var(--shadow-md)]">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[#13294f] via-[#0d1b3d] to-[#081228] p-6 text-white shadow-[var(--shadow-md)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex flex-wrap items-center gap-2">

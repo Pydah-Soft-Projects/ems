@@ -106,7 +106,7 @@ export function CollectPaymentModal({
     >
       {receipt ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="rounded-xl border border-[var(--success-border)] bg-[var(--success-soft)] px-4 py-3 text-sm text-[var(--success)]">
             Receipt <strong>{receipt.payment.receiptNumber}</strong> — paid{' '}
             {money(receipt.payment.amountPaid)}
           </div>

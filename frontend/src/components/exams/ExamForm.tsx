@@ -953,7 +953,7 @@ export function ExamForm({
                 step === item.n
                   ? 'bg-[var(--primary)] text-white'
                   : step > item.n
-                    ? 'bg-emerald-100 text-emerald-700'
+                    ? 'bg-[var(--success-soft)] text-[var(--success)]'
                     : 'bg-slate-100 text-slate-500'
               }`}
             >

@@ -10,7 +10,7 @@ const variants: Record<Variant, string> = {
     'border border-[var(--border)] bg-white text-slate-700 shadow-[var(--shadow-sm)] hover:bg-[var(--surface-subtle)]',
   ghost: 'text-[var(--sidebar-text)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]',
   danger: 'bg-[var(--danger)] text-white hover:bg-rose-700',
-  success: 'bg-[var(--success)] text-white hover:bg-emerald-600',
+  success: 'bg-[var(--success)] text-white hover:bg-[var(--accent-hover)]',
   warning: 'bg-[var(--warning)] text-white hover:bg-amber-600',
   accent: 'bg-[var(--accent)] text-white shadow-[var(--shadow-sm)] hover:bg-[var(--accent-hover)]',
 };

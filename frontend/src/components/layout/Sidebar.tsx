@@ -94,7 +94,7 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
             collapsed ? 'justify-center p-2' : 'gap-3 p-3'
           }`}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-indigo-400 text-sm font-bold text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-sm font-bold text-white">
             {getInitials(user.fullName)}
           </div>
           {!collapsed ? (

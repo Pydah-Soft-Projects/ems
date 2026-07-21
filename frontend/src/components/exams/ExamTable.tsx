@@ -175,7 +175,7 @@ export function ExamTable({
                     <>
                       <Button
                         variant="ghost"
-                        className="!px-2.5 !py-1.5 text-xs !text-emerald-700"
+                        className="!px-2.5 !py-1.5 text-xs !text-[var(--success)]"
                         onClick={() => onApprove(exam)}
                       >
                         Approve
@@ -192,7 +192,7 @@ export function ExamTable({
                   {exam.status === 'approved' && (
                     <Button
                       variant="ghost"
-                      className="!px-2.5 !py-1.5 text-xs !text-emerald-700"
+                      className="!px-2.5 !py-1.5 text-xs !text-[var(--success)]"
                       onClick={() => onPublish(exam)}
                     >
                       Publish
@@ -201,7 +201,7 @@ export function ExamTable({
                   {exam.status === 'published' && (
                     <Button
                       variant="ghost"
-                      className="!px-2.5 !py-1.5 text-xs !text-indigo-700"
+                      className="!px-2.5 !py-1.5 text-xs !text-[var(--accent)]"
                       onClick={() => onReleaseHallTickets(exam)}
                       disabled={!!exam.hallTicketsReleasedAt}
                       title={

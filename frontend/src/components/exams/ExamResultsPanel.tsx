@@ -443,7 +443,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
                             title={`${sub.subjectName} · attempt ${sub.attemptNumber} · ${sub.credits} credits`}
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                               sub.passed
-                                ? 'bg-emerald-50 text-emerald-700'
+                                ? 'bg-[var(--success-soft)] text-[var(--success)]'
                                 : 'bg-rose-50 text-rose-700'
                             }`}
                           >
@@ -456,7 +456,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                           s.allPassed
-                            ? 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-[var(--success-soft)] text-[var(--success)]'
                             : 'bg-rose-100 text-rose-800'
                         }`}
                       >

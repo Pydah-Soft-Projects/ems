@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Poppins, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   description: 'Super Admin portal for examination management',
   manifest: '/manifest.webmanifest',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#0f172a' },
+    { media: '(prefers-color-scheme: light)', color: '#0d1b3d' },
     { media: '(prefers-color-scheme: dark)', color: '#000000' },
   ],
   icons: {
@@ -38,7 +39,7 @@ export const metadata: Metadata = {
       {
         rel: 'mask-icon',
         url: '/icon-monochrome.png',
-        color: '#0f172a',
+        color: '#0d1b3d',
       },
     ],
   },
@@ -57,7 +58,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${poppins.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
         <ToastProvider>{children}</ToastProvider>

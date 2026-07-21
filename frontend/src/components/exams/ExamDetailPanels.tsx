@@ -62,8 +62,8 @@ function MetricCard({
 }) {
   const accents = {
     slate: 'from-slate-500/10 to-slate-500/5 border-slate-200/80',
-    indigo: 'from-indigo-500/10 to-indigo-500/5 border-indigo-200/80',
-    emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-200/80',
+    indigo: 'from-[#0d1b3d]/10 to-[#0d1b3d]/5 border-[#0d1b3d]/15',
+    emerald: 'from-[#2e7d32]/10 to-[#2e7d32]/5 border-[#2e7d32]/20',
     amber: 'from-amber-500/10 to-amber-500/5 border-amber-200/80',
     rose: 'from-rose-500/10 to-rose-500/5 border-rose-200/80',
   };
@@ -243,7 +243,7 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
               ).map((label) => (
                 <span
                   key={label}
-                  className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800"
+                  className="inline-flex rounded-full border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]"
                 >
                   {label}
                 </span>
@@ -269,7 +269,7 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
                           ? ` · Section ${pf.section}`
                           : ' · whole branch'}
                       </p>
-                      <p className="mt-0.5 text-sm font-bold text-emerald-700">
+                      <p className="mt-0.5 text-sm font-bold text-[var(--success)]">
                         ₹{pf.amount}
                       </p>
                       <p className="mt-0.5 text-[11px] text-[var(--muted)]">
@@ -425,7 +425,7 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
                 {list.length} paper{list.length === 1 ? '' : 's'}
               </p>
             </div>
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
               {money(list.reduce((s, es) => s + Number(es.fee || 0), 0))} total
             </span>
           </div>
@@ -470,7 +470,7 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-600">{timing}</td>
                       <td className="px-5 py-3 text-right">
-                        <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                        <span className="inline-flex rounded-full bg-[var(--success-soft)] px-2.5 py-1 text-xs font-bold text-[var(--success)]">
                           {money(Number(es.fee))}
                         </span>
                       </td>

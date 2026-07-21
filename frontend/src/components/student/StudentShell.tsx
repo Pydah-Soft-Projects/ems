@@ -70,7 +70,7 @@ export function StudentShell({
 
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-white py-1 pl-1 pr-3 shadow-[var(--shadow-sm)] sm:flex">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-indigo-400 text-[10px] font-bold text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-[10px] font-bold text-white">
                 {getInitials(user.fullName)}
               </div>
               <span className="text-xs font-medium text-[var(--muted)]">

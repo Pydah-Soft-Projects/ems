@@ -256,7 +256,7 @@ function StepPill({
           active
             ? 'bg-[var(--primary)] text-white'
             : done
-              ? 'bg-emerald-100 text-emerald-700'
+              ? 'bg-[var(--success-soft)] text-[var(--success)]'
               : 'bg-slate-100 text-slate-500'
         }`}
       >

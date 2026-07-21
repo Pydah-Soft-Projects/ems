@@ -1,31 +1,21 @@
 import Image from 'next/image';
 
 const sizeMap = {
-  sm: { box: 'h-9 w-9', px: 36 },
-  md: { box: 'h-10 w-10', px: 40 },
-  lg: { box: 'h-14 w-14', px: 56 },
+  sm: { box: 'h-10 w-10', px: 40 },
+  md: { box: 'h-14 w-14', px: 56 },
+  lg: { box: 'h-36 w-36', px: 144 },
 } as const;
 
 type BrandLogoProps = {
   size?: keyof typeof sizeMap;
   className?: string;
-  /** Soft white plate behind the dark logo so it reads on light sidebars */
-  framed?: boolean;
 };
 
-export function BrandLogo({
-  size = 'md',
-  className = '',
-  framed = true,
-}: BrandLogoProps) {
+export function BrandLogo({ size = 'md', className = '' }: BrandLogoProps) {
   const { box, px } = sizeMap[size];
   return (
     <span
-      className={`relative inline-flex ${box} shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] ${
-        framed
-          ? 'bg-slate-950 shadow-[var(--shadow-md)] ring-1 ring-black/10'
-          : ''
-      } ${className}`}
+      className={`relative inline-flex ${box} shrink-0 items-center justify-center ${className}`}
     >
       <Image
         src="/logo.png"

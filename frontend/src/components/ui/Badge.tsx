@@ -7,7 +7,7 @@ export function Badge({
 }) {
   const styles = {
     default: 'bg-[var(--surface-muted)] text-[var(--sidebar-text)]',
-    success: 'bg-[var(--success-soft)] text-emerald-700',
+    success: 'bg-[var(--success-soft)] text-[var(--success)]',
     primary: 'bg-[var(--primary-soft)] text-[var(--primary)]',
     warning: 'bg-[var(--warning-soft)] text-amber-800',
     danger: 'bg-[var(--danger-soft)] text-rose-700',

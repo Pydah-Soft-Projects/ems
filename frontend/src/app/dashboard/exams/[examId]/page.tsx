@@ -184,7 +184,7 @@ export default function ExamDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 p-6 text-white shadow-[var(--shadow-md)]">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-gradient-to-br from-[#0d1b3d] via-[#13294f] to-[#1d5c2f] p-6 text-white shadow-[var(--shadow-md)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -196,7 +196,7 @@ export default function ExamDetailPage() {
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
               {exam.name}
             </h1>
-            <p className="mt-2 text-sm text-indigo-100">
+            <p className="mt-2 text-sm text-slate-200">
               {exam.college ?? '—'} · {exam.course} · Batch {exam.batch} · Y
               {exam.yearOfStudy} S{exam.semester}
             </p>

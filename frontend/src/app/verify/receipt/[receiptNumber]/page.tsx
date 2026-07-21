@@ -73,7 +73,7 @@ export default function VerifyReceiptPage({
       <div className="mx-auto max-w-lg">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex justify-center">
-            <BrandLogo size="md" className="rounded-2xl" />
+            <BrandLogo size="md" />
           </div>
           <h1 className="text-xl font-bold text-slate-900">
             Receipt verification
@@ -96,9 +96,9 @@ export default function VerifyReceiptPage({
             </div>
           ) : data ? (
             <div className="space-y-4">
-              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <div className="rounded-xl bg-[var(--success-soft)] px-4 py-3 text-sm text-[var(--success)]">
                 <p className="font-bold">✓ Genuine receipt</p>
-                <p className="mt-0.5 text-emerald-700">
+                <p className="mt-0.5 text-[var(--success)]">
                   Payment recorded successfully in EMS.
                   {data.tokenValidated
                     ? ' QR security token validated.'

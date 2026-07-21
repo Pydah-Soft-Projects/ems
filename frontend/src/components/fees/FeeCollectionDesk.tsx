@@ -426,7 +426,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                       <span
                         className={`text-xs font-bold ${
                           y.status === 'PAID'
-                            ? 'text-emerald-600'
+                            ? 'text-[var(--success)]'
                             : 'text-amber-600'
                         }`}
                       >
@@ -435,7 +435,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     </div>
                     <p
                       className={`mt-3 text-lg font-bold tabular-nums ${
-                        y.balance > 0 ? 'text-amber-600' : 'text-emerald-600'
+                        y.balance > 0 ? 'text-amber-600' : 'text-[var(--success)]'
                       }`}
                     >
                       {money(y.balance)}
@@ -528,7 +528,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                                 Apply
                               </Button>
                             ) : (
-                              <span className="text-xs font-semibold text-emerald-600">
+                              <span className="text-xs font-semibold text-[var(--success)]">
                                 Fully applied
                               </span>
                             )}
@@ -713,7 +713,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                           <span
                             className={`text-xs font-semibold ${
                               p.status === 'success'
-                                ? 'text-emerald-600'
+                                ? 'text-[var(--success)]'
                                 : p.status === 'voided' || p.status === 'failed'
                                   ? 'text-red-600'
                                   : 'text-amber-600'

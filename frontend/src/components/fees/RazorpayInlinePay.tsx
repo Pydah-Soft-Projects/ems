@@ -229,7 +229,7 @@ export function RazorpayInlinePay({
 function StatusIcon({ phase }: { phase: InlinePayPhase }) {
   if (phase === 'success') {
     return (
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--success-soft)] text-[var(--success)]">
         ✓
       </span>
     );

@@ -92,7 +92,7 @@ export function KpiTile({
   const labels = {
     primary: 'text-[var(--primary)]',
     accent: 'text-[var(--accent-hover)]',
-    success: 'text-emerald-700',
+    success: 'text-[var(--success)]',
     warning: 'text-amber-800',
   };
 
