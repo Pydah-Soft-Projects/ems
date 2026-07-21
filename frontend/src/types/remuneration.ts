@@ -106,7 +106,12 @@ export interface RemunerationBill {
   createdAt: string;
   updatedAt: string;
   professional?: Professional | null;
-  exam?: { id: number; name: string; status: string } | null;
+  exam?: {
+    id: number;
+    name: string;
+    status: string;
+    college?: string | null;
+  } | null;
 }
 
 export type CreateRemunerationBillInput = {

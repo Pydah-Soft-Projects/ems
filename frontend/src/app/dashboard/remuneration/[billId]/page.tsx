@@ -20,6 +20,7 @@ import {
   BillStatusActions,
   BillStatusTimeline,
 } from '@/components/remuneration/BillStatusTimeline';
+import { printRemunerationBill } from '@/lib/printRemunerationBill';
 
 export default function RemunerationBillDetailPage() {
   const params = useParams<{ billId: string }>();
@@ -140,6 +141,9 @@ export default function RemunerationBillDetailPage() {
               onClick={() => router.push('/dashboard/remuneration')}
             >
               Back
+            </Button>
+            <Button variant="accent" onClick={() => printRemunerationBill(bill)}>
+              Print bill
             </Button>
             {!isPaid ? (
               <>

@@ -26,19 +26,45 @@ export function FeeReceipt({
   const timeStr = paidAt.toLocaleString('en-IN');
   const verifyUrl = buildReceiptVerificationUrl(payment);
 
-  const particulars = [
-    {
-      title: exam?.name ?? 'Examination fee',
-      detail: exam
-        ? `Y${exam.yearOfStudy} / Sem ${exam.semester}${
-            fr?.feeBreakdown?.length
-              ? ` · ${fr.feeBreakdown.map((b) => b.subjectCode).join(', ')}`
-              : ''
-          }`
-        : 'Exam fee payment',
-      amount: Number(payment.amountPaid),
-    },
-  ];
+  const amountPaid = Number(payment.amountPaid);
+  const examDetail = exam
+    ? `Y${exam.yearOfStudy} / Sem ${exam.semester}${
+        fr?.feeBreakdown?.length
+          ? ` · ${fr.feeBreakdown.map((b) => b.subjectCode).join(', ')}`
+          : ''
+      }`
+    : 'Exam fee payment';
+
+  // Show exam fee and late fee as separate rows when the fee record has a
+  // late fee and the parts add up to the amount paid; otherwise fall back to
+  // the single combined row.
+  const baseFee = Number(fr?.baseFee ?? 0);
+  const lateFee = Number(fr?.lateFee ?? 0);
+  const splitRows =
+    lateFee > 0 && Math.abs(baseFee + lateFee - amountPaid) < 0.01;
+
+  const particulars = splitRows
+    ? [
+        {
+          title: exam?.name ?? 'Examination fee',
+          detail: examDetail,
+          amount: baseFee,
+        },
+        {
+          title: 'Late Fee',
+          detail: exam?.name
+            ? `Late application fee — ${exam.name}`
+            : 'Late application fee',
+          amount: lateFee,
+        },
+      ]
+    : [
+        {
+          title: exam?.name ?? 'Examination fee',
+          detail: examDetail,
+          amount: amountPaid,
+        },
+      ];
 
   const total = particulars.reduce((s, p) => s + p.amount, 0);
   const signer = signatoryName || payment.collectedBy || 'Authorized';

@@ -52,6 +52,42 @@ function buildReceiptBlock(
       }`
     : 'Exam fee payment';
   const amount = Number(payment.amountPaid);
+
+  // Split exam fee and late fee into separate rows when the fee record has a
+  // late fee and the parts add up to the amount paid; otherwise keep the
+  // single combined row (old receipts, records without a breakdown).
+  const baseFee = Number(fr?.baseFee ?? 0);
+  const lateFee = Number(fr?.lateFee ?? 0);
+  const splitRows =
+    lateFee > 0 && Math.abs(baseFee + lateFee - amount) < 0.01;
+
+  const rows = splitRows
+    ? [
+        { title: examTitle, detail: examDetail, amount: baseFee },
+        {
+          title: 'Late Fee',
+          detail: exam?.name
+            ? `Late application fee — ${exam.name}`
+            : 'Late application fee',
+          amount: lateFee,
+        },
+      ]
+    : [{ title: examTitle, detail: examDetail, amount }];
+
+  const rowsHtml = rows
+    .map(
+      (row, idx) => `
+          <tr>
+            <td class="sno">${idx + 1}</td>
+            <td>
+              <div>${esc(row.title)}</div>
+              <div class="sub">${esc(row.detail)}</div>
+            </td>
+            <td class="amt">${esc(moneyPlain(row.amount))}</td>
+          </tr>`,
+    )
+    .join('');
+
   const verifyPageUrl =
     options.verificationUrl ||
     `${
@@ -114,15 +150,7 @@ function buildReceiptBlock(
             <th class="amt">Amount (₹)</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <td class="sno">1</td>
-            <td>
-              <div>${esc(examTitle)}</div>
-              <div class="sub">${esc(examDetail)}</div>
-            </td>
-            <td class="amt">${esc(moneyPlain(amount))}</td>
-          </tr>
+        <tbody>${rowsHtml}
         </tbody>
         <tfoot>
           <tr>
