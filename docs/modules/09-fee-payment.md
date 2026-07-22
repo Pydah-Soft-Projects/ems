@@ -2,7 +2,9 @@
 
 ## Overview (Workflow 9)
 
-Unified fee collection — students pay online; Accounts staff collect offline (cash/bank).
+Unified fee collection — students pay via Razorpay online, Self Online college UPI, or Accounts desk offline (cash/bank).
+
+See also: [Self Online Payment & Reconciliation](./18-self-online-payment.md).
 
 ## Desk collection UI
 
@@ -15,6 +17,10 @@ Screenshot-style desk page:
 - Collect sidebar (cash/bank, collector, remarks)
 - Transaction history → print receipt
 
+Self Online reconcile: `/dashboard/fees/self-online` (merchant PDF upload + match).
+
+Desk collect methods: Cash · Bank · Razorpay · **Self Online** (college UPI QR at counter).
+
 ## Receipt (A5)
 
 `/dashboard/fees/receipt/[paymentId]` and `/student/receipt/[paymentId]`
@@ -22,12 +28,14 @@ Screenshot-style desk page:
 - Printable A5 landscape layout (mock fee receipt style)
 - QR for receipt number, particulars, authorized signatory
 - Browser **Print receipt** button
+- Self Online: temporary acknowledgement until verified; official receipt after reconcile
 
 ## Student portal
 
 - Login: `/student/login` — PIN + Admission Number (password)
 - Home: `/student` — exams, subjects, paid/pending, online pay
 - Auth: `POST /auth/student/login`
+- Payment methods: Razorpay and/or Self Online (college UPI QR) when enabled in Settings
 
 ## API
 
@@ -40,3 +48,9 @@ Screenshot-style desk page:
 | GET | `/student/fees` | Student’s own fees |
 | POST | `/student/fees/:id/pay` | Student online pay |
 | GET | `/student/payments/:id` | Student receipt |
+| GET | `/fees/self-online/status` | Self Online readiness |
+| POST | `/fees/self-online/order` | Create EMS order + UPI QR |
+| POST | `/fees/self-online/:id/claim` | Student “I have paid” |
+| POST | `/fees/self-online/statements` | Upload merchant PDF/CSV/XLS |
+| POST | `/fees/self-online/verify` | Admin confirm match |
+

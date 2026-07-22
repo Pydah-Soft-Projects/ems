@@ -12,12 +12,19 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<PaymentGatewaySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSelf, setSavingSelf] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const [enabled, setEnabled] = useState(false);
   const [keyId, setKeyId] = useState('');
   const [keySecret, setKeySecret] = useState('');
+
+  const [selfOnlineEnabled, setSelfOnlineEnabled] = useState(false);
+  const [selfOnlineUpiId, setSelfOnlineUpiId] = useState('');
+  const [selfOnlineMerchantName, setSelfOnlineMerchantName] = useState('');
+  const [selfOnlinePaymentNote, setSelfOnlinePaymentNote] = useState('Exam Fee');
+  const [selfOnlineExpiryHours, setSelfOnlineExpiryHours] = useState('48');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,6 +35,11 @@ export default function SettingsPage() {
       setEnabled(data.enabled);
       setKeyId(data.razorpayKeyId ?? '');
       setKeySecret('');
+      setSelfOnlineEnabled(Boolean(data.selfOnlineEnabled));
+      setSelfOnlineUpiId(data.selfOnlineUpiId ?? '');
+      setSelfOnlineMerchantName(data.selfOnlineMerchantName ?? '');
+      setSelfOnlinePaymentNote(data.selfOnlinePaymentNote ?? 'Exam Fee');
+      setSelfOnlineExpiryHours(String(data.selfOnlineExpiryHours ?? 48));
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -58,7 +70,7 @@ export default function SettingsPage() {
       setEnabled(updated.enabled);
       setKeyId(updated.razorpayKeyId ?? '');
       setKeySecret('');
-      setSuccess('Payment settings saved.');
+      setSuccess('Razorpay settings saved.');
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Failed to save settings.',
@@ -68,11 +80,40 @@ export default function SettingsPage() {
     }
   }
 
+  async function onSubmitSelfOnline(e: FormEvent) {
+    e.preventDefault();
+    setSavingSelf(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await api.updatePaymentSettings({
+        selfOnlineEnabled,
+        selfOnlineUpiId: selfOnlineUpiId.trim(),
+        selfOnlineMerchantName: selfOnlineMerchantName.trim(),
+        selfOnlinePaymentNote: selfOnlinePaymentNote.trim() || 'Exam Fee',
+        selfOnlineExpiryHours: parseInt(selfOnlineExpiryHours, 10) || 48,
+      });
+      setSettings(updated);
+      setSelfOnlineEnabled(Boolean(updated.selfOnlineEnabled));
+      setSelfOnlineUpiId(updated.selfOnlineUpiId ?? '');
+      setSelfOnlineMerchantName(updated.selfOnlineMerchantName ?? '');
+      setSelfOnlinePaymentNote(updated.selfOnlinePaymentNote ?? 'Exam Fee');
+      setSelfOnlineExpiryHours(String(updated.selfOnlineExpiryHours ?? 48));
+      setSuccess('Self Online UPI settings saved.');
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : 'Failed to save Self Online settings.',
+      );
+    } finally {
+      setSavingSelf(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Razorpay keys for inline popup payments on the fee pages"
+        description="Razorpay gateway and Self Online college UPI configuration"
       />
 
       <Card>
@@ -134,24 +175,105 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {error && (
-                <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3.5 py-2.5 text-sm text-[var(--danger)]">
-                  {error}
-                </div>
-              )}
-              {success && (
-                <div className="rounded-[var(--radius)] bg-[var(--success-soft)] px-3.5 py-2.5 text-sm text-[var(--success)]">
-                  {success}
-                </div>
-              )}
-
               <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Save settings'}
+                {saving ? 'Saving…' : 'Save Razorpay settings'}
               </Button>
             </form>
           )}
         </CardBody>
       </Card>
+
+      <Card>
+        <CardHeader
+          title="Self Online UPI"
+          description="College merchant UPI QR — no payment gateway. Fee Management transaction is created only after statement verification."
+        />
+        <CardBody>
+          {loading ? (
+            <p className="text-sm text-[var(--muted)]">Loading…</p>
+          ) : (
+            <form
+              onSubmit={(e) => void onSubmitSelfOnline(e)}
+              className="space-y-5"
+            >
+              <label className="flex items-center gap-3 text-sm font-medium text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={selfOnlineEnabled}
+                  onChange={(e) => setSelfOnlineEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+                Enable Self Online (college UPI QR)
+              </label>
+
+              <Input
+                label="Merchant UPI ID"
+                value={selfOnlineUpiId}
+                onChange={(e) => setSelfOnlineUpiId(e.target.value)}
+                placeholder="college@bank"
+                autoComplete="off"
+              />
+
+              <Input
+                label="Merchant display name"
+                value={selfOnlineMerchantName}
+                onChange={(e) => setSelfOnlineMerchantName(e.target.value)}
+                placeholder="Pydah College"
+                autoComplete="off"
+              />
+
+              <Input
+                label="Default payment note"
+                value={selfOnlinePaymentNote}
+                onChange={(e) => setSelfOnlinePaymentNote(e.target.value)}
+                placeholder="Exam Fee"
+                autoComplete="off"
+              />
+
+              <Input
+                label="QR / pending expiry (hours)"
+                value={selfOnlineExpiryHours}
+                onChange={(e) => setSelfOnlineExpiryHours(e.target.value)}
+                placeholder="48"
+                autoComplete="off"
+              />
+
+              <div className="rounded-lg border border-[var(--border)] bg-slate-50 px-3.5 py-3 text-sm text-slate-600">
+                <p className="font-medium text-slate-800">How it works</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-[var(--muted)]">
+                  <li>Student gets UPI QR with EMS order ID in the payment note</li>
+                  <li>After paying, student marks “I have paid” (temporary acknowledgement)</li>
+                  <li>Accounts uploads merchant PDF statement and verifies matches</li>
+                  <li>Only then fee becomes paid and Fee Management gets the transaction</li>
+                </ul>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Status:{' '}
+                  {settings?.selfOnlineReady
+                    ? 'Ready'
+                    : settings?.selfOnlineConfigured
+                      ? 'Configured but disabled'
+                      : 'Add Merchant UPI ID and enable'}
+                </p>
+              </div>
+
+              <Button type="submit" disabled={savingSelf}>
+                {savingSelf ? 'Saving…' : 'Save Self Online settings'}
+              </Button>
+            </form>
+          )}
+        </CardBody>
+      </Card>
+
+      {error && (
+        <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3.5 py-2.5 text-sm text-[var(--danger)]">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-[var(--radius)] bg-[var(--success-soft)] px-3.5 py-2.5 text-sm text-[var(--success)]">
+          {success}
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { money } from '@/components/fees/money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
+import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 
 type Step = 1 | 2;
@@ -41,20 +42,31 @@ export default function StudentApplyPage({
   const [step, setStep] = useState<Step>(1);
   const [consent, setConsent] = useState(false);
   const [declaration, setDeclaration] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod>('upi');
+  const [method, setMethod] = useState<PaymentMethod | 'self_online'>('upi');
   const [razorpayReady, setRazorpayReady] = useState(false);
+  const [selfOnlineReady, setSelfOnlineReady] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [selfPayOpen, setSelfPayOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [fees, status] = await Promise.all([
+      const [fees, status, selfStatus] = await Promise.all([
         api.getStudentFees(),
         api.getRazorpayStatus().catch(() => ({
           enabled: false,
           configured: false,
           ready: false,
+        })),
+        api.getSelfOnlineStatus().catch(() => ({
+          enabled: false,
+          configured: false,
+          ready: false,
+          upiId: null,
+          merchantName: '',
+          paymentNote: '',
+          expiryHours: 48,
         })),
       ]);
       const found = fees.find((f) => f.id === id) ?? null;
@@ -70,8 +82,22 @@ export default function StudentApplyPage({
             return;
           }
         }
+        const awaiting = found.payments?.find(
+          (p) =>
+            p.paymentMode === 'self_online' &&
+            p.status === 'awaiting_verification',
+        );
+        if (awaiting) {
+          setStep(2);
+          setMethod('self_online');
+          setSelfPayOpen(true);
+        }
       }
       setRazorpayReady(status.ready);
+      setSelfOnlineReady(selfStatus.ready);
+      if (!status.ready && selfStatus.ready) {
+        setMethod('self_online');
+      }
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -89,9 +115,17 @@ export default function StudentApplyPage({
 
   const split = useMemo(
     () =>
-      record
+      record && method !== 'self_online'
         ? calcUpiConvenienceFee(record.totalAmount, method)
-        : null,
+        : record
+          ? {
+              base: Number(record.totalAmount),
+              convenienceFee: 0,
+              total: Number(record.totalAmount),
+              applies: false,
+              rate: 0,
+            }
+          : null,
     [record, method],
   );
 
@@ -102,7 +136,7 @@ export default function StudentApplyPage({
       );
       return;
     }
-    if (!razorpayReady) {
+    if (!razorpayReady && !selfOnlineReady) {
       setError(
         'Online payments are not available yet. Contact the examination cell.',
       );
@@ -446,22 +480,39 @@ export default function StudentApplyPage({
               </label>
               <select
                 value={method}
-                onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+                onChange={(e) => {
+                  setMethod(e.target.value as PaymentMethod | 'self_online');
+                  setPayOpen(false);
+                  setSelfPayOpen(false);
+                }}
                 className="w-full max-w-xs rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
               >
-                <option value="upi">UPI</option>
-                <option value="debit_card">Debit card</option>
-                <option value="credit_card">Credit card</option>
-                <option value="net_banking">Net banking</option>
+                {razorpayReady ? (
+                  <>
+                    <option value="upi">UPI (Razorpay)</option>
+                    <option value="debit_card">Debit card</option>
+                    <option value="credit_card">Credit card</option>
+                    <option value="net_banking">Net banking</option>
+                  </>
+                ) : null}
+                {selfOnlineReady ? (
+                  <option value="self_online">Self Online (College UPI)</option>
+                ) : null}
               </select>
-              {method === 'upi' && (
+              {method === 'upi' && razorpayReady && (
                 <p className="mt-2 text-xs text-amber-800">
                   UPI payments include a 2.2% convenience / bank charge.
                 </p>
               )}
+              {method === 'self_online' && (
+                <p className="mt-2 text-xs text-slate-600">
+                  Pay exact fee via college UPI QR. Temporary acknowledgement
+                  first; official receipt after Accounts verifies the statement.
+                </p>
+              )}
             </div>
 
-            {!razorpayReady && (
+            {!razorpayReady && !selfOnlineReady && (
               <div className="mt-4 rounded-[var(--radius)] bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                 Online payment is temporarily unavailable. Please pay at the fee
                 counter.
@@ -474,6 +525,7 @@ export default function StudentApplyPage({
                 variant="secondary"
                 onClick={() => {
                   setPayOpen(false);
+                  setSelfPayOpen(false);
                   setStep(1);
                 }}
               >
@@ -481,20 +533,33 @@ export default function StudentApplyPage({
               </Button>
               <Button
                 type="button"
-                disabled={!razorpayReady || payOpen}
+                disabled={
+                  (method === 'self_online'
+                    ? !selfOnlineReady || selfPayOpen
+                    : !razorpayReady || payOpen) ||
+                  (!razorpayReady && !selfOnlineReady)
+                }
                 onClick={() => {
                   setError('');
-                  setPayOpen(true);
+                  if (method === 'self_online') {
+                    setSelfPayOpen(true);
+                    setPayOpen(false);
+                  } else {
+                    setPayOpen(true);
+                    setSelfPayOpen(false);
+                  }
                 }}
               >
-                Pay {money(split?.total ?? record.totalAmount)}
+                {method === 'self_online'
+                  ? `Pay ${money(record.totalAmount)} via UPI`
+                  : `Pay ${money(split?.total ?? record.totalAmount)}`}
               </Button>
             </div>
 
             <RazorpayInlinePay
-              open={payOpen}
+              open={payOpen && method !== 'self_online'}
               record={record}
-              paymentMethod={method}
+              paymentMethod={method === 'self_online' ? 'upi' : method}
               variant="panel"
               prefillName={user?.fullName}
               prefillContact={user?.mobile ?? undefined}
@@ -503,6 +568,15 @@ export default function StudentApplyPage({
               onSuccess={(paymentId) => {
                 setPayOpen(false);
                 router.push(`/student/receipt/${paymentId}`);
+              }}
+            />
+
+            <SelfOnlinePayPanel
+              open={selfPayOpen && method === 'self_online'}
+              record={record}
+              onClose={() => setSelfPayOpen(false)}
+              onClaimed={() => {
+                void load();
               }}
             />
           </section>

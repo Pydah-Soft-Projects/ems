@@ -11,6 +11,12 @@ const PaymentGatewaySettings = new EntitySchema({
     razorpayKeyId: { type: 'varchar', length: 100, nullable: true },
     razorpayKeySecret: { type: 'varchar', length: 255, nullable: true },
     razorpayWebhookSecret: { type: 'varchar', length: 255, nullable: true },
+    /** Self Online (college UPI QR) — no gateway */
+    selfOnlineEnabled: { type: 'boolean', default: false },
+    selfOnlineUpiId: { type: 'varchar', length: 150, nullable: true },
+    selfOnlineMerchantName: { type: 'varchar', length: 150, nullable: true },
+    selfOnlinePaymentNote: { type: 'varchar', length: 100, nullable: true },
+    selfOnlineExpiryHours: { type: 'int', default: 48 },
     createdAt: { type: 'datetime', createDate: true },
     updatedAt: { type: 'datetime', updateDate: true },
   },

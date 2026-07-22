@@ -684,6 +684,11 @@ export const api = {
     enabled?: boolean;
     razorpayKeyId?: string;
     razorpayKeySecret?: string;
+    selfOnlineEnabled?: boolean;
+    selfOnlineUpiId?: string;
+    selfOnlineMerchantName?: string;
+    selfOnlinePaymentNote?: string;
+    selfOnlineExpiryHours?: number;
   }) {
     return request<import('./razorpayCheckout').PaymentGatewaySettings>(
       '/settings/payments',
@@ -692,6 +697,163 @@ export const api = {
         body: JSON.stringify(data),
       },
     );
+  },
+
+  getSelfOnlineStatus() {
+    return request<import('@/types/self-online').SelfOnlineStatus>(
+      '/fees/self-online/status',
+    );
+  },
+
+  createSelfOnlineOrder(feeRecordId: number) {
+    return request<import('@/types/self-online').SelfOnlineOrder>(
+      '/fees/self-online/order',
+      {
+        method: 'POST',
+        body: JSON.stringify({ feeRecordId }),
+      },
+    );
+  },
+
+  claimSelfOnlinePayment(paymentId: number, utr?: string) {
+    return request<import('@/types/self-online').SelfOnlineClaimResult>(
+      `/fees/self-online/${paymentId}/claim`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ utr: utr || undefined }),
+      },
+    );
+  },
+
+  listSelfOnlinePending() {
+    return request<import('@/types/self-online').SelfOnlinePendingRow[]>(
+      '/fees/self-online/pending',
+    );
+  },
+
+  listSelfOnlineSuggestions() {
+    return request<import('@/types/self-online').SelfOnlineSuggestion[]>(
+      '/fees/self-online/suggestions',
+    );
+  },
+
+  listSelfOnlineStatements() {
+    return request<
+      {
+        id: number;
+        fileName: string;
+        sourceKind: string;
+        fileFormat: string;
+        rowCount: number;
+        uploadedBy: string | null;
+        notes: string | null;
+        createdAt: string;
+      }[]
+    >('/fees/self-online/statements');
+  },
+
+  listSelfOnlineStatementTxns(params?: {
+    statementId?: number;
+    matchStatus?: string;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.statementId) q.set('statementId', String(params.statementId));
+    if (params?.matchStatus) q.set('matchStatus', params.matchStatus);
+    const suffix = q.toString() ? `?${q}` : '';
+    return request<
+      {
+        id: number;
+        statementId: number;
+        fileName?: string;
+        sourceKind?: string;
+        utr: string | null;
+        merchantReference: string | null;
+        transactionReference: string | null;
+        amount: number;
+        txnDate: string | null;
+        payerName: string | null;
+        payerUpi: string | null;
+        matchStatus: string;
+        matchedPaymentId: number | null;
+        matchConfidence: string | null;
+        matchReason: string | null;
+      }[]
+    >(`/fees/self-online/statement-txns${suffix}`);
+  },
+
+  async uploadSelfOnlineStatement(file: File, notes?: string) {
+    const token = getToken();
+    const form = new FormData();
+    form.append('file', file);
+    if (notes) form.append('notes', notes);
+    const headers: HeadersInit = {};
+    if (token) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${API_URL}/fees/self-online/statements`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        clearAuth();
+      }
+      let message = 'Upload failed';
+      try {
+        const body = (await res.json()) as { message?: string };
+        if (body.message) message = body.message;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(message, res.status);
+    }
+    return res.json() as Promise<{
+      statement: {
+        id: number;
+        fileName: string;
+        sourceKind: string;
+        rowCount: number;
+        createdAt: string;
+        notes: string | null;
+      };
+      parsedCount: number;
+      matchSummary: { autoVerified: number; suggested: number };
+      warning: string | null;
+    }>;
+  },
+
+  verifySelfOnlineMatch(paymentId: number, merchantTxnId: number) {
+    return request<{
+      payment: Payment;
+      feeRecord: ExamFeeRecord;
+      alreadyVerified?: boolean;
+    }>('/fees/self-online/verify', {
+      method: 'POST',
+      body: JSON.stringify({ paymentId, merchantTxnId }),
+    });
+  },
+
+  manualVerifySelfOnline(data: {
+    paymentId: number;
+    utr?: string;
+    bankLine?: string;
+  }) {
+    return request<{
+      payment: Payment;
+      feeRecord: ExamFeeRecord;
+      alreadyVerified?: boolean;
+    }>('/fees/self-online/manual-verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  rejectSelfOnlineSuggestion(merchantTxnId: number) {
+    return request<{ ok: boolean }>('/fees/self-online/reject-suggestion', {
+      method: 'POST',
+      body: JSON.stringify({ merchantTxnId }),
+    });
   },
 
   // —— Professionals (external setters / evaluators) ——

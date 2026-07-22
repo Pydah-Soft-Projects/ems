@@ -37,6 +37,13 @@ export type PaymentGatewaySettings = {
   razorpayKeyId: string | null;
   razorpayKeySecretMasked: string | null;
   hasKeySecret: boolean;
+  selfOnlineEnabled?: boolean;
+  selfOnlineConfigured?: boolean;
+  selfOnlineReady?: boolean;
+  selfOnlineUpiId?: string | null;
+  selfOnlineMerchantName?: string;
+  selfOnlinePaymentNote?: string;
+  selfOnlineExpiryHours?: number;
   updatedAt: string;
 };
 

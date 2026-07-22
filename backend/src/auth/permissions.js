@@ -63,6 +63,10 @@ const PRIVILEGE_GROUPS = [
       { key: 'fees:read', label: 'View fee records & payments' },
       { key: 'fees:collect', label: 'Collect offline payments' },
       { key: 'fees:apply', label: 'Apply for exams on behalf of students' },
+      {
+        key: 'fees:reconcile',
+        label: 'Upload merchant statements & verify Self Online payments',
+      },
     ],
   },
   {

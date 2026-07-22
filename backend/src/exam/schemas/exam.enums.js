@@ -23,6 +23,7 @@ const FeeStatus = {
 const PaymentMode = {
   ONLINE: 'online',
   OFFLINE: 'offline',
+  SELF_ONLINE: 'self_online',
 };
 
 const PaymentMethod = {
@@ -37,9 +38,11 @@ const PaymentMethod = {
 const PaymentStatus = {
   PENDING: 'pending',
   PROCESSING: 'processing',
+  AWAITING_VERIFICATION: 'awaiting_verification',
   SUCCESS: 'success',
   FAILED: 'failed',
   VOIDED: 'voided',
+  EXPIRED: 'expired',
 };
 
 const UPI_CONVENIENCE_FEE_RATE = 0.022;

@@ -382,6 +382,192 @@ function createFeesRoutes(services) {
       );
     }),
   );
+
+  // —— Self Online (college UPI + statement reconcile) ——
+  const multer = require('multer');
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 },
+  });
+
+  router.get(
+    '/self-online/status',
+    asyncHandler(async (_req, res) => {
+      res.json(await services.settings.getSelfOnlineStatus());
+    }),
+  );
+
+  router.post(
+    '/self-online/order',
+    asyncHandler(async (req, res) => {
+      const feeRecordId = parseInt(String(req.body.feeRecordId), 10);
+      if (!feeRecordId) {
+        res.status(400).json({ message: 'feeRecordId is required' });
+        return;
+      }
+      res.status(201).json(
+        await services.selfOnline.createOrder(feeRecordId, {
+          actor: {
+            role: req.user?.role,
+            pinNo: req.user?.pinNo,
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/self-online/:paymentId/claim',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.selfOnline.claimPaid(parseId(req.params.paymentId), {
+          utr: req.body.utr,
+        }, {
+          actor: {
+            role: req.user?.role,
+            pinNo: req.user?.pinNo,
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+        }),
+      );
+    }),
+  );
+
+  router.get(
+    '/self-online/pending',
+    requireStaff,
+    requirePrivilege('fees:read'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.selfOnline.listPending());
+    }),
+  );
+
+  router.get(
+    '/self-online/suggestions',
+    requireStaff,
+    requirePrivilege('fees:read'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.selfOnline.listSuggestedMatches());
+    }),
+  );
+
+  router.get(
+    '/self-online/statements',
+    requireStaff,
+    requirePrivilege('fees:read'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.selfOnline.listStatements());
+    }),
+  );
+
+  router.get(
+    '/self-online/statement-txns',
+    requireStaff,
+    requirePrivilege('fees:read'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.selfOnline.listStatementTxns({
+          statementId: req.query.statementId
+            ? parseInt(String(req.query.statementId), 10)
+            : undefined,
+          matchStatus: req.query.matchStatus
+            ? String(req.query.matchStatus)
+            : undefined,
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/self-online/statements',
+    requireStaff,
+    requirePrivilege('fees:reconcile'),
+    upload.single('file'),
+    asyncHandler(async (req, res) => {
+      if (!req.file) {
+        res.status(400).json({ message: 'Statement file is required (PDF preferred)' });
+        return;
+      }
+      res.status(201).json(
+        await services.selfOnline.uploadStatement({
+          buffer: req.file.buffer,
+          fileName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          uploadedBy: req.user?.fullName || req.user?.username,
+          uploadedByUsername: req.user?.username,
+          notes: req.body?.notes,
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/self-online/verify',
+    requireStaff,
+    requirePrivilege('fees:reconcile'),
+    asyncHandler(async (req, res) => {
+      const paymentId = parseInt(String(req.body.paymentId), 10);
+      const merchantTxnId = parseInt(String(req.body.merchantTxnId), 10);
+      if (!paymentId || !merchantTxnId) {
+        res.status(400).json({
+          message: 'paymentId and merchantTxnId are required',
+        });
+        return;
+      }
+      res.json(
+        await services.selfOnline.verifyMatch({
+          paymentId,
+          merchantTxnId,
+          actor: {
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/self-online/manual-verify',
+    requireStaff,
+    requirePrivilege('fees:reconcile'),
+    asyncHandler(async (req, res) => {
+      const paymentId = parseInt(String(req.body.paymentId), 10);
+      if (!paymentId) {
+        res.status(400).json({ message: 'paymentId is required' });
+        return;
+      }
+      res.json(
+        await services.selfOnline.manualVerifyByUtr({
+          paymentId,
+          utr: req.body.utr,
+          bankLine: req.body.bankLine,
+          actor: {
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/self-online/reject-suggestion',
+    requireStaff,
+    requirePrivilege('fees:reconcile'),
+    asyncHandler(async (req, res) => {
+      const merchantTxnId = parseInt(String(req.body.merchantTxnId), 10);
+      if (!merchantTxnId) {
+        res.status(400).json({ message: 'merchantTxnId is required' });
+        return;
+      }
+      res.json(await services.selfOnline.rejectSuggestion(merchantTxnId));
+    }),
+  );
+
   return router;
 }
 

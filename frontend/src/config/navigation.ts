@@ -92,6 +92,13 @@ export const navigation: NavGroup[] = [
         privilege: ['fees:read', 'fees:collect'],
       },
       {
+        href: '/dashboard/fees/self-online',
+        label: 'Self Online reconcile',
+        description: 'College UPI statements & verification',
+        icon: 'fees',
+        privilege: ['fees:reconcile', 'fees:read'],
+      },
+      {
         href: '/dashboard/professionals',
         label: 'Professionals',
         description: 'External paper setters & examiners directory',

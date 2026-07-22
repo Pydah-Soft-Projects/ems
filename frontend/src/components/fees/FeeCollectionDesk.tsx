@@ -17,10 +17,11 @@ import { StudentExamListItem } from '@/types/exam';
 import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
+import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
 import { calcUpiConvenienceFee, paymentLineLabel } from '@/lib/upiConvenienceFee';
 
-type CollectChannel = PaymentMethod | 'razorpay';
+type CollectChannel = PaymentMethod | 'razorpay' | 'self_online';
 
 interface FeeCollectionDeskProps {
   rollNumber: string;
@@ -48,9 +49,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [saving, setSaving] = useState(false);
   const [payError, setPayError] = useState('');
   const [razorpayReady, setRazorpayReady] = useState(false);
+  const [selfOnlineReady, setSelfOnlineReady] = useState(false);
   const [razorpayRecord, setRazorpayRecord] = useState<ExamFeeRecord | null>(
     null,
   );
+  const [selfOnlineRecord, setSelfOnlineRecord] =
+    useState<ExamFeeRecord | null>(null);
   const [eligibleExams, setEligibleExams] = useState<StudentExamListItem[]>([]);
   const [eligibleError, setEligibleError] = useState('');
   const [applyExam, setApplyExam] = useState<StudentExamListItem | null>(null);
@@ -73,15 +77,25 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     setLoading(true);
     setError('');
     try {
-      const [lookup, rzStatus] = await Promise.all([
+      const [lookup, rzStatus, selfStatus] = await Promise.all([
         api.lookupFeeCollection(rollNumber),
         api.getRazorpayStatus().catch(() => ({
           enabled: false,
           configured: false,
           ready: false,
         })),
+        api.getSelfOnlineStatus().catch(() => ({
+          enabled: false,
+          configured: false,
+          ready: false,
+          upiId: null,
+          merchantName: '',
+          paymentNote: '',
+          expiryHours: 48,
+        })),
       ]);
       setRazorpayReady(rzStatus.ready);
+      setSelfOnlineReady(selfStatus.ready);
       setRecords(lookup.records);
       setStudentName(lookup.studentName ?? '');
       const pending = lookup.records.filter((r) => r.status === 'pending');
@@ -220,7 +234,25 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         return;
       }
       setPayError('');
+      setSelfOnlineRecord(null);
       setRazorpayRecord(selectedPending[0]);
+      return;
+    }
+
+    if (paymentMethod === 'self_online') {
+      if (!selfOnlineReady) {
+        setPayError(
+          'Self Online is not configured. Enable Merchant UPI ID under Settings → Self Online UPI.',
+        );
+        return;
+      }
+      if (selectedPending.length !== 1) {
+        setPayError('Select exactly one fee row for Self Online UPI payment.');
+        return;
+      }
+      setPayError('');
+      setRazorpayRecord(null);
+      setSelfOnlineRecord(selectedPending[0]);
       return;
     }
 
@@ -304,6 +336,19 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         onSuccess={(paymentId) => {
           setRazorpayRecord(null);
           router.push(`/dashboard/fees/receipt/${paymentId}`);
+        }}
+      />
+
+      <SelfOnlinePayPanel
+        open={selfOnlineRecord != null}
+        record={selfOnlineRecord}
+        variant="overlay"
+        onClose={() => {
+          setSelfOnlineRecord(null);
+          void load();
+        }}
+        onClaimed={() => {
+          void load();
         }}
       />
 
@@ -704,7 +749,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                           {paymentLineLabel(p)}
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">
-                          {p.receiptNumber}
+                          <div>{p.receiptNumber}</div>
+                          {p.transactionReference ? (
+                            <div className="mt-0.5 text-[10px] text-[var(--muted)]">
+                              Order {p.transactionReference}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3 capitalize">
                           <span className="block">
@@ -733,6 +783,13 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                                 className="text-xs font-semibold text-[var(--primary)] hover:underline"
                               >
                                 Receipt
+                              </Link>
+                            ) : p.status === 'awaiting_verification' ? (
+                              <Link
+                                href="/dashboard/fees/self-online"
+                                className="text-xs font-semibold text-amber-700 hover:underline"
+                              >
+                                Reconcile
                               </Link>
                             ) : (
                               <span className="text-xs text-[var(--muted)]">
@@ -794,33 +851,41 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Payment method
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {(
                   [
                     ['cash', 'Cash'],
                     ['bank_transfer', 'Bank'],
                     ['razorpay', 'Razorpay'],
+                    ['self_online', 'Self Online'],
                   ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    disabled={value === 'razorpay' && !razorpayReady}
-                    title={
-                      value === 'razorpay' && !razorpayReady
-                        ? 'Configure Razorpay in Settings'
-                        : undefined
-                    }
-                    onClick={() => setPaymentMethod(value)}
-                    className={`rounded-lg px-2 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                      paymentMethod === value
-                        ? 'bg-[var(--primary)] text-white'
-                        : 'border border-[var(--border)] bg-white text-slate-600'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                ).map(([value, label]) => {
+                  const disabled =
+                    (value === 'razorpay' && !razorpayReady) ||
+                    (value === 'self_online' && !selfOnlineReady);
+                  const title =
+                    value === 'razorpay' && !razorpayReady
+                      ? 'Configure Razorpay in Settings'
+                      : value === 'self_online' && !selfOnlineReady
+                        ? 'Configure Self Online UPI in Settings'
+                        : undefined;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={disabled}
+                      title={title}
+                      onClick={() => setPaymentMethod(value)}
+                      className={`rounded-lg px-2 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                        paymentMethod === value
+                          ? 'bg-[var(--primary)] text-white'
+                          : 'border border-[var(--border)] bg-white text-slate-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
               {paymentMethod === 'razorpay' && selectedPending.length === 1 && (
                 <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
@@ -835,6 +900,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   {money(selectedPending[0].totalAmount)} + 2.2% convenience)
                 </p>
               )}
+              {paymentMethod === 'self_online' && (
+                <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
+                  Exact fee amount via college UPI QR. Temporary acknowledgement
+                  first; official receipt after statement verification.
+                </p>
+              )}
               {!razorpayReady && (
                 <p className="mt-2 text-xs text-amber-700">
                   Razorpay offline — enable keys in{' '}
@@ -847,9 +918,22 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   .
                 </p>
               )}
+              {!selfOnlineReady && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Self Online offline — add Merchant UPI ID in{' '}
+                  <Link
+                    href="/dashboard/settings"
+                    className="font-semibold underline"
+                  >
+                    Settings
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
 
-            {paymentMethod !== 'razorpay' && (
+            {paymentMethod !== 'razorpay' &&
+              paymentMethod !== 'self_online' && (
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-700">
                 Collected by
@@ -891,7 +975,8 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               </>
             )}
 
-            {paymentMethod !== 'razorpay' && (
+            {paymentMethod !== 'razorpay' &&
+              paymentMethod !== 'self_online' && (
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Remarks / notes (optional)
@@ -919,7 +1004,9 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                 ? 'Processing…'
                 : paymentMethod === 'razorpay'
                   ? 'Pay with Razorpay'
-                  : 'Confirm payment'}
+                  : paymentMethod === 'self_online'
+                    ? 'Open Self Online QR'
+                    : 'Confirm payment'}
             </Button>
           </form>
         </aside>

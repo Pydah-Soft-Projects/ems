@@ -2,7 +2,7 @@ import { Exam, ExamType } from './exam';
 
 export type FeeStatus = 'pending' | 'paid';
 
-export type PaymentMode = 'online' | 'offline';
+export type PaymentMode = 'online' | 'offline' | 'self_online';
 
 export type PaymentMethod =
   | 'upi'
@@ -10,14 +10,17 @@ export type PaymentMethod =
   | 'credit_card'
   | 'net_banking'
   | 'cash'
-  | 'bank_transfer';
+  | 'bank_transfer'
+  | 'self_online';
 
 export type PaymentStatus =
   | 'pending'
   | 'processing'
+  | 'awaiting_verification'
   | 'success'
   | 'failed'
-  | 'voided';
+  | 'voided'
+  | 'expired';
 
 export interface FeeBreakdownItem {
   subjectId: number;

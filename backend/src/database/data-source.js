@@ -24,6 +24,10 @@ const {
   Payment,
 } = require('../exam/schemas/fee.schema');
 const {
+  MerchantStatement,
+  MerchantStatementTxn,
+} = require('../exam/schemas/merchant-statement.schema');
+const {
   ResultUpload,
   SubjectResult,
 } = require('../exam/schemas/result.schema');
@@ -52,6 +56,8 @@ const entities = [
   ExamFeeRecord,
   ExamApplication,
   Payment,
+  MerchantStatement,
+  MerchantStatementTxn,
   ResultUpload,
   SubjectResult,
   PaymentGatewaySettings,

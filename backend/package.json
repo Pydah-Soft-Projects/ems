@@ -13,6 +13,7 @@
     "simulate": "node scripts/simulate-workflow.js",
     "seed:demo": "node scripts/reset-and-seed-demo.js",
     "seed:pydah-btech": "node scripts/seed-pydah-btech-exams.js",
+    "seed:pydah-btech-2000": "node scripts/seed-pydah-btech-batch-2000.js",
     "fix:indexes": "node scripts/fix-subject-mapping-indexes.js"
   },
   "dependencies": {
@@ -25,10 +26,14 @@
     "jsonwebtoken": "^9.0.2",
     "kill-port": "^2.0.1",
     "mongoose": "^8.7.0",
+    "multer": "^2.2.0",
     "mysql2": "^3.11.3",
+    "pdf-parse": "^2.4.5",
     "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.4",

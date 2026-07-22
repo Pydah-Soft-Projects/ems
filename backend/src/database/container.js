@@ -19,8 +19,13 @@ const {
   Payment,
   ExamApplication,
 } = require('../exam/schemas/fee.schema');
+const {
+  MerchantStatement,
+  MerchantStatementTxn,
+} = require('../exam/schemas/merchant-statement.schema');
 const { ResultUpload, SubjectResult } = require('../exam/schemas/result.schema');
 const { ResultsService } = require('../exam/results.service');
+const { SelfOnlineService } = require('../exam/self-online.service');
 const {
   PaymentGatewaySettings,
 } = require('../settings/payment-gateway-settings.entity');
@@ -101,6 +106,15 @@ function createServices(dataSource, studentDataSource) {
     feeManagement,
   );
 
+  const selfOnline = new SelfOnlineService(
+    dataSource.getRepository(Payment),
+    dataSource.getRepository(ExamFeeRecord),
+    dataSource.getRepository(MerchantStatement),
+    dataSource.getRepository(MerchantStatementTxn),
+    settings,
+    exam,
+  );
+
   const results = new ResultsService(
     dataSource.getRepository(ResultUpload),
     dataSource.getRepository(SubjectResult),
@@ -132,6 +146,7 @@ function createServices(dataSource, studentDataSource) {
     regulations,
     subjects,
     exam,
+    selfOnline,
     sdms,
     settings,
     feeManagement,
