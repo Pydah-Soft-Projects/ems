@@ -18,6 +18,7 @@ const TEMPLATE_HEADERS = [
   'Subject Code',
   'Subject Name',
   'Grade',
+  'Grade Points',
   'P/F',
   'Credits',
 ];
@@ -43,6 +44,7 @@ const HEADER_ALIASES: Record<keyof ResultRowInput, string[]> = {
   subjectCode: ['subjectcode', 'subcode', 'code'],
   subjectName: ['subjectname', 'subname', 'subject', 'papername'],
   grade: ['grade', 'grades'],
+  gradePoints: ['gradepoints', 'gradepoint', 'gp'],
   result: ['pf', 'result', 'passfail', 'status'],
   credits: ['credits', 'credit', 'cr'],
 };
@@ -117,6 +119,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
         'Subject Code': sub.subjectCode,
         'Subject Name': sub.subjectName,
         Grade: sub.grade,
+        'Grade Points': sub.gradePoints ?? '',
         'P/F': sub.passed ? 'P' : 'F',
         Credits: sub.credits,
         Attempt: sub.attemptNumber,
@@ -135,8 +138,8 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
     const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ['22HP1A0501', 'CS101', 'Data Structures', 'A', 'P', 3],
-      ['22HP1A0501', 'CS102', 'Digital Logic', 'F', 'F', 0],
+      ['22HP1A0501', 'CS101', 'Data Structures', 'A', 8, 'P', 3],
+      ['22HP1A0501', 'CS102', 'Digital Logic', 'F', 0, 'F', 3],
     ]);
     ws['!cols'] = TEMPLATE_HEADERS.map((h) => ({ wch: h.length + 8 }));
     const wb = XLSX.utils.book_new();
@@ -296,6 +299,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
                     <th className="px-3 py-2 font-semibold">Subject code</th>
                     <th className="px-3 py-2 font-semibold">Subject name</th>
                     <th className="px-3 py-2 font-semibold">Grade</th>
+                    <th className="px-3 py-2 font-semibold">Grade points</th>
                     <th className="px-3 py-2 font-semibold">P/F</th>
                     <th className="px-3 py-2 font-semibold">Credits</th>
                   </tr>
@@ -307,6 +311,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
                       <td className="px-3 py-1.5">{r.subjectCode}</td>
                       <td className="px-3 py-1.5">{r.subjectName ?? '—'}</td>
                       <td className="px-3 py-1.5">{r.grade}</td>
+                      <td className="px-3 py-1.5">{r.gradePoints ?? '—'}</td>
                       <td className="px-3 py-1.5">{r.result ?? 'auto'}</td>
                       <td className="px-3 py-1.5">{r.credits ?? '0'}</td>
                     </tr>
@@ -440,7 +445,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
                         {s.subjects.map((sub) => (
                           <span
                             key={sub.subjectCode}
-                            title={`${sub.subjectName} · attempt ${sub.attemptNumber} · ${sub.credits} credits`}
+                            title={`${sub.subjectName} · attempt ${sub.attemptNumber} · ${sub.gradePoints ?? '—'} grade points · ${sub.credits} credits`}
                             className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                               sub.passed
                                 ? 'bg-[var(--success-soft)] text-[var(--success)]'
@@ -448,6 +453,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
                             }`}
                           >
                             {sub.subjectCode}: {sub.grade}
+                            {sub.gradePoints != null ? ` (${sub.gradePoints} GP)` : ''}
                           </span>
                         ))}
                       </div>

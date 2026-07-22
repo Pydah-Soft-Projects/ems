@@ -47,7 +47,7 @@ const ExamApplication = new EntitySchema({
     { name: 'IDX_exam_applications_examId', columns: ['examId'] },
     {
       name: 'UQ_exam_app_enrollment',
-      columns: ['examId', 'studentRollNumber', 'examType'],
+      columns: ['examId', 'studentRollNumber'],
       unique: true,
     },
   ],

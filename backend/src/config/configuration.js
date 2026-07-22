@@ -9,10 +9,17 @@ module.exports = () => ({
     secret: process.env.JWT_SECRET || 'change-me',
     expiresIn: process.env.JWT_EXPIRES_IN || '1d',
   },
+  logging: {
+    level: process.env.LOG_LEVEL || 'info',
+  },
   hrms: {
     mongodbUri: process.env.HRMS_MONGODB_URI || '',
     usersCollection: process.env.HRMS_USERS_COLLECTION || 'users',
     superAdminRole: process.env.HRMS_SUPER_ADMIN_ROLE || 'super_admin',
+  },
+  ems: {
+    bootstrapSuperAdminEmail:
+      process.env.EMS_BOOTSTRAP_SUPERADMIN_EMAIL || 'ravi@pydahsoft.in',
   },
   feeManagement: {
     mongodbUri: process.env.FEE_MANAGEMENT_MONGODB_URI || '',

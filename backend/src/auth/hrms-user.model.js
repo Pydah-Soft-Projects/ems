@@ -16,8 +16,24 @@ const hrmsUserSchema = new mongoose.Schema(
   { collection: config.hrms.usersCollection, strict: false },
 );
 
+const hrmsEmployeeSchema = new mongoose.Schema(
+  {
+    emp_no: String,
+    employee_name: String,
+    email: { type: String, lowercase: true, trim: true },
+    plain_password: { type: String, select: false },
+    is_active: Boolean,
+    role: String,
+    roles: [String],
+  },
+  { collection: 'employees', strict: false },
+);
+
 const HrmsUserModel =
   mongoose.models.HrmsUser || mongoose.model('HrmsUser', hrmsUserSchema);
+const HrmsEmployeeModel =
+  mongoose.models.HrmsEmployee ||
+  mongoose.model('HrmsEmployee', hrmsEmployeeSchema);
 
 async function connectHrmsMongo() {
   if (!config.hrms.mongodbUri) {
@@ -41,6 +57,7 @@ function isHrmsConnected() {
 
 module.exports = {
   HrmsUserModel,
+  HrmsEmployeeModel,
   connectHrmsMongo,
   disconnectHrmsMongo,
   isHrmsConnected,

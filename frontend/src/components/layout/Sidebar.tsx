@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { AuthUser, clearAuth } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { findNavItem, navigation } from '@/config/navigation';
 import { NavIcon } from '@/components/icons/NavIcon';
 import { BrandLockup } from '@/components/brand/BrandLogo';
@@ -26,6 +27,12 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const activeItem = findNavItem(pathname);
+  const visibleGroups = navigation
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => can(user, item.privilege)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   function logout() {
     clearAuth();
@@ -49,7 +56,7 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
       </div>
 
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-3">
-        {navigation.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.title} className="mb-4 last:mb-0">
             {!collapsed ? (
               <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">
@@ -102,7 +109,10 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
               <p className="truncate text-sm font-semibold text-slate-900">
                 {user.fullName}
               </p>
-              <p className="truncate text-xs text-[var(--muted)]">{user.username}</p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                {user.emsRoleName || (user.isSuperAdmin ? 'Super Admin' : user.role)}
+              </p>
+              <p className="truncate text-[10px] text-[var(--muted)]">{user.username}</p>
             </div>
           ) : null}
         </div>

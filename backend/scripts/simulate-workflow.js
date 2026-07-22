@@ -38,10 +38,34 @@ async function run() {
         name: 'Super Administrator',
         isActive: true,
     });
+    // Also create bootstrap Ravi so unrestricted path is covered in simulate
+    await HrmsUserModel.create({
+        email: 'ravi@pydahsoft.in',
+        password: await bcrypt.hash('admin123', 10),
+        role: 'employee',
+        roles: [],
+        name: 'Ravi Bootstrap',
+        isActive: true,
+    });
     const dataSource = createExamPortalDataSource();
     await dataSource.initialize();
     const services = createServices(dataSource);
     try {
+        await services.users.ensureSystemRole();
+        const hrmsUser = await HrmsUserModel.findOne({
+            email: 'superadmin@example.com',
+        }).exec();
+        const systemRole = await services.users.ensureSystemRole();
+        await services.users.createUser(
+            {
+                hrmsUserId: hrmsUser._id.toString(),
+                roleId: systemRole.id,
+            },
+            {
+                email: 'ravi@pydahsoft.in',
+                isSuperAdmin: true,
+            },
+        );
         const login = await services.auth.login({
             username: 'superadmin@example.com',
             password: 'admin123',

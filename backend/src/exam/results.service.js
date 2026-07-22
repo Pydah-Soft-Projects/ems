@@ -34,7 +34,8 @@ class ResultsService {
 
   /**
    * Post results for an exam from a parsed sheet.
-   * Rows: { rollNumber, subjectCode, subjectName?, grade, result?, credits? }.
+   * Rows: { rollNumber, subjectCode, subjectName?, grade, gradePoints?,
+   * result?, credits? }.
    * Validation is atomic — nothing is saved unless every row is valid.
    * Re-uploading corrects existing rows in place (same attempt); results for
    * the same subject from a different exam become the next attempt.
@@ -143,6 +144,21 @@ class ResultsService {
           return;
         }
       }
+      let gradePoints = null;
+      if (
+        row.gradePoints !== undefined &&
+        row.gradePoints !== null &&
+        String(row.gradePoints).trim() !== ''
+      ) {
+        gradePoints = Number(row.gradePoints);
+        if (Number.isNaN(gradePoints) || gradePoints < 0) {
+          errors.push({
+            row: line,
+            message: `Grade points must be a non-negative number (${roll} / ${code})`,
+          });
+          return;
+        }
+      }
       const dupKey = `${roll.toLowerCase()}|${code.toLowerCase()}`;
       if (seen.has(dupKey)) {
         errors.push({
@@ -159,6 +175,7 @@ class ResultsService {
         subject,
         subjectName: String(row.subjectName ?? '').trim() || subject.name,
         grade,
+        gradePoints,
         passed,
         credits,
       });
@@ -215,6 +232,7 @@ class ResultsService {
           uploadId: upload.id,
           subjectName: n.subjectName,
           grade: n.grade,
+          gradePoints: n.gradePoints,
           passed: n.passed,
           credits: n.credits,
           studentName: n.studentName ?? prior.studentName,
@@ -230,6 +248,7 @@ class ResultsService {
         subjectCode: n.subject.code,
         subjectName: n.subjectName,
         grade: n.grade,
+        gradePoints: n.gradePoints,
         passed: n.passed,
         credits: n.credits,
         examType: n.examType,
@@ -276,6 +295,7 @@ class ResultsService {
         subjectCode: r.subjectCode,
         subjectName: r.subjectName,
         grade: r.grade,
+        gradePoints: r.gradePoints == null ? null : Number(r.gradePoints),
         passed: !!r.passed,
         credits: Number(r.credits),
         attemptNumber: r.attemptNumber,
@@ -366,6 +386,7 @@ class ResultsService {
       sub.attempts.push({
         attemptNumber: r.attemptNumber,
         grade: r.grade,
+        gradePoints: r.gradePoints == null ? null : Number(r.gradePoints),
         passed: !!r.passed,
         credits: Number(r.credits),
         examId: r.examId,
@@ -395,6 +416,7 @@ class ResultsService {
             subjectCode: sub.subjectCode,
             subjectName: sub.subjectName,
             grade: latest.grade,
+            gradePoints: latest.gradePoints,
             passed: latest.passed,
             credits: latest.credits,
             attemptCount: attempts.length,

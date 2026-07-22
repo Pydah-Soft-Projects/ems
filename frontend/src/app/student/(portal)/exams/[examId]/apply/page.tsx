@@ -64,15 +64,22 @@ export default function StudentExamApplyPage({
       ]);
       setDetail(res);
       setRazorpayReady(status.ready);
-      const allIds = res.exam.subjects.map((s) => s.subjectId);
-      setSelected(new Set(allIds));
-      const open = res.openTypes?.length
-        ? res.openTypes
-        : res.exam.allowedTypes?.length
+      const open =
+        res.openTypes ??
+        (res.exam.allowedTypes?.length
           ? res.exam.allowedTypes
-          : [res.exam.type];
-      if (open.length === 1) setEnrollType(open[0]);
-      else setEnrollType('');
+          : [res.exam.type]);
+      const initialType = open.length === 1 ? open[0] : '';
+      setEnrollType(initialType);
+      setSelected(
+        new Set(
+          res.exam.subjects
+            .filter(
+              (s) => initialType !== 'supply' || s.supplyStatus?.eligible,
+            )
+            .map((s) => s.subjectId),
+        ),
+      );
 
       // Pending payment for any type → unified application lifecycle page
       const pendingApp = res.applications?.find((a) => a.feeStatus === 'pending');
@@ -95,7 +102,14 @@ export default function StudentExamApplyPage({
     void load();
   }, [load]);
 
-  const subjects = detail?.exam.subjects ?? [];
+  const subjects = useMemo(() => detail?.exam.subjects ?? [], [detail]);
+  const selectableSubjects = useMemo(
+    () =>
+      subjects.filter(
+        (s) => enrollType !== 'supply' || s.supplyStatus?.eligible,
+      ),
+    [enrollType, subjects],
+  );
 
   const liveTotal = useMemo(() => {
     if (!detail) return 0;
@@ -124,6 +138,7 @@ export default function StudentExamApplyPage({
   );
 
   function toggleSubject(id: number) {
+    if (!selectableSubjects.some((s) => s.subjectId === id)) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -133,8 +148,19 @@ export default function StudentExamApplyPage({
   }
 
   function toggleAll(on: boolean) {
-    if (on) setSelected(new Set(subjects.map((s) => s.subjectId)));
+    if (on) setSelected(new Set(selectableSubjects.map((s) => s.subjectId)));
     else setSelected(new Set());
+  }
+
+  function chooseEnrollmentType(type: ExamType) {
+    setEnrollType(type);
+    setSelected(
+      new Set(
+        subjects
+          .filter((s) => type !== 'supply' || s.supplyStatus?.eligible)
+          .map((s) => s.subjectId),
+      ),
+    );
   }
 
   async function submitApplication() {
@@ -194,6 +220,64 @@ export default function StudentExamApplyPage({
   }
 
   const exam = detail.exam;
+  const existingApp = detail.applications?.[0] ?? null;
+
+  // Already applied → no apply form; point to the application / hall ticket.
+  if (existingApp && (detail.openTypes?.length ?? 0) === 0 && !feeRecord) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <Link
+            href="/student/exams"
+            className="text-xs font-medium text-[var(--primary)] hover:underline"
+          >
+            ← Examinations
+          </Link>
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">
+            {exam.name}
+          </h1>
+        </div>
+        <section className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-6 shadow-[var(--shadow-sm)]">
+          <Badge variant={existingApp.feeStatus === 'paid' ? 'success' : 'warning'}>
+            {existingApp.feeStatus === 'paid' ? 'Applied' : 'Payment due'}
+          </Badge>
+          <p className="mt-3 text-sm text-slate-700">
+            You have already applied for this examination as{' '}
+            <strong>{existingApp.examType.replace(/_/g, ' ')}</strong>. Another
+            enrollment type requires a separate examination.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {existingApp.feeStatus === 'paid' ? (
+              <Button
+                type="button"
+                onClick={() =>
+                  router.push(`/student/hall-tickets/${existingApp.id}`)
+                }
+              >
+                See hall ticket
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() =>
+                  router.push(`/student/applications/${existingApp.feeRecordId}`)
+                }
+              >
+                Review & pay
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => router.push('/student/exams')}
+            >
+              Back to examinations
+            </Button>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -287,12 +371,13 @@ export default function StudentExamApplyPage({
               Applying as
             </h2>
             <p className="mb-3 text-xs text-[var(--muted)]">
-              This is one examination. Select Regular or Supply for this
-              application.
+              Select one enrollment type. Only one application is accepted per
+              examination.
             </p>
             {(detail.openTypes?.length ?? 0) === 0 ? (
               <p className="text-sm text-[var(--muted)]">
-                You have already enrolled for all available types on this exam.
+                You already applied for this examination. To use another
+                enrollment type, a separate examination must be published.
               </p>
             ) : (
               <div className="flex flex-wrap gap-3">
@@ -309,7 +394,7 @@ export default function StudentExamApplyPage({
                       type="radio"
                       name="enrollType"
                       checked={enrollType === t}
-                      onChange={() => setEnrollType(t)}
+                      onChange={() => chooseEnrollmentType(t)}
                     />
                     {t.replace(/_/g, ' ')}
                   </label>
@@ -352,24 +437,38 @@ export default function StudentExamApplyPage({
               </div>
             </div>
             <p className="mb-3 text-xs text-[var(--muted)]">
-              All selected by default. Deselect any you are not applying for.
-              {exam.packageFee != null
+              {enrollType === 'supply'
+                ? 'Only subjects whose latest result is failed can be selected. Passed subjects are disabled.'
+                : 'All selected by default. Deselect any you are not applying for.'}
+              {exam.packageFee != null &&
+              selectableSubjects.length === subjects.length
                 ? ` Package fee applies when all subjects are selected (₹${exam.packageFee}).`
                 : ''}
             </p>
             <ul className="space-y-2">
-              {subjects.map((s) => (
+              {subjects.map((s) => {
+                const supplyDisabled =
+                  enrollType === 'supply' && !s.supplyStatus?.eligible;
+                return (
                 <li key={s.subjectId}>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm">
+                  <label className={`flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm ${supplyDisabled ? 'cursor-not-allowed bg-slate-50 opacity-70' : ''}`}>
                     <span className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={selected.has(s.subjectId)}
+                        disabled={supplyDisabled}
                         onChange={() => toggleSubject(s.subjectId)}
                       />
                       <span>
                         <span className="font-medium">{s.code}</span>
                         {s.name ? ` — ${s.name}` : ''}
+                        {enrollType === 'supply' && (
+                          <span className={`block text-xs ${s.supplyStatus?.eligible ? 'text-rose-700' : 'text-[var(--muted)]'}`}>
+                            {s.supplyStatus
+                              ? `${s.supplyStatus.eligible ? 'Not passed — eligible' : s.supplyStatus.passed ? 'Passed — not selectable' : 'No previous result found — not selectable'} · Grade ${s.supplyStatus.grade ?? '—'} · Grade points ${s.supplyStatus.gradePoints ?? '—'}`
+                              : 'No previous result found — not selectable'}
+                          </span>
+                        )}
                         {(s.examDate || s.startTime) && (
                           <span className="block text-xs text-[var(--muted)]">
                             {s.examDate ? formatDate(s.examDate) : ''}
@@ -391,7 +490,8 @@ export default function StudentExamApplyPage({
                     </span>
                   </label>
                 </li>
-              ))}
+                );
+              })}
             </ul>
             <p className="mt-4 text-right text-sm font-semibold text-slate-900">
               Estimated fee: {money(liveTotal)}

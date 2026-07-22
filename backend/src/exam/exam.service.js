@@ -4,6 +4,7 @@ const { createHmac, timingSafeEqual } = require('crypto');
 const Razorpay = require('razorpay');
 const { AppError } = require('../common/errors');
 const { config } = require('../config');
+const { operationLogger } = require('../common/logger');
 const {
     ExamStatus,
     ExamType,
@@ -13,15 +14,17 @@ const {
     PaymentStatus,
     UPI_CONVENIENCE_FEE_RATE,
 } = require('./schemas/exam.enums');
+const log = operationLogger('examinations');
 
 class ExamService {
-    constructor(examRepo, examSubjectRepo, feeRecordRepo, paymentRepo, examScopeRepo, applicationRepo, subjectsService, regulationsService, sdms, settings, feeManagement) {
+    constructor(examRepo, examSubjectRepo, feeRecordRepo, paymentRepo, examScopeRepo, applicationRepo, subjectResultRepo, subjectsService, regulationsService, sdms, settings, feeManagement) {
         this.examRepo = examRepo;
         this.examSubjectRepo = examSubjectRepo;
         this.feeRecordRepo = feeRecordRepo;
         this.paymentRepo = paymentRepo;
         this.examScopeRepo = examScopeRepo;
         this.applicationRepo = applicationRepo;
+        this.subjectResultRepo = subjectResultRepo;
         // EntitySchema entities are not constructible classes; use a repo to
         // instantiate late-fee slab rows.
         this.lateFeeSlabRepo = examRepo.manager.getRepository('LateFeeSlab');
@@ -807,6 +810,63 @@ class ExamService {
             return true;
         });
     }
+    /**
+     * Latest result for each paper in this exam's semester. Supply enrollment
+     * is allowed only when the latest recorded attempt is explicitly failed.
+     */
+    async supplyResultStatus(exam, roll, branchSubjects) {
+        const codeToSubjectIds = new Map();
+        for (const es of branchSubjects) {
+            const code = es.subject?.code?.trim().toLowerCase();
+            if (!code)
+                continue;
+            const ids = codeToSubjectIds.get(code) ?? [];
+            ids.push(es.subjectId);
+            codeToSubjectIds.set(code, ids);
+        }
+        const statusBySubjectId = new Map();
+        if (codeToSubjectIds.size === 0)
+            return statusBySubjectId;
+        const results = await this.subjectResultRepo
+            .createQueryBuilder('r')
+            .where('LOWER(r.studentRollNumber) = LOWER(:roll)', { roll })
+            .andWhere('r.yearOfStudy = :yearOfStudy', { yearOfStudy: exam.yearOfStudy })
+            .andWhere('r.semester = :semester', { semester: exam.semester })
+            .andWhere('LOWER(r.subjectCode) IN (:...codes)', {
+            codes: [...codeToSubjectIds.keys()],
+        })
+            .orderBy('r.attemptNumber', 'DESC')
+            .addOrderBy('r.updatedAt', 'DESC')
+            .addOrderBy('r.id', 'DESC')
+            .getMany();
+        const latestByCode = new Map();
+        for (const result of results) {
+            const code = result.subjectCode.trim().toLowerCase();
+            if (!latestByCode.has(code))
+                latestByCode.set(code, result);
+        }
+        for (const [code, subjectIds] of codeToSubjectIds) {
+            const result = latestByCode.get(code);
+            const status = result
+                ? {
+                    eligible: !result.passed,
+                    grade: result.grade,
+                    gradePoints: result.gradePoints == null ? null : Number(result.gradePoints),
+                    passed: !!result.passed,
+                    attemptNumber: result.attemptNumber,
+                }
+                : {
+                    eligible: false,
+                    grade: null,
+                    gradePoints: null,
+                    passed: null,
+                    attemptNumber: null,
+                };
+            for (const subjectId of subjectIds)
+                statusBySubjectId.set(subjectId, status);
+        }
+        return statusBySubjectId;
+    }
     examScopeRows(exam) {
         if (exam.scopes?.length) {
             return exam.scopes.map((s) => ({
@@ -957,8 +1017,7 @@ class ExamService {
         return inScope.map((exam) => {
             const apps = appsByExam.get(exam.id) ?? [];
             const allowedTypes = this.eligibleTypesForStudent(exam, student);
-            const appliedTypes = apps.map((a) => a.examType);
-            const openTypes = allowedTypes.filter((t) => !appliedTypes.includes(t));
+            const openTypes = apps.length === 0 ? allowedTypes : [];
             return {
                 id: exam.id,
                 name: exam.name,
@@ -1004,9 +1063,12 @@ class ExamService {
             .andWhere('LOWER(a.studentRollNumber) = LOWER(:roll)', { roll })
             .getMany();
         const allowedTypes = this.eligibleTypesForStudent(exam, student);
-        const appliedTypes = applications.map((a) => a.examType);
-        const openTypes = allowedTypes.filter((t) => !appliedTypes.includes(t));
-        const subjects = this.examSubjectsForBranch(exam, student.branch, student.section).map((es) => ({
+        const openTypes = applications.length === 0 ? allowedTypes : [];
+        const branchSubjects = this.examSubjectsForBranch(exam, student.branch, student.section);
+        const supplyStatuses = allowedTypes.includes(ExamType.SUPPLY)
+            ? await this.supplyResultStatus(exam, roll, branchSubjects)
+            : new Map();
+        const subjects = branchSubjects.map((es) => ({
             subjectId: es.subjectId,
             fee: Number(es.fee),
             examDate: es.examDate,
@@ -1016,6 +1078,7 @@ class ExamService {
             durationMinutes: es.durationMinutes ?? null,
             code: es.subject?.code ?? String(es.subjectId),
             name: es.subject?.name ?? '',
+            supplyStatus: supplyStatuses.get(es.subjectId) ?? null,
         }));
         return {
             exam: {
@@ -1079,25 +1142,38 @@ class ExamService {
             .createQueryBuilder('a')
             .where('a.examId = :examId', { examId })
             .andWhere('LOWER(a.studentRollNumber) = LOWER(:roll)', { roll })
-            .andWhere('a.examType = :examType', { examType })
             .getOne();
         if (existing) {
-            throw AppError.badRequest(`You have already applied for this examination as ${this.typeLabel(examType)}`);
+            throw AppError.badRequest(`You have already applied for this examination as ${this.typeLabel(existing.examType)}. Another enrollment type requires a separate examination`);
         }
         const existingFee = await this.feeRecordRepo
             .createQueryBuilder('f')
             .where('f.examId = :examId', { examId })
             .andWhere('LOWER(f.studentRollNumber) = LOWER(:roll)', { roll })
-            .andWhere('f.examType = :examType', { examType })
             .getOne();
         if (existingFee) {
-            throw AppError.badRequest(`A fee record already exists for ${this.typeLabel(examType)}`);
+            throw AppError.badRequest('A fee record already exists for this examination');
         }
         // Students only sit for the papers grouped under their own branch
         // (and section, when papers are section-specific).
         const branchSubjects = this.examSubjectsForBranch(exam, student.branch, student.section);
-        const allIds = [...new Set(branchSubjects.map((es) => es.subjectId))];
-        let selectedSubjectIds = dto.selectedSubjectIds?.filter((id) => allIds.includes(id)) ?? [];
+        let allowedSubjects = branchSubjects;
+        if (examType === ExamType.SUPPLY) {
+            const supplyStatuses = await this.supplyResultStatus(exam, roll, branchSubjects);
+            allowedSubjects = branchSubjects.filter((es) => supplyStatuses.get(es.subjectId)?.eligible);
+            if (allowedSubjects.length === 0) {
+                throw AppError.badRequest('You have no failed subjects eligible for Supply in this semester');
+            }
+        }
+        const allIds = [...new Set(allowedSubjects.map((es) => es.subjectId))];
+        const requestedIds = dto.selectedSubjectIds ?? [];
+        const invalidIds = requestedIds.filter((id) => !allIds.includes(id));
+        if (invalidIds.length > 0) {
+            throw AppError.badRequest(examType === ExamType.SUPPLY
+                ? 'Supply applications may include only subjects whose latest result is not passed'
+                : `Subject ${invalidIds[0]} is not part of this exam`);
+        }
+        let selectedSubjectIds = [...new Set(requestedIds)];
         if (selectedSubjectIds.length === 0) {
             selectedSubjectIds = [...allIds];
         }
@@ -1105,32 +1181,51 @@ class ExamService {
             throw AppError.badRequest('No subjects available for this examination');
         }
         const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds, branchSubjects, this.packageFeeForScope(exam, student.branch, student.section));
-        const feeRecord = await this.feeRecordRepo.save(this.feeRecordRepo.create({
-            examId,
-            examType,
-            studentRollNumber: roll,
-            studentName: student.studentName,
-            selectedSubjectIds,
-            feeBreakdown: breakdown,
-            baseFee,
-            lateFee: 0,
-            totalAmount: baseFee,
-            status: FeeStatus.PENDING,
-            dueDate: exam.applicationEndDate,
-        }));
-        const application = await this.applicationRepo.save(this.applicationRepo.create({
-            examId,
-            examType,
-            studentRollNumber: roll,
-            studentName: student.studentName,
-            studentBranch: student.branch ?? null,
-            studentSection: student.section ?? null,
-            selectedSubjectIds,
-            feeBreakdown: breakdown,
-            declarationAccepted: true,
-            consentAccepted: true,
-            feeRecordId: feeRecord.id,
-        }));
+        // Save the fee and application atomically. The database uniqueness
+        // constraint prevents concurrent Regular/Supply submissions for one
+        // student on the same examination.
+        let saved;
+        try {
+            saved = await this.applicationRepo.manager.transaction(async (manager) => {
+                const feeRepo = manager.getRepository('ExamFeeRecord');
+                const appRepo = manager.getRepository('ExamApplication');
+                const savedFee = await feeRepo.save(feeRepo.create({
+                examId,
+                examType,
+                studentRollNumber: roll,
+                studentName: student.studentName,
+                selectedSubjectIds,
+                feeBreakdown: breakdown,
+                baseFee,
+                lateFee: 0,
+                totalAmount: baseFee,
+                status: FeeStatus.PENDING,
+                dueDate: exam.applicationEndDate,
+                }));
+                const savedApplication = await appRepo.save(appRepo.create({
+                examId,
+                examType,
+                studentRollNumber: roll,
+                studentName: student.studentName,
+                studentBranch: student.branch ?? null,
+                studentSection: student.section ?? null,
+                selectedSubjectIds,
+                feeBreakdown: breakdown,
+                declarationAccepted: true,
+                consentAccepted: true,
+                feeRecordId: savedFee.id,
+                }));
+                return { feeRecord: savedFee, application: savedApplication };
+            });
+        }
+        catch (error) {
+            if (error?.code === 'ER_DUP_ENTRY' ||
+                error?.code === 'SQLITE_CONSTRAINT') {
+                throw AppError.badRequest('You have already applied for this examination. Another enrollment type requires a separate examination');
+            }
+            throw error;
+        }
+        const { feeRecord, application } = saved;
         const refreshed = await this.getFeeRecord(feeRecord.id);
         return {
             application: {
@@ -1694,10 +1789,12 @@ class ExamService {
             }
             return result;
         } catch (err) {
-            console.error(
-                `[fee-management] Failed to post EMS payment #${payment.id}:`,
-                err.message,
-            );
+            log.error({
+                event: 'fee_management.payment_post_failed',
+                paymentId: payment.id,
+                feeRecordId: payment.feeRecordId,
+                err,
+            }, 'Failed to post EMS payment to Fee Management');
             payment.gatewayResponse = JSON.stringify({
                 ...gw,
                 feeManagement: {

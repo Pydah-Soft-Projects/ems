@@ -21,6 +21,8 @@ import { PublishExamModal } from '@/components/exams/PublishExamModal';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { TextareaField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
+import { getStoredUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 
 type DetailTab = 'overview' | 'subjects' | 'analytics' | 'hall-tickets' | 'results';
 
@@ -179,7 +181,7 @@ export default function ExamDetailPage() {
   }
 
   const canEdit = exam.status === 'draft' || exam.status === 'rejected';
-
+  const staff = getStoredUser();
   const types = exam.allowedTypes?.length ? exam.allowedTypes : [exam.type];
 
   return (
@@ -205,7 +207,7 @@ export default function ExamDetailPage() {
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
               Back
             </Button>
-            {canEdit ? (
+            {canEdit && can(staff, 'exams:write') ? (
               <Button
                 variant="secondary"
                 onClick={() => router.push(`/dashboard/exams/${exam.id}/edit`)}
@@ -213,12 +215,13 @@ export default function ExamDetailPage() {
                 Edit
               </Button>
             ) : null}
-            {exam.status === 'draft' || exam.status === 'rejected' ? (
+            {(exam.status === 'draft' || exam.status === 'rejected') &&
+            can(staff, 'exams:submit') ? (
               <Button onClick={() => void handleSubmit()} loading={saving}>
                 Submit
               </Button>
             ) : null}
-            {exam.status === 'pending_approval' ? (
+            {exam.status === 'pending_approval' && can(staff, 'exams:approve') ? (
               <>
                 <Button
                   variant="success"
@@ -232,10 +235,12 @@ export default function ExamDetailPage() {
                 </Button>
               </>
             ) : null}
-            {exam.status === 'approved' ? (
+            {exam.status === 'approved' && can(staff, 'exams:publish') ? (
               <Button onClick={() => setPublishOpen(true)}>Publish</Button>
             ) : null}
-            {exam.status === 'published' && !exam.hallTicketsReleasedAt ? (
+            {exam.status === 'published' &&
+            !exam.hallTicketsReleasedAt &&
+            can(staff, 'exams:hall_tickets') ? (
               <Button
                 variant="warning"
                 onClick={() => void handleReleaseHallTickets()}

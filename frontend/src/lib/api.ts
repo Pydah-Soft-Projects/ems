@@ -72,6 +72,18 @@ import {
   RemunerationBillStatus,
   RemunerationSimulateResult,
 } from '@/types/remuneration';
+import {
+  PrivilegesCatalog,
+  EmsRole,
+  EmsUser,
+  EmsUserListResponse,
+  HrmsUserSearchResponse,
+  EmsAuditLog,
+  CreateEmsRoleInput,
+  UpdateEmsRoleInput,
+  CreateEmsUserInput,
+  UpdateEmsUserInput,
+} from '@/types/user-management';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -781,5 +793,93 @@ export const api = {
     return request<RemunerationSimulateResult>('/remuneration/simulate', {
       method: 'POST',
     });
+  },
+
+  // ── User management / RBAC ──
+  getPrivilegeCatalog() {
+    return request<PrivilegesCatalog>('/user-management/privileges');
+  },
+
+  getEmsRoles() {
+    return request<EmsRole[]>('/user-management/roles');
+  },
+
+  getEmsRole(id: number) {
+    return request<EmsRole>(`/user-management/roles/${id}`);
+  },
+
+  createEmsRole(data: CreateEmsRoleInput) {
+    return request<EmsRole>('/user-management/roles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateEmsRole(id: number, data: UpdateEmsRoleInput) {
+    return request<EmsRole>(`/user-management/roles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteEmsRole(id: number) {
+    return request<{ success: boolean }>(`/user-management/roles/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getEmsUsers(params?: { q?: string; page?: number; limit?: number }) {
+    const q = new URLSearchParams();
+    if (params?.q) q.set('q', params.q);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return request<EmsUserListResponse>(
+      `/user-management/users${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  createEmsUser(data: CreateEmsUserInput) {
+    return request<EmsUser>('/user-management/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateEmsUser(id: number, data: UpdateEmsUserInput) {
+    return request<EmsUser>(`/user-management/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  searchHrmsUsers(params?: {
+    q?: string;
+    page?: number;
+    limit?: number;
+    superAdminsOnly?: boolean;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.q) q.set('q', params.q);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.superAdminsOnly) q.set('superAdminsOnly', 'true');
+    const qs = q.toString();
+    return request<HrmsUserSearchResponse>(
+      `/user-management/hrms-users${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  getEmsAuditLogs(params?: { page?: number; limit?: number }) {
+    const q = new URLSearchParams();
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return request<{
+      items: EmsAuditLog[];
+      total: number;
+      page: number;
+      limit: number;
+    }>(`/user-management/audit-logs${qs ? `?${qs}` : ''}`);
   },
 };

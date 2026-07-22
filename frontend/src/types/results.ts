@@ -4,6 +4,7 @@ export interface ResultRowInput {
   subjectCode: string;
   subjectName?: string;
   grade: string;
+  gradePoints?: number | string;
   /** P / F (also accepts Pass / Fail / AB); inferred from grade when empty */
   result?: string;
   credits?: number | string;
@@ -30,6 +31,7 @@ export interface ExamResultSubject {
   subjectCode: string;
   subjectName: string;
   grade: string;
+  gradePoints: number | null;
   passed: boolean;
   credits: number;
   attemptNumber: number;
@@ -78,6 +80,7 @@ export interface ExamResultsResponse {
 export interface ResultAttempt {
   attemptNumber: number;
   grade: string;
+  gradePoints: number | null;
   passed: boolean;
   credits: number;
   examId: number;
@@ -90,6 +93,7 @@ export interface StudentSubjectResult {
   subjectCode: string;
   subjectName: string;
   grade: string;
+  gradePoints: number | null;
   passed: boolean;
   credits: number;
   attemptCount: number;

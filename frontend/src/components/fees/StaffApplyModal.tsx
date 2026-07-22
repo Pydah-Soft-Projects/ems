@@ -44,13 +44,22 @@ export function StaffApplyModal({
     try {
       const res = await api.getStudentExamForStaff(student.id, examId);
       setDetail(res);
-      setSelected(new Set(res.exam.subjects.map((s) => s.subjectId)));
-      const open = res.openTypes?.length
-        ? res.openTypes
-        : res.exam.allowedTypes?.length
+      const open =
+        res.openTypes ??
+        (res.exam.allowedTypes?.length
           ? res.exam.allowedTypes
-          : [res.exam.type];
-      setEnrollType(open.length === 1 ? open[0] : '');
+          : [res.exam.type]);
+      const initialType = open.length === 1 ? open[0] : '';
+      setEnrollType(initialType);
+      setSelected(
+        new Set(
+          res.exam.subjects
+            .filter(
+              (s) => initialType !== 'supply' || s.supplyStatus?.eligible,
+            )
+            .map((s) => s.subjectId),
+        ),
+      );
       setDeclaration(false);
       setConsent(false);
     } catch (err) {
@@ -69,7 +78,14 @@ export function StaffApplyModal({
     if (open) void load();
   }, [open, load]);
 
-  const subjects = detail?.exam.subjects ?? [];
+  const subjects = useMemo(() => detail?.exam.subjects ?? [], [detail]);
+  const selectableSubjects = useMemo(
+    () =>
+      subjects.filter(
+        (s) => enrollType !== 'supply' || s.supplyStatus?.eligible,
+      ),
+    [enrollType, subjects],
+  );
 
   const liveTotal = useMemo(() => {
     if (!detail) return 0;
@@ -89,12 +105,24 @@ export function StaffApplyModal({
   }, [detail, selected, subjects]);
 
   function toggleSubject(id: number) {
+    if (!selectableSubjects.some((s) => s.subjectId === id)) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  }
+
+  function chooseEnrollmentType(type: ExamType) {
+    setEnrollType(type);
+    setSelected(
+      new Set(
+        subjects
+          .filter((s) => type !== 'supply' || s.supplyStatus?.eligible)
+          .map((s) => s.subjectId),
+      ),
+    );
   }
 
   async function submit() {
@@ -178,8 +206,8 @@ export function StaffApplyModal({
               </h3>
               {(detail.openTypes?.length ?? 0) === 0 ? (
                 <p className="text-sm text-[var(--muted)]">
-                  This student has already enrolled for all available types on
-                  this examination.
+                  This student already applied for this examination. Another
+                  enrollment type requires a separate examination.
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-3">
@@ -196,7 +224,7 @@ export function StaffApplyModal({
                         type="radio"
                         name="staff-enroll-type"
                         checked={enrollType === t}
-                        onChange={() => setEnrollType(t)}
+                        onChange={() => chooseEnrollmentType(t)}
                       />
                       {t.replace(/_/g, ' ')}
                     </label>
@@ -226,7 +254,9 @@ export function StaffApplyModal({
                     type="button"
                     className="text-[var(--primary)] hover:underline"
                     onClick={() =>
-                      setSelected(new Set(subjects.map((s) => s.subjectId)))
+                      setSelected(
+                        new Set(selectableSubjects.map((s) => s.subjectId)),
+                      )
                     }
                   >
                     Select all
@@ -240,25 +270,43 @@ export function StaffApplyModal({
                   </button>
                 </div>
               </div>
-              {detail.exam.packageFee != null && (
+              {detail.exam.packageFee != null &&
+                selectableSubjects.length === subjects.length && (
                 <p className="mb-2 text-xs text-[var(--muted)]">
                   Package fee ₹{detail.exam.packageFee} applies when all
                   subjects are selected.
                 </p>
+                )}
+              {enrollType === 'supply' && (
+                <p className="mb-2 text-xs text-[var(--muted)]">
+                  Only subjects with a latest failed result are selectable.
+                  Passed subjects are disabled.
+                </p>
               )}
               <ul className="space-y-2">
-                {subjects.map((s) => (
+                {subjects.map((s) => {
+                  const supplyDisabled =
+                    enrollType === 'supply' && !s.supplyStatus?.eligible;
+                  return (
                   <li key={s.subjectId}>
-                    <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2 text-sm">
+                    <label className={`flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2 text-sm ${supplyDisabled ? 'cursor-not-allowed bg-slate-50 opacity-70' : ''}`}>
                       <span className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selected.has(s.subjectId)}
+                          disabled={supplyDisabled}
                           onChange={() => toggleSubject(s.subjectId)}
                         />
                         <span>
                           <span className="font-medium">{s.code}</span>
                           {s.name ? ` — ${s.name}` : ''}
+                          {enrollType === 'supply' && (
+                            <span className={`block text-xs ${s.supplyStatus?.eligible ? 'text-rose-700' : 'text-[var(--muted)]'}`}>
+                              {s.supplyStatus
+                                ? `${s.supplyStatus.eligible ? 'Not passed — eligible' : s.supplyStatus.passed ? 'Passed — not selectable' : 'No previous result found — not selectable'} · Grade ${s.supplyStatus.grade ?? '—'} · Grade points ${s.supplyStatus.gradePoints ?? '—'}`
+                                : 'No previous result found — not selectable'}
+                            </span>
+                          )}
                           {(s.examDate || s.startTime) && (
                             <span className="block text-xs text-[var(--muted)]">
                               {s.examDate ?? ''}
@@ -280,7 +328,8 @@ export function StaffApplyModal({
                       </span>
                     </label>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
               <p className="mt-3 text-right text-sm font-semibold text-slate-900">
                 Estimated fee: {money(liveTotal)}

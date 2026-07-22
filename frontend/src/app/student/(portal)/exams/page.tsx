@@ -38,8 +38,22 @@ export default function StudentExamsPage() {
     () => exams.filter((e) => (e.openTypes?.length ?? 0) > 0),
     [exams],
   );
+  const applied = useMemo(
+    () =>
+      exams.filter(
+        (e) =>
+          (e.openTypes?.length ?? 0) === 0 &&
+          (e.applications?.length ?? 0) > 0,
+      ),
+    [exams],
+  );
   const closed = useMemo(
-    () => exams.filter((e) => (e.openTypes?.length ?? 0) === 0),
+    () =>
+      exams.filter(
+        (e) =>
+          (e.openTypes?.length ?? 0) === 0 &&
+          (e.applications?.length ?? 0) === 0,
+      ),
     [exams],
   );
 
@@ -47,7 +61,7 @@ export default function StudentExamsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Examinations"
-        description="Apply for open enrollment types. If you already applied for Regular, Supply can still appear here when published."
+        description="Apply once per examination. A different enrollment type requires a separate published examination."
       />
       {error ? <Alert tone="danger">{error}</Alert> : null}
       {loading ? (
@@ -67,10 +81,20 @@ export default function StudentExamsPage() {
               open.map((e) => <AvailableExamCard key={e.id} exam={e} />)
             )}
           </section>
+          {applied.length > 0 ? (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Already applied ({applied.length})
+              </h2>
+              {applied.map((e) => (
+                <AvailableExamCard key={e.id} exam={e} />
+              ))}
+            </section>
+          ) : null}
           {closed.length > 0 ? (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                No open types ({closed.length})
+                Not open ({closed.length})
               </h2>
               {closed.map((e) => (
                 <div
@@ -79,8 +103,7 @@ export default function StudentExamsPage() {
                 >
                   <p className="font-semibold text-slate-800">{e.name}</p>
                   <p className="mt-1">
-                    All published enrollment types for this exam are already
-                    applied or closed.
+                    No enrollment types are open for you on this examination.
                   </p>
                 </div>
               ))}

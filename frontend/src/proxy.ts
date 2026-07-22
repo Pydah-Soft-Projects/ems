@@ -19,7 +19,7 @@ export function proxy(request: NextRequest) {
     if (!token) {
       return NextResponse.redirect(new URL('/student/login', request.url));
     }
-    if (role === 'super_admin') {
+    if (role === 'super_admin' || role === 'staff') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
@@ -35,7 +35,7 @@ export function proxy(request: NextRequest) {
     if (role === 'student') {
       return NextResponse.redirect(new URL('/student', request.url));
     }
-    if (role === 'super_admin') {
+    if (role === 'super_admin' || role === 'staff') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }

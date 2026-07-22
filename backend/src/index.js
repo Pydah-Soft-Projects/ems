@@ -19,6 +19,7 @@ const {
 const { createServices } = require('./database/container');
 const { createApp } = require('./app');
 const { config } = require('./config');
+const { logger } = require('./common/logger');
 
 let server = null;
 let examPortalDataSource = null;
@@ -49,7 +50,7 @@ async function cleanupConnections() {
 function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`\n${signal} received, shutting down gracefully...`);
+  logger.info({ event: 'application.shutdown', signal }, 'Shutting down gracefully');
   if (server) {
     server.close(() => {
       void cleanupConnections().finally(() => process.exit(0));
@@ -84,8 +85,9 @@ async function listenWithRetry(app, port, maxAttempts = 15) {
         throw err;
       }
       const waitMs = 400 * attempt;
-      console.warn(
-        `Port ${port} busy, retrying in ${waitMs}ms... (${attempt}/${maxAttempts})`,
+      logger.warn(
+        { event: 'server.port_busy', port, waitMs, attempt, maxAttempts },
+        'Port busy; retrying',
       );
       await delay(waitMs);
     }
@@ -95,32 +97,41 @@ async function listenWithRetry(app, port, maxAttempts = 15) {
 
 async function connectOptionalHrms() {
   if (!config.hrms.mongodbUri) {
-    console.warn('HRMS MongoDB URI not set — staff login unavailable until configured');
+    logger.warn(
+      { event: 'dependency.hrms.not_configured' },
+      'HRMS MongoDB URI not set; staff login unavailable',
+    );
     return;
   }
   try {
     await connectHrmsMongo();
-    console.log('HRMS MongoDB connected');
+    logger.info({ event: 'dependency.hrms.connected' }, 'HRMS MongoDB connected');
   } catch (err) {
-    console.warn(
-      `HRMS MongoDB unavailable (${err.message}) — Express will still start; staff login needs Mongo`,
+    logger.warn(
+      { event: 'dependency.hrms.unavailable', err },
+      'HRMS MongoDB unavailable; staff login disabled',
     );
   }
 }
 
 async function connectOptionalFeeManagement() {
   if (!config.feeManagement.mongodbUri) {
-    console.warn(
-      'FEE_MANAGEMENT_MONGODB_URI not set — exam payments will not post to Fee Management',
+    logger.warn(
+      { event: 'dependency.fee_management.not_configured' },
+      'Fee Management MongoDB URI not set; fee posting disabled',
     );
     return;
   }
   try {
     await connectFeeManagementMongo();
-    console.log('Fee Management MongoDB connected');
+    logger.info(
+      { event: 'dependency.fee_management.connected' },
+      'Fee Management MongoDB connected',
+    );
   } catch (err) {
-    console.warn(
-      `Fee Management MongoDB unavailable (${err.message}) — Express will still start; fee posting needs Mongo`,
+    logger.warn(
+      { event: 'dependency.fee_management.unavailable', err },
+      'Fee Management MongoDB unavailable; fee posting disabled',
     );
   }
 }
@@ -130,11 +141,21 @@ async function bootstrap() {
 
   examPortalDataSource = createExamPortalDataSource();
   await examPortalDataSource.initialize();
-  console.log('Exam portal database connected');
+  logger.info(
+    { event: 'dependency.exam_database.connected' },
+    'Exam portal database connected',
+  );
 
   studentDataSource = createStudentDataSource();
   await studentDataSource.initialize();
-  console.log(`Student database connected (${config.studentDb.name}, read-only)`);
+  logger.info(
+    {
+      event: 'dependency.student_database.connected',
+      database: config.studentDb.name,
+      readOnly: true,
+    },
+    'Student database connected',
+  );
 
   await connectOptionalHrms();
   await connectOptionalFeeManagement();
@@ -148,25 +169,50 @@ async function bootstrap() {
     server = await listenWithRetry(app, config.port);
   } catch (err) {
     if (err.code === 'EADDRINUSE') {
-      console.error(
-        `Port ${config.port} is still in use after retries. Run: npm run predev`,
+      logger.error(
+        { event: 'server.port_bind_failed', port: config.port, err },
+        'Port is still in use after retries',
       );
     }
     throw err;
   }
 
   const base = `http://localhost:${config.port}/${config.apiPrefix}`;
-  console.log(`EMS backend (Express) running on ${base}`);
+  logger.info(
+    { event: 'application.started', baseUrl: base, port: config.port },
+    'EMS backend started',
+  );
   if (!isHrmsConnected()) {
-    console.log('Note: staff /auth/login requires HRMS MongoDB');
+    logger.warn(
+      { event: 'application.degraded', dependency: 'hrms' },
+      'Staff login requires HRMS MongoDB',
+    );
   }
   if (config.feeManagement.mongodbUri && !isFeeManagementConnected()) {
-    console.log('Note: exam fee posting requires Fee Management MongoDB');
+    logger.warn(
+      { event: 'application.degraded', dependency: 'fee_management' },
+      'Exam fee posting requires Fee Management MongoDB',
+    );
   }
 }
 
+process.on('unhandledRejection', (reason) => {
+  logger.fatal(
+    { event: 'process.unhandled_rejection', err: reason },
+    'Unhandled promise rejection',
+  );
+});
+
+process.on('uncaughtException', (err) => {
+  logger.fatal(
+    { event: 'process.uncaught_exception', err },
+    'Uncaught exception',
+  );
+  void cleanupConnections().finally(() => process.exit(1));
+});
+
 bootstrap().catch(async (err) => {
-  console.error('Failed to start server:', err);
+  logger.fatal({ event: 'application.start_failed', err }, 'Failed to start server');
   await cleanupConnections();
   process.exit(1);
 });

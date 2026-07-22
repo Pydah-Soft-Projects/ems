@@ -34,6 +34,11 @@ const { Professional } = require('../remuneration/schemas/professional.schema');
 const {
   RemunerationBill,
 } = require('../remuneration/schemas/remuneration-bill.schema');
+const {
+  EmsRole,
+  EmsUser,
+  EmsAuditLog,
+} = require('../auth/schemas/ems-rbac.schema');
 
 const entities = [
   Regulation,
@@ -52,6 +57,9 @@ const entities = [
   PaymentGatewaySettings,
   Professional,
   RemunerationBill,
+  EmsRole,
+  EmsUser,
+  EmsAuditLog,
 ];
 
 function createExamPortalDataSource() {

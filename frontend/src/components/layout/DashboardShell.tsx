@@ -1,13 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { AuthUser, getStoredUser } from '@/lib/auth';
+import { usePathname, useRouter } from 'next/navigation';
+import { AuthUser, getStoredUser, setAuth, getToken, clearAuth } from '@/lib/auth';
+import { can } from '@/lib/permissions';
+import { findNavItem } from '@/config/navigation';
 import { api } from '@/lib/api';
 import { Sidebar } from './Sidebar';
+import { AccessDenied } from '@/components/auth/AccessDenied';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -24,9 +28,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         return;
       }
       try {
-        await api.me();
-        setUser(stored);
+        const me = await api.me();
+        const token = getToken();
+        if (token) setAuth(token, me);
+        setUser(me);
       } catch {
+        clearAuth();
         router.replace('/login');
       } finally {
         setLoading(false);
@@ -51,6 +58,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return null;
+
+  const navItem = findNavItem(pathname);
+  const allowed = !navItem || can(user, navItem.privilege);
 
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
@@ -95,7 +105,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               />
             </svg>
           </button>
-          <div className="w-full">{children}</div>
+          <div className="w-full">
+            {allowed ? children : <AccessDenied />}
+          </div>
         </main>
       </div>
     </div>

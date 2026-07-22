@@ -10,8 +10,7 @@ import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 
 export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
   const router = useRouter();
-  const open = exam.openTypes?.length ?? 0;
-  const applied = exam.applications?.length ?? 0;
+  const application = exam.applications?.[0] ?? null;
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]">
@@ -30,20 +29,48 @@ export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
               Apply by {exam.applicationEndDate}
             </p>
           ) : null}
-          {applied > 0 && open > 0 ? (
+          {application ? (
             <p className="mt-2 text-xs font-medium text-amber-800">
-              You already applied for {applied} type
-              {applied !== 1 ? 's' : ''}. {open} type{open !== 1 ? 's' : ''} still
-              open.
+              You have already applied as{' '}
+              {application.examType.replace(/_/g, ' ')}. Another type requires
+              a separate examination.
             </p>
           ) : null}
         </div>
-        <Button
-          type="button"
-          onClick={() => router.push(`/student/exams/${exam.id}/apply`)}
-        >
-          {applied > 0 ? 'Continue / apply' : 'Apply'}
-        </Button>
+        {application ? (
+          <div className="flex flex-col items-end gap-2">
+            <Badge variant={application.feeStatus === 'paid' ? 'success' : 'warning'}>
+              {application.feeStatus === 'paid' ? 'Applied' : 'Payment due'}
+            </Badge>
+            {application.feeStatus === 'paid' ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  router.push(`/student/hall-tickets/${application.id}`)
+                }
+              >
+                See hall ticket
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() =>
+                  router.push(`/student/applications/${application.feeRecordId}`)
+                }
+              >
+                Review & pay
+              </Button>
+            )}
+          </div>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => router.push(`/student/exams/${exam.id}/apply`)}
+          >
+            Apply
+          </Button>
+        )}
       </div>
     </div>
   );

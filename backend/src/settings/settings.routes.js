@@ -2,21 +2,15 @@
 
 const { Router } = require('express');
 const { asyncHandler } = require('../common/asyncHandler');
-const { AppError } = require('../common/errors');
+const { requireStaff, requirePrivilege } = require('../middleware/auth');
 
 function createSettingsRoutes(services) {
   const router = Router();
-
-  router.use((req, _res, next) => {
-    if (req.user?.role === 'student') {
-      next(AppError.forbidden('Settings are for staff only'));
-      return;
-    }
-    next();
-  });
+  router.use(requireStaff);
 
   router.get(
     '/payments',
+    requirePrivilege('settings:payments'),
     asyncHandler(async (_req, res) => {
       res.json(await services.settings.getPaymentSettingsPublic());
     }),
@@ -24,6 +18,7 @@ function createSettingsRoutes(services) {
 
   router.put(
     '/payments',
+    requirePrivilege('settings:payments'),
     asyncHandler(async (req, res) => {
       res.json(await services.settings.updatePaymentSettings(req.body ?? {}));
     }),

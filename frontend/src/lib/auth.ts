@@ -5,12 +5,19 @@ export interface AuthUser {
   id: string;
   username: string;
   fullName: string;
-  role: 'super_admin' | 'student';
+  role: 'super_admin' | 'staff' | 'student';
+  email?: string | null;
+  emsRoleId?: number | null;
+  emsRoleName?: string | null;
+  privileges?: string[];
+  isSuperAdmin?: boolean;
+  hrmsUserId?: string | null;
+  hrmsSource?: 'user' | 'employee';
+  emsUserId?: number | null;
   pinNo?: string;
   studentId?: number;
   admissionNumber?: string | null;
   mobile?: string | null;
-  email?: string | null;
   college?: string | null;
   course?: string | null;
   branch?: string | null;
@@ -29,8 +36,14 @@ export function setAuth(token: string, user: AuthUser) {
   if (typeof window === 'undefined') return;
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  const portalRole =
+    user.role === 'student'
+      ? 'student'
+      : user.isSuperAdmin
+        ? 'super_admin'
+        : 'staff';
   document.cookie = `ems_token=${token}; path=/; max-age=86400; SameSite=Lax`;
-  document.cookie = `ems_role=${user.role}; path=/; max-age=86400; SameSite=Lax`;
+  document.cookie = `ems_role=${portalRole}; path=/; max-age=86400; SameSite=Lax`;
 }
 
 export function clearAuth() {

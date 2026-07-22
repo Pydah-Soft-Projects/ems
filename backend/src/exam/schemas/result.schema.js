@@ -52,6 +52,8 @@ const SubjectResult = new EntitySchema({
     subjectCode: { type: 'varchar', length: 50 },
     subjectName: { type: 'varchar', length: 200 },
     grade: { type: 'varchar', length: 10 },
+    /** Numeric grade points recorded by the result sheet, when available. */
+    gradePoints: { type: 'decimal', precision: 4, scale: 2, nullable: true },
     passed: { type: 'boolean' },
     credits: { type: 'decimal', precision: 4, scale: 1, default: 0 },
     /** Enrollment type of the student's application on this exam */

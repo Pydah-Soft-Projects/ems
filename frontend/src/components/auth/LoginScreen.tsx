@@ -176,7 +176,9 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
                 className="mb-1.5 block text-[13px] font-semibold"
                 style={{ color: NAVY }}
               >
-                {role === 'student' ? 'PIN / Username' : 'Email / Username'}
+                {role === 'student'
+                  ? 'PIN / Username'
+                  : 'Email / Employee number'}
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
@@ -190,11 +192,11 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  autoComplete={role === 'student' ? 'username' : 'email'}
+                  autoComplete="username"
                   placeholder={
                     role === 'student'
                       ? 'Enter your PIN or username'
-                      : 'Enter your email or username'
+                      : 'Enter your email or employee number'
                   }
                   className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#2E7D32] focus:outline-none focus:ring-2 focus:ring-[#2E7D32]/20"
                 />

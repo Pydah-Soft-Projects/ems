@@ -293,7 +293,7 @@ async function main() {
         console.log(`Regulation:  ${regulation.code} (id ${regulation.id})`);
         console.log(`Exam:        #${exam.id} ${(exam.allowedTypes ?? [exam.type]).join(' + ')}`);
         console.log(`Demo PIN:    ${roll} (${student.studentName})`);
-        console.log('             Regular applied+paid in seed; open Supply on the same exam to apply again.');
+        console.log('             Regular applied+paid in seed; another type requires a separate exam.');
         console.log('Staff:       Dashboard → Examinations → View (analytics)');
         console.log('================================');
     }

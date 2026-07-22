@@ -2,6 +2,7 @@
 
 const { AppError } = require('../common/errors');
 const { AuthService } = require('../auth/auth.service');
+const { UsersService } = require('../auth/users.service');
 const { RegulationsService } = require('../regulations/regulations.service');
 const { SubjectsService } = require('../subjects/subjects.service');
 const { ExamService } = require('../exam/exam.service');
@@ -37,6 +38,11 @@ const {
 const {
   RemunerationService,
 } = require('../remuneration/remuneration.service');
+const {
+  EmsRole,
+  EmsUser,
+  EmsAuditLog,
+} = require('../auth/schemas/ems-rbac.schema');
 
 function createSdmsStub() {
   const unavailable = async () => {
@@ -54,6 +60,12 @@ function createServices(dataSource, studentDataSource) {
   const sdms = studentDataSource
     ? createSdmsService(studentDataSource)
     : createSdmsStub();
+
+  const users = new UsersService(
+    dataSource.getRepository(EmsRole),
+    dataSource.getRepository(EmsUser),
+    dataSource.getRepository(EmsAuditLog),
+  );
 
   const regulations = new RegulationsService(
     dataSource.getRepository(Regulation),
@@ -81,6 +93,7 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(Payment),
     dataSource.getRepository(ExamScope),
     dataSource.getRepository(ExamApplication),
+    dataSource.getRepository(SubjectResult),
     subjects,
     regulations,
     sdms,
@@ -96,7 +109,7 @@ function createServices(dataSource, studentDataSource) {
     sdms,
   );
 
-  const auth = new AuthService(sdms);
+  const auth = new AuthService(sdms, users);
 
   const professionals = new ProfessionalsService(
     dataSource.getRepository(Professional),
@@ -110,8 +123,12 @@ function createServices(dataSource, studentDataSource) {
     professionals,
   );
 
+  // Ensure system Super Admin role exists on startup
+  users.ensureSystemRole().catch(() => undefined);
+
   return {
     auth,
+    users,
     regulations,
     subjects,
     exam,

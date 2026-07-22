@@ -7,6 +7,7 @@ const compression = require('compression');
 const { config } = require('./config');
 const { errorHandler } = require('./middleware/errorHandler');
 const { createAuthMiddleware } = require('./middleware/auth');
+const { requestLogger } = require('./common/logger');
 const { asyncHandler } = require('./common/asyncHandler');
 const { AppError } = require('./common/errors');
 const { createRegulationsRoutes } = require('./regulations/regulations.routes');
@@ -25,12 +26,14 @@ const {
   createProfessionalsRoutes,
   createRemunerationRoutes,
 } = require('./remuneration/remuneration.routes');
+const { createUsersRoutes } = require('./auth/users.routes');
 
 function createApp(services) {
   const app = express();
   const auth = createAuthMiddleware(services);
   const api = express.Router();
 
+  app.use(requestLogger);
   app.use(helmet());
   app.use(compression());
   app.use(
@@ -108,7 +111,21 @@ function createApp(services) {
         });
         return;
       }
-      res.json(req.user);
+      res.json({
+        id: req.user.emsUserId
+          ? String(req.user.emsUserId)
+          : req.user.hrmsUserId,
+        username: req.user.username,
+        email: req.user.email ?? req.user.username,
+        fullName: req.user.fullName,
+        role: req.user.role,
+        emsRoleId: req.user.emsRoleId ?? null,
+        emsRoleName: req.user.emsRoleName ?? null,
+        privileges: req.user.privileges ?? [],
+        isSuperAdmin: !!req.user.isSuperAdmin,
+        hrmsUserId: req.user.hrmsUserId,
+        emsUserId: req.user.emsUserId ?? null,
+      });
     }),
   );
 
@@ -246,6 +263,7 @@ function createApp(services) {
   api.use('/settings', createSettingsRoutes(services));
   api.use('/professionals', createProfessionalsRoutes(services));
   api.use('/remuneration', createRemunerationRoutes(services));
+  api.use('/user-management', createUsersRoutes(services));
 
   app.use(`/${config.apiPrefix}`, api);
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));

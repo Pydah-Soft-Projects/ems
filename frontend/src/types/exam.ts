@@ -246,6 +246,13 @@ export interface StudentExamDetail {
       durationMinutes?: number | null;
       code: string;
       name: string;
+      supplyStatus: {
+        eligible: boolean;
+        grade: string | null;
+        gradePoints: number | null;
+        passed: boolean | null;
+        attemptNumber: number | null;
+      } | null;
     }[];
   };
   openTypes: ExamType[];

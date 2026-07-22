@@ -2,6 +2,7 @@
 
 const { Router } = require('express');
 const { asyncHandler } = require('../common/asyncHandler');
+const { requireStaff, requirePrivilege } = require('../middleware/auth');
 
 function parseId(value) {
   return parseInt(value, 10);
@@ -9,9 +10,11 @@ function parseId(value) {
 
 function createProfessionalsRoutes(services) {
   const router = Router();
+  router.use(requireStaff);
 
   router.get(
     '/',
+    requirePrivilege('professionals:read'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.professionals.findAll({
@@ -24,6 +27,7 @@ function createProfessionalsRoutes(services) {
 
   router.get(
     '/suggest',
+    requirePrivilege('professionals:read', 'remuneration:write'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.professionals.suggest(
@@ -36,6 +40,7 @@ function createProfessionalsRoutes(services) {
 
   router.get(
     '/:id',
+    requirePrivilege('professionals:read'),
     asyncHandler(async (req, res) => {
       res.json(await services.professionals.findOne(parseId(req.params.id)));
     }),
@@ -43,6 +48,7 @@ function createProfessionalsRoutes(services) {
 
   router.post(
     '/',
+    requirePrivilege('professionals:write'),
     asyncHandler(async (req, res) => {
       res.status(201).json(await services.professionals.create(req.body));
     }),
@@ -50,6 +56,7 @@ function createProfessionalsRoutes(services) {
 
   router.patch(
     '/:id',
+    requirePrivilege('professionals:write'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.professionals.update(parseId(req.params.id), req.body),
@@ -59,6 +66,7 @@ function createProfessionalsRoutes(services) {
 
   router.delete(
     '/:id',
+    requirePrivilege('professionals:write'),
     asyncHandler(async (req, res) => {
       await services.professionals.remove(parseId(req.params.id));
       res.status(204).send();
@@ -70,9 +78,11 @@ function createProfessionalsRoutes(services) {
 
 function createRemunerationRoutes(services) {
   const router = Router();
+  router.use(requireStaff);
 
   router.get(
     '/meta',
+    requirePrivilege('remuneration:read', 'remuneration:write'),
     asyncHandler(async (_req, res) => {
       res.json(services.remuneration.meta());
     }),
@@ -80,6 +90,7 @@ function createRemunerationRoutes(services) {
 
   router.post(
     '/simulate',
+    requirePrivilege('remuneration:write'),
     asyncHandler(async (req, res) => {
       res.status(201).json(
         await services.remuneration.simulateForPresentExams(req.user),
@@ -89,6 +100,7 @@ function createRemunerationRoutes(services) {
 
   router.get(
     '/exam-subjects/:examId',
+    requirePrivilege('remuneration:read', 'remuneration:write'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.remuneration.subjectsForExam(
@@ -101,6 +113,7 @@ function createRemunerationRoutes(services) {
 
   router.get(
     '/exam-branches/:examId',
+    requirePrivilege('remuneration:read', 'remuneration:write'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.remuneration.branchesForExam(parseId(req.params.examId)),
@@ -110,6 +123,7 @@ function createRemunerationRoutes(services) {
 
   router.get(
     '/',
+    requirePrivilege('remuneration:read'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.remuneration.findAll({
@@ -124,6 +138,7 @@ function createRemunerationRoutes(services) {
 
   router.get(
     '/:id',
+    requirePrivilege('remuneration:read'),
     asyncHandler(async (req, res) => {
       res.json(await services.remuneration.findOne(parseId(req.params.id)));
     }),
@@ -131,6 +146,7 @@ function createRemunerationRoutes(services) {
 
   router.post(
     '/',
+    requirePrivilege('remuneration:write'),
     asyncHandler(async (req, res) => {
       res.status(201).json(
         await services.remuneration.create(req.body, req.user),
@@ -140,6 +156,7 @@ function createRemunerationRoutes(services) {
 
   router.patch(
     '/:id',
+    requirePrivilege('remuneration:write'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.remuneration.update(
@@ -153,6 +170,7 @@ function createRemunerationRoutes(services) {
 
   router.post(
     '/:id/status',
+    requirePrivilege('remuneration:write'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.remuneration.updateStatus(
@@ -166,6 +184,7 @@ function createRemunerationRoutes(services) {
 
   router.delete(
     '/:id',
+    requirePrivilege('remuneration:delete'),
     asyncHandler(async (req, res) => {
       await services.remuneration.remove(parseId(req.params.id));
       res.status(204).send();
