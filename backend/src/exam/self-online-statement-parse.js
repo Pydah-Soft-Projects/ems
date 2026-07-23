@@ -43,6 +43,7 @@ function extractOrderRefs(text) {
     /\b(SO20\d{2}\d{6,})\b/gi,
     /\b(FM20\d{2}\d{6,})\b/gi,
     /\b(SO[-\s]?20\d{2}[-\s]?\d{4,})\b/gi,
+    /\b(E[0-9A-Z]{3})\b/gi, // New pattern for our short E-prefixed order refs
   ];
   for (const re of patterns) {
     let m;

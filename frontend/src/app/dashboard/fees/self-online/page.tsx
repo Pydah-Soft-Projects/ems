@@ -299,12 +299,17 @@ export default function SelfOnlineReconcilePage() {
         </PermissionGate>
 
         <Card>
-          <CardHeader title="Pending Self Online payments" />
+          <CardHeader
+            title="Awaiting verification payments"
+            description="Only payments already claimed by the student and waiting for bank reconciliation are shown here."
+          />
           <CardBody>
             {loading ? (
               <p className="text-sm text-[var(--muted)]">Loading…</p>
-            ) : pending.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No pending payments.</p>
+            ) : awaiting.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">
+                No awaiting-verification payments.
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -318,7 +323,7 @@ export default function SelfOnlineReconcilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pending.map((row) => (
+                    {awaiting.map((row) => (
                       <tr
                         key={row.id}
                         className="border-b border-[var(--border)]"

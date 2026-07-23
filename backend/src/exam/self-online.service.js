@@ -55,25 +55,22 @@ class SelfOnlineService {
     this.exam = examService;
   }
 
-  buildOrderRef(paymentId) {
-    const year = new Date().getFullYear();
-    return `SO${year}${String(paymentId).padStart(6, '0')}`;
+  async buildOrderRef(paymentId) {
+    // Generate a 3-character unique ID using the payment's auto-increment ID
+    // Payment ID is unique, so this will never have duplicates!
+    // Convert to base36 (0-9, A-Z) for short ID, pad to 3 chars
+    const shortId = paymentId.toString(36).toUpperCase().padStart(3, '0');
+    return `E${shortId}`;
   }
 
-  buildUpiDeepLink({ upiId, merchantName, amount, note, orderRef }) {
-    // Banks/apps often truncate `tn` from the left or keep only the first word.
-    // Put orderRef FIRST so it survives (e.g. "SO2026000026 Exam" → still has SO…).
-    // `tr` is also set, but many PSPs drop it from merchant statements.
-    const noteParts = [orderRef];
-    if (note && !String(note).toUpperCase().includes(String(orderRef).toUpperCase())) {
-      noteParts.push(String(note).trim());
-    }
+  buildUpiDeepLink({ upiId, merchantName, amount, orderRef }) {
+    // Only put order ref in tn (payment note) for maximum visibility
     const params = new URLSearchParams({
       pa: upiId,
       pn: merchantName,
       am: roundMoney(amount).toFixed(2),
       cu: 'INR',
-      tn: noteParts.join(' ').trim().slice(0, 50),
+      tn: orderRef,
       tr: orderRef,
     });
     return `upi://pay?${params.toString()}`;
@@ -288,13 +285,12 @@ class SelfOnlineService {
       }),
     );
 
-    const orderRef = this.buildOrderRef(payment.id);
+    const orderRef = await this.buildOrderRef(payment.id);
     payment.transactionReference = orderRef;
     const upiUrl = this.buildUpiDeepLink({
       upiId: cfg.upiId,
       merchantName: cfg.merchantName,
       amount,
-      note: cfg.paymentNote,
       orderRef,
     });
     const qrDataUrl = await QRCode.toDataURL(upiUrl, {
@@ -343,7 +339,6 @@ class SelfOnlineService {
         upiId: cfg.upiId,
         merchantName: cfg.merchantName,
         amount,
-        note: cfg.paymentNote,
         orderRef,
       });
     const qrDataUrl =
@@ -443,13 +438,13 @@ class SelfOnlineService {
       feeRecord: await this.exam.getFeeRecord(payment.feeRecordId),
       acknowledgement: {
         type: 'temporary',
-        title: 'Payment acknowledgement — awaiting verification',
+        title: 'Your payment is under verification',
         status: 'awaiting_verification',
         orderRef: refreshed.transactionReference,
         amount: roundMoney(refreshed.amountPaid),
         receiptNumber: refreshed.receiptNumber,
         message:
-          'This is not the final fee receipt. Accounts will verify against the merchant statement.',
+          "Don't panic! We will update the payment status in a few hours. You can check it on your dashboard. Thank you!",
       },
     };
   }
@@ -761,6 +756,8 @@ class SelfOnlineService {
       normalizeRef(txn.merchantReference),
       normalizeRef(txn.transactionReference),
       normalizeRef(txn.rawLine),
+      normalizeRef(txn.narration),
+      normalizeRef(txn.paymentNote), // Also check payment note
     ].filter(Boolean);
 
     if (orderRef && refs.some((r) => r.includes(orderRef))) {
@@ -830,6 +827,8 @@ class SelfOnlineService {
       studentUtr: this.exam.parseGateway(payment.gatewayResponse)?.studentUtr,
       createdAt: payment.paidAt,
     };
+    let bestSuggestion = null;
+    const suggestionRank = { medium: 2, low: 1 };
     for (const txn of unmatched) {
       const score = this.scoreMatch(payView, txn);
       if (score.autoEligible) {
@@ -842,13 +841,23 @@ class SelfOnlineService {
         return 'verified';
       }
       if (score.confidence === 'medium' || score.confidence === 'low') {
-        txn.matchStatus = 'suggested';
-        txn.matchConfidence = score.confidence;
-        txn.matchReason = score.reason;
-        txn.matchedPaymentId = payment.id;
-        await this.statementTxnRepo.save(txn);
-        return 'suggested';
+        const currentRank = suggestionRank[score.confidence] || 0;
+        const bestRank = bestSuggestion
+          ? suggestionRank[bestSuggestion.score.confidence] || 0
+          : 0;
+        if (!bestSuggestion || currentRank > bestRank) {
+          bestSuggestion = { txn, score };
+        }
       }
+    }
+    if (bestSuggestion) {
+      const { txn, score } = bestSuggestion;
+      txn.matchStatus = 'suggested';
+      txn.matchConfidence = score.confidence;
+      txn.matchReason = score.reason;
+      txn.matchedPaymentId = payment.id;
+      await this.statementTxnRepo.save(txn);
+      return 'suggested';
     }
     return null;
   }
@@ -888,15 +897,20 @@ class SelfOnlineService {
         return 'verified';
       }
       if (score.confidence === 'medium') {
-        txn.matchStatus = 'suggested';
-        txn.matchConfidence = score.confidence;
-        txn.matchReason = score.reason;
-        txn.matchedPaymentId = payment.id;
-        await this.statementTxnRepo.save(txn);
-        return 'suggested';
+        if (
+          !txn.matchedPaymentId ||
+          txn.matchStatus !== 'suggested' ||
+          txn.matchConfidence !== 'medium'
+        ) {
+          txn.matchStatus = 'suggested';
+          txn.matchConfidence = score.confidence;
+          txn.matchReason = score.reason;
+          txn.matchedPaymentId = payment.id;
+          await this.statementTxnRepo.save(txn);
+        }
       }
     }
-    return null;
+    return txn.matchStatus === 'suggested' ? 'suggested' : null;
   }
 
   async verifyMatch({ paymentId, merchantTxnId, actor, auto = false }) {

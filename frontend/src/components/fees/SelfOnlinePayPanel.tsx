@@ -38,18 +38,18 @@ export function SelfOnlinePayPanel({
   } | null>(null);
 
   const loadOrder = useCallback(async () => {
-    if (!record) return;
+    if (!record || ack) return; // Skip if we already have an acknowledgement
     setLoading(true);
     setError('');
-    setAck(null);
+    // Don't reset ack if we already have an acknowledgement from claiming payment
     try {
       const data = await api.createSelfOnlineOrder(record.id);
       setOrder(data);
       if (data.status === 'awaiting_verification') {
         setAck({
-          title: 'Awaiting verification',
+          title: 'Your payment is under verification',
           message:
-            'You already marked this payment. Accounts will confirm against the merchant statement.',
+            "Don't panic! We will update the payment status in a few hours. You can check it on your dashboard. Thank you!",
           receiptNumber: data.receiptNumber,
           orderRef: data.orderRef,
           amount: data.amount,
@@ -64,10 +64,10 @@ export function SelfOnlinePayPanel({
     } finally {
       setLoading(false);
     }
-  }, [record]);
+  }, [record, ack]);
 
   useEffect(() => {
-    if (open && record) {
+    if (open && record && !ack) { // Only load if we don't have an ack yet
       void loadOrder();
     }
     if (!open) {
@@ -76,7 +76,7 @@ export function SelfOnlinePayPanel({
       setUtr('');
       setError('');
     }
-  }, [open, record, loadOrder]);
+  }, [open, record, loadOrder, ack]);
 
   async function onClaim() {
     if (!order) return;

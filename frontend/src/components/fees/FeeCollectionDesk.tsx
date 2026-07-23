@@ -347,8 +347,8 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
           setSelfOnlineRecord(null);
           void load();
         }}
-        onClaimed={() => {
-          void load();
+        onClaimed={async () => {
+          // Don't call load() right now to avoid re-opening the dialog!
         }}
       />
 

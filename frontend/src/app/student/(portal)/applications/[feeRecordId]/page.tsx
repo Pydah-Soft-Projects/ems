@@ -574,10 +574,14 @@ export default function StudentApplyPage({
             <SelfOnlinePayPanel
               open={selfPayOpen && method === 'self_online'}
               record={record}
-              onClose={() => setSelfPayOpen(false)}
-              onClaimed={() => {
-                void load();
-              }}
+              onClose={() => {
+              setSelfPayOpen(false);
+              void load();
+            }}
+              onClaimed={async () => {
+              // Don't call load() right now to avoid re-opening the dialog!
+              // Wait for user to close the dialog, then load (if needed)
+            }}
             />
           </section>
         </div>
