@@ -769,13 +769,22 @@ class SelfOnlineService {
     }
 
     const studentUtr = normalizeRef(pay.studentUtr);
-    const txnUtr = normalizeRef(txn.utr);
-    if (studentUtr && txnUtr && studentUtr === txnUtr) {
-      return {
-        confidence: 'high',
-        reason: 'utr_match',
-        autoEligible: true,
-      };
+    if (studentUtr) {
+      const utrRefs = [
+        normalizeRef(txn.utr),
+        normalizeRef(txn.transactionReference),
+        normalizeRef(txn.internalBankRef),
+        normalizeRef(txn.rawLine),
+        normalizeRef(txn.narration),
+        normalizeRef(txn.paymentNote),
+      ].filter(Boolean);
+      if (utrRefs.some(r => r.includes(studentUtr))) {
+        return {
+          confidence: 'high',
+          reason: 'utr_match',
+          autoEligible: true,
+        };
+      }
     }
 
     // Amount + date window → suggest only
