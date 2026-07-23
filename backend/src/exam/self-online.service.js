@@ -830,7 +830,8 @@ class SelfOnlineService {
     }
     const unmatched = await this.statementTxnRepo.find({
       where: { matchStatus: 'unmatched' },
-      take: 500,
+      order: { id: 'DESC' },
+      take: 1000,
     });
     console.log(`  tryAutoMatchPayment: Checking ${unmatched.length} unmatched transactions`);
     const payView = {
