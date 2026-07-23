@@ -92,7 +92,7 @@ const Payment = new EntitySchema({
     amountPaid: { type: 'decimal', precision: 10, scale: 2 },
     paymentMode: { type: 'varchar', length: 20 },
     paymentMethod: { type: 'varchar', length: 30 },
-    status: { type: 'varchar', length: 20 },
+    status: { type: 'varchar', length: 30 },
     receiptNumber: { type: 'varchar', length: 100, unique: true },
     transactionReference: { type: 'varchar', length: 100, nullable: true },
     collectedBy: { type: 'varchar', length: 100, nullable: true },

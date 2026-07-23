@@ -856,6 +856,15 @@ export const api = {
     });
   },
 
+  autoMatchAllSelfOnline() {
+    return request<{
+      awaitingCount: number;
+      verifiedCount: number;
+    }>('/fees/self-online/auto-match-all', {
+      method: 'POST',
+    });
+  },
+
   // —— Professionals (external setters / evaluators) ——
 
   getProfessionals(search?: string) {

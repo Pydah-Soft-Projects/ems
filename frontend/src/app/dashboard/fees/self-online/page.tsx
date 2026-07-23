@@ -42,6 +42,11 @@ export default function SelfOnlineReconcilePage() {
   const [manualSaving, setManualSaving] = useState(false);
   const [rowFilter, setRowFilter] = useState<'all' | 'unmatched' | 'matched'>('all');
   const [directionFilter, setDirectionFilter] = useState<'all' | 'credit' | 'debit'>('all');
+  const [autoMatching, setAutoMatching] = useState(false);
+  const [autoMatchResult, setAutoMatchResult] = useState<{
+    awaitingCount: number;
+    verifiedCount: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +160,24 @@ export default function SelfOnlineReconcilePage() {
     }
   }
 
+  async function onAutoMatchAll() {
+    setAutoMatching(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await api.autoMatchAllSelfOnline();
+      setAutoMatchResult(result);
+      setSuccess(
+        `Auto-match complete: ${result.verifiedCount}/${result.awaitingCount} payments verified.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Auto-match failed.');
+    } finally {
+      setAutoMatching(false);
+    }
+  }
+
   const awaiting = pending.filter((p) => p.status === 'awaiting_verification');
 
   const filteredRows = parsedRows.filter((row) => {
@@ -220,6 +243,13 @@ export default function SelfOnlineReconcilePage() {
                   disabled={uploading || !file}
                 >
                   {uploading ? 'Uploading…' : 'Upload & parse'}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void onAutoMatchAll()}
+                  disabled={autoMatching}
+                >
+                  {autoMatching ? 'Auto-matching…' : 'Reconcile all'}
                 </Button>
                 <Button
                   type="button"

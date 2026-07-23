@@ -568,6 +568,15 @@ function createFeesRoutes(services) {
     }),
   );
 
+  router.post(
+    '/self-online/auto-match-all',
+    requireStaff,
+    requirePrivilege('fees:reconcile'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.selfOnline.runAutoMatchAll());
+    }),
+  );
+
   return router;
 }
 

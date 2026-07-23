@@ -242,13 +242,18 @@ function parseSbiTransactionBlock(block, header = {}) {
   if (!normalized || isNoiseBlock(normalized)) return null;
 
   const headerMatch = normalized.match(
-    /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:WDL TFR|DEP TFR|CEMTEX DEP|ATM WDL|POS|CHQ|TRF)[A-Z\s]*)/i,
+    /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:WDL TFR|DEP TFR|CEMTEX DEP|ATM WDL|POS|CHQ|TRF)[A-Z\s]*?)(?=\s*(?:UPI\/|NEFT\*|IMPS\b))/i,
   );
-  if (!headerMatch) return null;
+  // If that didn't match (no UPI/NEFT/IMPS), fall back to original
+  const headerMatchFallback = !headerMatch ? normalized.match(
+    /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:WDL TFR|DEP TFR|CEMTEX DEP|ATM WDL|POS|CHQ|TRF)[A-Z\s]*)/i,
+  ) : null;
+  const actualMatch = headerMatch || headerMatchFallback;
+  if (!actualMatch) return null;
 
-  const postDate = parseDateLoose(headerMatch[1]);
-  const valueDate = parseDateLoose(headerMatch[2]);
-  const txnType = headerMatch[3].trim().toUpperCase();
+  const postDate = parseDateLoose(actualMatch[1]);
+  const valueDate = parseDateLoose(actualMatch[2]);
+  const txnType = actualMatch[3].trim().toUpperCase();
 
   const amounts = parseAmountColumns(normalized);
   if (!amounts || amounts.amount == null || amounts.amount <= 0) return null;
@@ -256,9 +261,19 @@ function parseSbiTransactionBlock(block, header = {}) {
   const { internalBankRef, terminal } = extractInternalBankRef(normalized);
   const branchLocation = extractBranchLocation(normalized);
 
+  let narrationStart = normalized;
+  // Try to remove dates + txn type, stopping at UPI/NEFT/IMPS
+  const tempMatch = narrationStart.match(
+    /^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+(.*?)(?=\s*(?:UPI\/|NEFT\*|IMPS\b))/i,
+  );
+  if (tempMatch) {
+    narrationStart = narrationStart.replace(tempMatch[0], '');
+  } else {
+    // Fallback to original replacement if no UPI/NEFT/IMPS
+    narrationStart = narrationStart.replace(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+[A-Z\s]+/i, '');
+  }
   const narrationBody = repairBrokenUpiNarration(
-    normalized
-      .replace(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+[A-Z\s]+/i, '')
+    narrationStart
       .replace(/\b\d{13}\s+AT\s+\d{4,5}\b[\s\S]*?(?=-\s*[0-9]|$)/i, '')
       .replace(/-\s*(?:-\s*)?[0-9]+(?:,[0-9]{3})*\.[0-9]{2}[\s\S]*$/, '')
       .trim(),
@@ -272,12 +287,12 @@ function parseSbiTransactionBlock(block, header = {}) {
   const imps = !upi && !neft ? parseImpsNarration(narrationBody) : null;
   const payment = upi || neft || imps;
 
-  if (!payment?.utr && !/\bUPI\/|NEFT\*|IMPS\b/i.test(narrationBody)) {
-    return null;
-  }
-
   const refs = extractOrderRefs(normalized);
   const narration = narrationBody.slice(0, 2000);
+
+  if (!payment?.utr && !refs.length && !/\bUPI\/|NEFT\*|IMPS\b/i.test(narrationBody)) {
+    return null;
+  }
 
   return {
     postDate,

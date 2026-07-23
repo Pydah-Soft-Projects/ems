@@ -1170,6 +1170,25 @@ class SelfOnlineService {
     await this.statementTxnRepo.save(txn);
     return { ok: true };
   }
+
+  async runAutoMatchAll() {
+    // Get all awaiting-verification payments
+    const pending = await this.listPending();
+    const awaiting = pending.filter((p) => p.status === PaymentStatus.AWAITING_VERIFICATION);
+    let verifiedCount = 0;
+    
+    for (const payment of awaiting) {
+      const result = await this.tryAutoMatchPayment(payment.id);
+      if (result === 'verified') {
+        verifiedCount++;
+      }
+    }
+
+    return {
+      awaitingCount: awaiting.length,
+      verifiedCount,
+    };
+  }
 }
 
 module.exports = { SelfOnlineService };
