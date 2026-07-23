@@ -2,11 +2,13 @@
 
 /**
  * Parse merchant statement text / tabular rows into normalized txn objects.
- * PDF text is primary; CSV/XLS rows are secondary.
+ * Optimised for SBI account statement PDFs; CSV/XLS and pasted lines supported.
  */
 
 function roundMoney(n) {
-  return Math.round(Number(n) * 100) / 100;
+  if (n == null || n === '') return null;
+  const v = Math.round(Number(n) * 100) / 100;
+  return Number.isFinite(v) ? v : null;
 }
 
 function normalizeRef(value) {
@@ -15,171 +17,12 @@ function normalizeRef(value) {
   return s || null;
 }
 
-function looksLikePaymentNarration(text) {
-  if (!text) return false;
-  const s = String(text).trim();
-  if (s.length < 10) return false;
-  const compact = s.replace(/[^A-Z0-9]/gi, '');
-  const hasAmount = /(?:INR|Rs\.?|₹|\bCR\b|\bDR\b)/i.test(s) || /\b\d+(?:,\d{3})*(?:\.\d{1,2})\b/.test(s) || /\b\d+\.\d{2}\b/.test(compact);
-  const hasIdentifier = /\b(?:UPI|UTR|REF|REFNO|ORDER|SO\d|FM\d|CR|DR|NEFT|IMPS|RTGS|HDFC|IFSC)\b/i.test(s) || /\b(?:SO|FM)\d{4,}\b/i.test(s) || /(SO|FM)\d{4,}/i.test(compact);
-  const hasCommonNoise = /\b(balance|closing balance|opening balance|interest|charges|tax|service|statement|txn|credit|debit)\b/i.test(s);
-  if (hasCommonNoise && !hasIdentifier) return false;
-  return hasAmount && (hasIdentifier || /\b(?:UPI|CR|DR|NEFT|IMPS|RTGS)\//.test(s));
-}
-
-/** Extract SO… / FM… / order-like tokens from free text */
-function extractOrderRefs(text) {
-  if (!text) return [];
-  const found = new Set();
-  const re = /\b(SO[-\s]?\d{4,}|FM[-\s]?\d{4,}|SO-\d+|FM-\d+|SO|FM)\b/gi;
-  let m;
-  while ((m = re.exec(String(text))) !== null) {
-    found.add(m[1].replace(/\s+/g, '').toUpperCase());
-  }
-  const compact = String(text).replace(/[^A-Z0-9]/gi, '');
-  const compactMatches = compact.match(/(SO\d{4,}|FM\d{4,})/gi) || [];
-  for (const match of compactMatches) {
-    found.add(String(match).toUpperCase());
-  }
-  return [...found];
-}
-
-function extractPayerName(text) {
-  if (!text) return null;
-  const s = String(text).trim();
-  const direct = s.match(/UPI\/(?:CR|DR)\/[0-9]{8,22}\/?([^/\n]+)/i);
-  if (direct?.[1]) {
-    return direct[1].replace(/\s+/g, ' ').trim();
-  }
-  const fallback = s.match(/(?:^|\s)([A-Z][A-Z .'-]{2,})(?:\s+\d{2}\/)/i);
-  if (fallback?.[1]) {
-    return fallback[1].replace(/\s+/g, ' ').trim();
-  }
-  return null;
-}
-function extractNarrationTokens(text) {
-  if (!text) return [];
-  const s = String(text)
-    .replace(/\s+/g, ' ')
-    .trim();
-  const tokens = s
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
-  return tokens;
-}
-
-function extractIfsc(text) {
-  if (!text) return null;
-  const match = String(text).match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/i);
-  return match?.[1]?.toUpperCase() || null;
-}
-
-function extractNeftReference(text) {
-  if (!text) return null;
-  const match = String(text).match(/(?:NEFT|IMPS|RTGS)[^\n]*?([A-Z0-9]{6,20})/i);
-  return match?.[1]?.toUpperCase() || null;
-}
-
-function extractTerminal(text) {
-  if (!text) return null;
-  const match = String(text).match(/AT\s*([A-Z0-9-]{2,10})/i);
-  return match?.[1]?.toUpperCase() || null;
-}
-
-function extractLocation(text) {
-  if (!text) return null;
-  let s = String(text);
-  s = s.replace(/--.*$/, '').trim();
-  const match = s.match(/\b([A-Z][A-Z\s(\)\-]{2,80})\b$/i);
-  return match?.[1]?.trim() || null;
-}
-/**
- * Extract UTR from bank / UPI narration.
- * Common SBI-style: UPI/CR/696846634477/PayerName/...
- */
-function extractUtr(text) {
-  if (!text) return null;
-  const patterns = [
-    /\bNEFT\*[^*]*\*([A-Z0-9]{8,20})\*/i,
-    /\b([A-Z]{4}\d{10,14})\b/i,
-    /\bUPI\/(?:CR|DR)\/([0-9]{10,22})\b/i,
-    /\bUTR[:\s#.\-\/]*([A-Z0-9]{8,22})\b/i,
-    /\bUPI[:\s#\-]*Ref[:\s#.\-\/]*([A-Z0-9]{8,22})\b/i,
-    /\bRef(?:erence)?(?:\s*No)?[:\s#.\-\/]*([A-Z0-9]{8,22})\b/i,
-    /\b([0-9]{12,22})\b/,
-  ];
-  for (const re of patterns) {
-    const m = String(text).match(re);
-    if (m?.[1]) return m[1].toUpperCase();
-  }
-  return null;
-}
-
-function extractAmount(text) {
-  if (!text) return null;
-  const s = String(text);
-  // Prefer trailing money columns: "... -- 1.00 1.36" or "... 1.00 Cr"
-  const trailing = s.match(
-    /(?:--|−|-)?\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:[0-9]+(?:,[0-9]{3})*\.[0-9]{2})?\s*(?:CR|DR|Cr|Dr)?\s*$/,
-  );
-  if (trailing?.[1]) {
-    return roundMoney(trailing[1].replace(/,/g, ''));
-  }
-  const patterns = [
-    /(?:INR|Rs\.?|₹)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/i,
-    /\b([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\b/,
-  ];
-  for (const re of patterns) {
-    const m = s.match(re);
-    if (m?.[1]) {
-      return roundMoney(m[1].replace(/,/g, ''));
-    }
-  }
-  return null;
-}
-
-/**
- * Parse a single pasted bank narration line into a txn candidate.
- */
-function parseBankNarrationLine(line) {
-  const raw = String(line || '').trim();
-  if (!raw) return null;
-  const normalized = raw.replace(/\s+/g, ' ');
-  if (!looksLikePaymentNarration(normalized)) return null;
-  const amount = extractAmount(normalized);
-  const utr = extractUtr(normalized);
-  const refs = extractOrderRefs(normalized);
-  const payerName = extractPayerName(normalized);
-  const ifsc = extractIfsc(normalized);
-  const neftRef = extractNeftReference(normalized);
-  const terminal = extractTerminal(normalized);
-  const location = extractLocation(normalized);
-  const hasIdentifier = Boolean(utr || refs.length || payerName || ifsc || neftRef || terminal || location);
-  if (amount == null && !hasIdentifier) return null;
-  return {
-    utr: utr || neftRef || null,
-    merchantReference: refs[0] || null,
-    transactionReference: refs[0] || neftRef || null,
-    amount: amount != null ? amount : null,
-    txnDate: parseDateLoose(raw.slice(0, 40)),
-    payerName: payerName || null,
-    payerUpi: null,
-    statusRaw: 'success',
-    rawLine: normalized.slice(0, 2000),
-    ifsc,
-    terminal,
-    location,
-    narrationTokens: extractNarrationTokens(normalized),
-  };
-}
-
 function parseDateLoose(value) {
   if (!value) return null;
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   const s = String(value).trim();
-  const d = new Date(s);
-  if (!Number.isNaN(d.getTime())) return d;
+  const iso = new Date(s);
+  if (!Number.isNaN(iso.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(s)) return iso;
   const m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (m) {
     const day = parseInt(m[1], 10);
@@ -192,46 +35,441 @@ function parseDateLoose(value) {
   return null;
 }
 
-/**
- * Split PDF / plain text into candidate transaction lines and parse.
- */
-function parseStatementText(rawText) {
-  const text = String(rawText || '');
-  const blocks = text
-    .split(/\n(?=\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/)
-    .map((s) => s.replace(/\s+/g, ' ').trim())
-    .filter((s) => s.length > 20);
+/** EMS order refs only — avoid false positives like bare "SO" + bank internal ref */
+function extractOrderRefs(text) {
+  if (!text) return [];
+  const found = new Set();
+  const patterns = [
+    /\b(SO20\d{2}\d{6,})\b/gi,
+    /\b(FM20\d{2}\d{6,})\b/gi,
+    /\b(SO[-\s]?20\d{2}[-\s]?\d{4,})\b/gi,
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(String(text))) !== null) {
+      found.add(m[1].replace(/[\s-]/g, '').toUpperCase());
+    }
+  }
+  return [...found];
+}
 
+function parseAmountColumns(text) {
+  const s = String(text).trim();
+  let m = s.match(
+    /-\s*-\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s+([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:CR|DR)?\s*$/i,
+  );
+  if (m) {
+    const creditAmount = roundMoney(m[1].replace(/,/g, ''));
+    return {
+      debitAmount: null,
+      creditAmount,
+      runningBalance: roundMoney(m[2].replace(/,/g, '')),
+      txnDirection: 'credit',
+      amount: creditAmount,
+    };
+  }
+  m = s.match(
+    /--\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s+([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:CR|DR)?\s*$/i,
+  );
+  if (m) {
+    const creditAmount = roundMoney(m[1].replace(/,/g, ''));
+    return {
+      debitAmount: null,
+      creditAmount,
+      runningBalance: roundMoney(m[2].replace(/,/g, '')),
+      txnDirection: 'credit',
+      amount: creditAmount,
+    };
+  }
+  m = s.match(
+    /-\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*-\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:CR|DR)?\s*$/i,
+  );
+  if (m) {
+    const debitAmount = roundMoney(m[1].replace(/,/g, ''));
+    return {
+      debitAmount,
+      creditAmount: null,
+      runningBalance: roundMoney(m[2].replace(/,/g, '')),
+      txnDirection: 'debit',
+      amount: debitAmount,
+    };
+  }
+  return null;
+}
+
+function repairBrokenUpiNarration(text) {
+  return String(text || '')
+    .replace(/\/([A-Z]{1,3})\s+IN\//gi, '/$1IN/')
+    .replace(/\/([A-Z]{1,4})\s+(\d{6,15})\//gi, '/$1/$2/')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanPaymentNote(note) {
+  if (!note) return null;
+  let s = String(note).trim();
+  s = s.split(/\s+\d{13}\s+AT\s+/i)[0].trim();
+  s = s.split(/\s+(?:DEP TFR|WDL TFR|CEMTEX DEP)\b/i)[0].trim();
+  s = s.split(/\s+\d{2}\/\d{2}\/\d{4}\b/)[0].trim();
+  s = s.split(/\s+-\s+-?\s*[0-9]/)[0].trim();
+  if (!s) return null;
+  const token = s.split(/\s+/)[0];
+  return token.slice(0, 100) || null;
+}
+
+function parseUpiNarration(rawNarration, fallbackDirection) {
+  const flat = repairBrokenUpiNarration(rawNarration);
+  const trimmed = flat.replace(/\s+\d{13}\s+AT\s+[\s\S]*$/i, '').trim();
+  const match = trimmed.match(
+    /\bUPI\/(CR|DR|DRC)\/([0-9]{10,22})(?:\/([^/]*))?(?:\/([^/]*))?(?:\/([^/]*))?(?:\/(.*))?/i,
+  );
+  if (!match) return null;
+
+  const rail = `UPI/${match[1].toUpperCase()}`;
+  const utr = match[2];
+  const name = (match[3] || '').trim() || null;
+  const bankCode = (match[4] || '').trim().toUpperCase() || null;
+  const vpaOrMobile = (match[5] || '').trim() || null;
+  const note = cleanPaymentNote((match[6] || '').trim() || null);
+
+  let txnDirection = fallbackDirection;
+  if (match[1].toUpperCase() === 'CR' || match[1].toUpperCase() === 'DRC') {
+    txnDirection = 'credit';
+  } else if (match[1].toUpperCase() === 'DR') {
+    txnDirection = 'debit';
+  }
+
+  const isCredit = txnDirection === 'credit';
+
+  return {
+    paymentMethod: 'UPI',
+    paymentRail: rail,
+    txnDirection,
+    utr,
+    payerName: isCredit ? name : null,
+    payeeName: isCredit ? null : name,
+    payerBankCode: bankCode,
+    payerUpi: vpaOrMobile,
+    paymentNote: note,
+  };
+}
+
+function parseNeftNarration(rawNarration) {
+  const flat = String(rawNarration || '').replace(/\s+/g, ' ').trim();
+  const match = flat.match(/\bNEFT\*([^*]+)\*([^*]+)\*(.+?)(?:\s+\d{13}\s+AT|\s*$)/i);
+  if (!match) return null;
+
+  return {
+    paymentMethod: 'NEFT',
+    paymentRail: 'NEFT',
+    txnDirection: 'credit',
+    ifsc: match[1].trim().toUpperCase(),
+    utr: match[2].trim().toUpperCase(),
+    payerName: match[3].trim() || null,
+    payeeName: null,
+    payerBankCode: match[1].trim().slice(0, 4).toUpperCase(),
+    payerUpi: null,
+    paymentNote: null,
+  };
+}
+
+function parseImpsNarration(rawNarration) {
+  const flat = String(rawNarration || '').replace(/\s+/g, ' ').trim();
+  if (!/\bIMPS\b/i.test(flat)) return null;
+  const utr = flat.match(/\bIMPS[^A-Z0-9]*([A-Z0-9]{8,20})\b/i)?.[1]?.toUpperCase();
+  if (!utr) return null;
+  return {
+    paymentMethod: 'IMPS',
+    paymentRail: 'IMPS',
+    txnDirection: flat.includes('/DR/') ? 'debit' : 'credit',
+    utr,
+    payerName: null,
+    payeeName: null,
+    payerBankCode: null,
+    payerUpi: null,
+    paymentNote: null,
+    ifsc: extractIfsc(flat),
+  };
+}
+
+function extractIfsc(text) {
+  if (!text) return null;
+  const match = String(text).match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/i);
+  return match?.[1]?.toUpperCase() || null;
+}
+
+function extractInternalBankRef(text) {
+  const match = String(text).match(/\b(\d{13})\s+AT\s+(\d{4,5})\b/i);
+  if (!match) return { internalBankRef: null, terminal: null };
+  return {
+    internalBankRef: match[1],
+    terminal: match[2],
+  };
+}
+
+function extractBranchLocation(text) {
+  const match = String(text).match(
+    /\b([A-Z][A-Z0-9\s(\)\-/]{2,80})\s+-\s*(?:[0-9]|$)/,
+  );
+  if (match) return match[1].replace(/\s+/g, ' ').trim();
+  const loc = String(text).match(
+    /AT\s+\d{4,5}\s+([A-Z][A-Z0-9\s(\)\-/]{2,80}?)(?:\s+-|\s+\d|\s*$)/i,
+  );
+  return loc?.[1]?.replace(/\s+/g, ' ').trim() || null;
+}
+
+function isNoiseBlock(block) {
+  const s = String(block || '');
+  if (/Account Summary|CIF Number|STATEMENT OF ACCOUNT|Page no\.|Statement Summary|Please do not share your ATM/i.test(s)) {
+    return true;
+  }
+  if (!/\b(?:UPI\/|NEFT\*|IMPS\b)/i.test(s) && !parseAmountColumns(s)) {
+    return true;
+  }
+  return false;
+}
+
+function inferTxnDirectionFromType(txnType) {
+  const t = String(txnType || '').toUpperCase();
+  if (t.includes('DEP') || t.includes('CEMTEX')) return 'credit';
+  if (t.includes('WDL')) return 'debit';
+  return null;
+}
+
+function parseSbiTransactionBlock(block, header = {}) {
+  const normalized = String(block || '').replace(/\s+/g, ' ').trim();
+  if (!normalized || isNoiseBlock(normalized)) return null;
+
+  const headerMatch = normalized.match(
+    /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+((?:WDL TFR|DEP TFR|CEMTEX DEP|ATM WDL|POS|CHQ|TRF)[A-Z\s]*)/i,
+  );
+  if (!headerMatch) return null;
+
+  const postDate = parseDateLoose(headerMatch[1]);
+  const valueDate = parseDateLoose(headerMatch[2]);
+  const txnType = headerMatch[3].trim().toUpperCase();
+
+  const amounts = parseAmountColumns(normalized);
+  if (!amounts || amounts.amount == null || amounts.amount <= 0) return null;
+
+  const { internalBankRef, terminal } = extractInternalBankRef(normalized);
+  const branchLocation = extractBranchLocation(normalized);
+
+  const narrationBody = repairBrokenUpiNarration(
+    normalized
+      .replace(/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+[A-Z\s]+/i, '')
+      .replace(/\b\d{13}\s+AT\s+\d{4,5}\b[\s\S]*?(?=-\s*[0-9]|$)/i, '')
+      .replace(/-\s*(?:-\s*)?[0-9]+(?:,[0-9]{3})*\.[0-9]{2}[\s\S]*$/, '')
+      .trim(),
+  );
+
+  const fallbackDirection =
+    amounts.txnDirection || inferTxnDirectionFromType(txnType);
+
+  const upi = parseUpiNarration(narrationBody, fallbackDirection);
+  const neft = !upi ? parseNeftNarration(narrationBody) : null;
+  const imps = !upi && !neft ? parseImpsNarration(narrationBody) : null;
+  const payment = upi || neft || imps;
+
+  if (!payment?.utr && !/\bUPI\/|NEFT\*|IMPS\b/i.test(narrationBody)) {
+    return null;
+  }
+
+  const refs = extractOrderRefs(normalized);
+  const narration = narrationBody.slice(0, 2000);
+
+  return {
+    postDate,
+    valueDate,
+    txnDate: postDate,
+    txnType,
+    paymentMethod: payment?.paymentMethod || null,
+    paymentRail: payment?.paymentRail || null,
+    txnDirection: payment?.txnDirection || amounts.txnDirection,
+    utr: payment?.utr || null,
+    internalBankRef,
+    merchantReference: refs[0] || null,
+    transactionReference: refs[0] || payment?.utr || null,
+    ifsc: payment?.ifsc || extractIfsc(narrationBody),
+    terminal,
+    branchLocation,
+    payerName: payment?.payerName || null,
+    payeeName: payment?.payeeName || null,
+    payerBankCode: payment?.payerBankCode || null,
+    payerUpi: payment?.payerUpi || null,
+    receiverBankCode: header.receiverBankCode || null,
+    receiverIfsc: header.receiverIfsc || null,
+    debitAmount: amounts.debitAmount,
+    creditAmount: amounts.creditAmount,
+    amount: amounts.amount,
+    runningBalance: amounts.runningBalance,
+    paymentNote: payment?.paymentNote || null,
+    narration,
+    rawLine: normalized.slice(0, 2000),
+    statusRaw: 'success',
+  };
+}
+
+function parseStatementHeader(rawText) {
+  const text = String(rawText || '');
+  const header = {
+    bankName: null,
+    branchName: null,
+    branchCode: null,
+    receiverIfsc: null,
+    receiverBankCode: null,
+    accountNumber: null,
+    accountHolderName: null,
+    statementFrom: null,
+    statementTo: null,
+    openingBalance: null,
+    closingBalance: null,
+    totalDebits: null,
+    totalCredits: null,
+    debitCount: null,
+    creditCount: null,
+  };
+
+  if (/State Bank of India/i.test(text)) header.bankName = 'State Bank of India';
+
+  const ifscMatch = text.match(/\b(SBIN\d{7})\b/i);
+  if (ifscMatch) {
+    header.receiverIfsc = ifscMatch[1].toUpperCase();
+    header.receiverBankCode = 'SBIN';
+  }
+
+  const branchNameMatch = text.match(/Branch Name\s*:\s*([A-Z0-9\s]+?)(?:\s+Balance|\s*$)/im);
+  if (branchNameMatch) header.branchName = branchNameMatch[1].trim();
+
+  const branchCodeMatch = text.match(/Branch Code[\s\S]{0,40}?:\s*(\d{4,5})/i);
+  if (branchCodeMatch) header.branchCode = branchCodeMatch[1];
+
+  const acctMatch = text.match(/Account Number[\s\S]{0,80}?(\d{10,18})/i);
+  if (acctMatch) header.accountNumber = acctMatch[1];
+
+  const welcomeMatch = text.match(/Welcome:\s*\n?\s*(Mr\.|Mrs\.|Ms\.|Dr\.)?\s*([A-Za-z .]+?)(?:\n|C\/O)/i);
+  if (welcomeMatch) {
+    header.accountHolderName = `${welcomeMatch[1] || ''} ${welcomeMatch[2]}`.trim();
+  }
+
+  const periodMatch = text.match(/Statement From\s*:\s*(\d{2}-\d{2}-\d{4})\s+to\s+(\d{2}-\d{2}-\d{4})/i);
+  if (periodMatch) {
+    header.statementFrom = parseDateLoose(periodMatch[1].replace(/-/g, '/'));
+    header.statementTo = parseDateLoose(periodMatch[2].replace(/-/g, '/'));
+  }
+
+  const summaryMatch = text.match(
+    /Brought Forward[\s\S]*?Closing Balance[\s\S]*?([0-9,]+\.\d{2})\s*CR?\s+([0-9,]+\.\d{2})\s+([0-9,]+\.\d{2})\s+([0-9,]+\.\d{2})\s*CR?\s+(\d+)\s+(\d+)/i,
+  );
+  if (summaryMatch) {
+    header.openingBalance = roundMoney(summaryMatch[1].replace(/,/g, ''));
+    header.totalCredits = roundMoney(summaryMatch[2].replace(/,/g, ''));
+    header.totalDebits = roundMoney(summaryMatch[3].replace(/,/g, ''));
+    header.closingBalance = roundMoney(summaryMatch[4].replace(/,/g, ''));
+    header.debitCount = parseInt(summaryMatch[5], 10);
+    header.creditCount = parseInt(summaryMatch[6], 10);
+  }
+
+  return header;
+}
+
+function splitTransactionBlocks(rawText) {
+  const text = String(rawText || '');
+  return text
+    .split(/\n(?=\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s+\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s+(?:WDL TFR|DEP TFR|CEMTEX DEP|ATM WDL|POS|CHQ|TRF))/i)
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s.length > 25);
+}
+
+function parseStatementText(rawText) {
+  const header = parseStatementHeader(rawText);
+  const blocks = splitTransactionBlocks(rawText);
   const rows = [];
+
   for (const block of blocks) {
-    const parsed = parseBankNarrationLine(block);
+    const parsed = parseSbiTransactionBlock(block, header);
     if (!parsed) continue;
-    if (parsed.amount != null && parsed.amount <= 0) continue;
-    if (!parsed.utr && !parsed.merchantReference && !parsed.transactionReference) continue;
+    if (!parsed.utr && !parsed.merchantReference) continue;
     rows.push(parsed);
   }
 
   if (!rows.length) {
-    const segments = text
-      .split(/(?=\bUPI\/(?:CR|DR)\/)/gi)
+    const segments = String(rawText || '')
+      .split(/(?=\bUPI\/(?:CR|DR|DRC)\/)/gi)
       .map((s) => s.replace(/\s+/g, ' ').trim())
       .filter((s) => s.length > 12);
     for (const segment of segments) {
-      const parsed = parseBankNarrationLine(segment);
+      const parsed = parseBankNarrationLine(segment, header);
       if (!parsed) continue;
-      if (parsed.amount != null && parsed.amount <= 0) continue;
-      if (!parsed.utr && !parsed.merchantReference && !parsed.transactionReference) continue;
+      if (!parsed.utr && !parsed.merchantReference) continue;
       rows.push(parsed);
     }
   }
 
-  return dedupeRows(rows);
+  return { header, rows: dedupeRows(rows) };
 }
 
-/**
- * Parse array of objects from CSV/XLS (header-normalized keys).
- */
-function parseTabularRows(objects) {
+function parseBankNarrationLine(line, header = {}) {
+  const raw = String(line || '').trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, ' ');
+
+  const sbiBlock = parseSbiTransactionBlock(normalized, header);
+  if (sbiBlock) return sbiBlock;
+
+  if (!/\b(?:UPI\/|NEFT\*|IMPS\b)/i.test(normalized)) return null;
+
+  const amounts = parseAmountColumns(normalized);
+  const upi = parseUpiNarration(normalized, amounts?.txnDirection);
+  const neft = !upi ? parseNeftNarration(normalized) : null;
+  const imps = !upi && !neft ? parseImpsNarration(normalized) : null;
+  const payment = upi || neft || imps;
+  if (!payment) return null;
+
+  const refs = extractOrderRefs(normalized);
+  const amount =
+    amounts?.amount ??
+    roundMoney(
+      normalized.match(/\b([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\b/)?.[1]?.replace(/,/g, ''),
+    );
+
+  if (amount != null && amount <= 0) return null;
+
+  const { internalBankRef, terminal } = extractInternalBankRef(normalized);
+
+  return {
+    postDate: parseDateLoose(normalized.slice(0, 12)),
+    valueDate: parseDateLoose(normalized.slice(0, 12)),
+    txnDate: parseDateLoose(normalized.slice(0, 12)),
+    txnType: null,
+    paymentMethod: payment.paymentMethod,
+    paymentRail: payment.paymentRail,
+    txnDirection: payment.txnDirection || amounts?.txnDirection,
+    utr: payment.utr,
+    internalBankRef,
+    merchantReference: refs[0] || null,
+    transactionReference: refs[0] || payment.utr || null,
+    ifsc: payment.ifsc || extractIfsc(normalized),
+    terminal,
+    branchLocation: extractBranchLocation(normalized),
+    payerName: payment.payerName,
+    payeeName: payment.payeeName,
+    payerBankCode: payment.payerBankCode,
+    payerUpi: payment.payerUpi,
+    receiverBankCode: header.receiverBankCode || null,
+    receiverIfsc: header.receiverIfsc || null,
+    debitAmount: amounts?.debitAmount ?? (payment.txnDirection === 'debit' ? amount : null),
+    creditAmount: amounts?.creditAmount ?? (payment.txnDirection === 'credit' ? amount : null),
+    amount,
+    runningBalance: amounts?.runningBalance ?? null,
+    paymentNote: payment.paymentNote,
+    narration: normalized.slice(0, 2000),
+    rawLine: normalized.slice(0, 2000),
+    statusRaw: 'success',
+  };
+}
+
+function parseTabularRows(objects, header = {}) {
   const rows = [];
   for (const obj of objects) {
     if (!obj || typeof obj !== 'object') continue;
@@ -239,76 +477,71 @@ function parseTabularRows(objects) {
     for (const [k, v] of Object.entries(obj)) {
       map[String(k).trim().toLowerCase().replace(/\s+/g, '_')] = v;
     }
-    
-    const details = String(map.details || map.transaction_details || map.description || '').trim();
-    
-    let amountRaw = map.credit ?? map.debit ?? map.amount ?? map.txn_amount ?? map.transaction_amount ?? map.paid_amount ?? map.credit_amount;
-    if (amountRaw == null || amountRaw === '') continue;
-    const amount = roundMoney(String(amountRaw).replace(/,/g, '').replace(/[₹rs\.]/gi, ''));
-    if (!Number.isFinite(amount) || amount <= 0) continue;
 
-    const refNo = normalizeRef(
-      map.ref_no ??
-        map.reference_no ??
-        map.cheque_no ??
-        map.utr ??
-        map.utr_number ??
-        map.upi_ref,
-    );
-    const utr = refNo || extractUtr(details);
+    const details = String(
+      map.details || map.transaction_details || map.description || map.narration || '',
+    ).trim();
+
+    const debitRaw = map.debit ?? map.debit_amount;
+    const creditRaw = map.credit ?? map.credit_amount;
+    let debitAmount = debitRaw != null && debitRaw !== '' ? roundMoney(String(debitRaw).replace(/,/g, '').replace(/[₹rs\.]/gi, '')) : null;
+    let creditAmount = creditRaw != null && creditRaw !== '' ? roundMoney(String(creditRaw).replace(/,/g, '').replace(/[₹rs\.]/gi, '')) : null;
+
+    let amountRaw = map.amount ?? map.txn_amount ?? map.transaction_amount;
+    if (amountRaw != null && amountRaw !== '') {
+      const parsed = roundMoney(String(amountRaw).replace(/,/g, '').replace(/[₹rs\.]/gi, ''));
+      if (debitAmount == null && creditAmount == null) {
+        if (map.type && /debit|dr/i.test(String(map.type))) debitAmount = parsed;
+        else creditAmount = parsed;
+      }
+    }
+
+    const amount = creditAmount ?? debitAmount;
+    if (amount == null || amount <= 0) continue;
+
+    const postDate = parseDateLoose(map.post_date ?? map.date ?? map.txn_date);
+    const valueDate = parseDateLoose(map.value_date ?? map.post_date ?? map.date);
+
+    const parsedLine = parseBankNarrationLine(details || JSON.stringify(map), header);
+    const utr =
+      normalizeRef(map.utr ?? map.utr_number ?? map.upi_ref ?? map.ref_no) ||
+      parsedLine?.utr;
     const refs = extractOrderRefs(details);
-    const payerName = extractPayerName(details);
-    const ifsc = extractIfsc(details);
-    const neftRef = extractNeftReference(details);
-    const terminal = extractTerminal(details);
-    const location = extractLocation(details);
-    
-    const merchantReference = normalizeRef(
-      refs[0] ??
-        map.merchant_reference ??
-        map.merchant_ref ??
-        map.order_id ??
-        map.transaction_note ??
-        map.remarks ??
-        map.tr,
-    );
-    const transactionReference = normalizeRef(
-      refs[0] ??
-        map.transaction_reference ??
-        map.txn_ref ??
-        map.transaction_id ??
-        merchantReference,
-    );
-    
-    const txnDate = parseDateLoose(
-      map.value_date ??
-        map.post_date ??
-        map.date ??
-        map.txn_date ??
-        map.transaction_date ??
-        map.payment_date ??
-        map.time,
-    );
-    const statusRaw = String(
-      map.status ?? map.txn_status ?? map.payment_status ?? 'success',
-    ).toLowerCase();
-
-    const balance = map.balance ? roundMoney(String(map.balance).replace(/,/g, '')) : null;
 
     rows.push({
-      utr: utr || neftRef || null,
-      merchantReference: merchantReference || null,
-      transactionReference: transactionReference || null,
+      postDate,
+      valueDate,
+      txnDate: postDate || valueDate,
+      txnType: map.txn_type ?? map.type ?? parsedLine?.txnType ?? null,
+      paymentMethod: parsedLine?.paymentMethod ?? (details.includes('UPI') ? 'UPI' : null),
+      paymentRail: parsedLine?.paymentRail ?? null,
+      txnDirection:
+        creditAmount != null ? 'credit' : debitAmount != null ? 'debit' : parsedLine?.txnDirection,
+      utr,
+      internalBankRef: parsedLine?.internalBankRef ?? null,
+      merchantReference:
+        normalizeRef(refs[0] ?? map.merchant_reference ?? map.order_id) || null,
+      transactionReference:
+        normalizeRef(refs[0] ?? map.transaction_reference ?? utr) || null,
+      ifsc: parsedLine?.ifsc ?? extractIfsc(details),
+      terminal: parsedLine?.terminal ?? null,
+      branchLocation: parsedLine?.branchLocation ?? null,
+      payerName: parsedLine?.payerName ?? map.payer_name ?? null,
+      payeeName: parsedLine?.payeeName ?? null,
+      payerBankCode: parsedLine?.payerBankCode ?? null,
+      payerUpi: parsedLine?.payerUpi ?? map.payer_upi ?? map.upi_id ?? map.vpa ?? null,
+      receiverBankCode: header.receiverBankCode ?? null,
+      receiverIfsc: header.receiverIfsc ?? null,
+      debitAmount,
+      creditAmount,
       amount,
-      txnDate,
-      payerName: payerName || null,
-      payerUpi: map.payer_upi ?? map.upi_id ?? map.vpa ?? null,
-      statusRaw,
+      runningBalance: map.balance
+        ? roundMoney(String(map.balance).replace(/,/g, ''))
+        : parsedLine?.runningBalance,
+      paymentNote: parsedLine?.paymentNote ?? map.remarks ?? null,
+      narration: details.slice(0, 2000),
       rawLine: details.slice(0, 2000),
-      ifsc,
-      terminal,
-      location,
-      balance,
+      statusRaw: String(map.status ?? 'success').toLowerCase(),
     });
   }
   return dedupeRows(rows);
@@ -318,8 +551,8 @@ function dedupeRows(rows) {
   const seen = new Set();
   const out = [];
   for (const r of rows) {
-    const key = `${r.utr || ''}|${r.merchantReference || ''}|${r.amount}|${
-      r.txnDate ? new Date(r.txnDate).toISOString().slice(0, 10) : ''
+    const key = `${r.utr || ''}|${r.txnDirection || ''}|${r.amount}|${
+      r.postDate ? new Date(r.postDate).toISOString().slice(0, 10) : ''
     }|${(r.rawLine || '').slice(0, 80)}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -328,10 +561,27 @@ function dedupeRows(rows) {
   return out;
 }
 
+/** @deprecated use parseAmountColumns — kept for tests */
+function extractAmount(text) {
+  return parseAmountColumns(text)?.amount ?? null;
+}
+
+/** @deprecated */
+function extractUtr(text) {
+  return (
+    parseUpiNarration(text)?.utr ||
+    parseNeftNarration(text)?.utr ||
+    null
+  );
+}
+
 module.exports = {
   parseStatementText,
+  parseStatementHeader,
   parseTabularRows,
   parseBankNarrationLine,
+  parseSbiTransactionBlock,
+  parseAmountColumns,
   extractOrderRefs,
   extractUtr,
   extractAmount,

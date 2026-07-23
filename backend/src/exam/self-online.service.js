@@ -25,6 +25,19 @@ const OPEN_STATUSES = [
   PaymentStatus.AWAITING_VERIFICATION,
 ];
 
+function strOrNull(value, maxLen) {
+  if (value == null || value === '') return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  return maxLen ? s.slice(0, maxLen) : s;
+}
+
+function moneyOrNull(value) {
+  if (value == null || value === '') return null;
+  const n = roundMoney(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 class SelfOnlineService {
   constructor(
     paymentRepo,
@@ -77,6 +90,101 @@ class SelfOnlineService {
 
   isSelfOnlinePayment(payment) {
     return payment.paymentMode === PaymentMode.SELF_ONLINE;
+  }
+
+  buildStatementFromHeader(header = {}) {
+    return {
+      bankName: strOrNull(header.bankName, 100),
+      branchName: strOrNull(header.branchName, 150),
+      branchCode: strOrNull(header.branchCode, 20),
+      receiverIfsc: strOrNull(header.receiverIfsc, 20),
+      accountNumber: strOrNull(header.accountNumber, 30),
+      accountHolderName: strOrNull(header.accountHolderName, 150),
+      statementFrom: header.statementFrom || null,
+      statementTo: header.statementTo || null,
+      openingBalance: moneyOrNull(header.openingBalance),
+      closingBalance: moneyOrNull(header.closingBalance),
+      totalDebits: moneyOrNull(header.totalDebits),
+      totalCredits: moneyOrNull(header.totalCredits),
+      debitCount: header.debitCount ?? null,
+      creditCount: header.creditCount ?? null,
+    };
+  }
+
+  buildTxnFromParsedRow(statementId, row) {
+    return {
+      statementId,
+      postDate: row.postDate || row.txnDate || null,
+      valueDate: row.valueDate || row.postDate || row.txnDate || null,
+      txnDate: row.postDate || row.txnDate || null,
+      txnType: strOrNull(row.txnType, 30),
+      paymentMethod: strOrNull(row.paymentMethod, 20),
+      paymentRail: strOrNull(row.paymentRail, 20),
+      txnDirection: strOrNull(row.txnDirection, 10),
+      utr: strOrNull(row.utr, 100),
+      internalBankRef: strOrNull(row.internalBankRef, 30),
+      merchantReference: strOrNull(row.merchantReference, 100),
+      transactionReference: strOrNull(row.transactionReference, 100),
+      ifsc: strOrNull(row.ifsc, 20),
+      terminal: strOrNull(row.terminal, 20),
+      branchLocation: strOrNull(row.branchLocation, 150),
+      payerName: strOrNull(row.payerName, 150),
+      payeeName: strOrNull(row.payeeName, 150),
+      payerBankCode: strOrNull(row.payerBankCode, 20),
+      payerUpi: strOrNull(row.payerUpi, 150),
+      receiverBankCode: strOrNull(row.receiverBankCode, 20),
+      receiverIfsc: strOrNull(row.receiverIfsc, 20),
+      debitAmount: moneyOrNull(row.debitAmount),
+      creditAmount: moneyOrNull(row.creditAmount),
+      amount: moneyOrNull(row.amount),
+      runningBalance: moneyOrNull(row.runningBalance),
+      paymentNote: strOrNull(row.paymentNote, 255),
+      narration: strOrNull(row.narration || row.rawLine, 4000),
+      statusRaw: row.statusRaw || 'success',
+      rawLine: strOrNull(row.rawLine, 2000),
+      matchStatus: 'unmatched',
+    };
+  }
+
+  toStatementTxnDto(t) {
+    return {
+      id: t.id,
+      statementId: t.statementId,
+      fileName: t.statement?.fileName,
+      sourceKind: t.statement?.sourceKind,
+      postDate: t.postDate,
+      valueDate: t.valueDate,
+      txnType: t.txnType,
+      paymentMethod: t.paymentMethod,
+      paymentRail: t.paymentRail,
+      txnDirection: t.txnDirection,
+      utr: t.utr,
+      internalBankRef: t.internalBankRef,
+      merchantReference: t.merchantReference,
+      transactionReference: t.transactionReference,
+      ifsc: t.ifsc,
+      terminal: t.terminal,
+      branchLocation: t.branchLocation,
+      payerName: t.payerName,
+      payeeName: t.payeeName,
+      payerBankCode: t.payerBankCode,
+      payerUpi: t.payerUpi,
+      receiverBankCode: t.receiverBankCode,
+      receiverIfsc: t.receiverIfsc,
+      debitAmount: t.debitAmount != null ? roundMoney(t.debitAmount) : null,
+      creditAmount: t.creditAmount != null ? roundMoney(t.creditAmount) : null,
+      amount: roundMoney(t.amount),
+      runningBalance:
+        t.runningBalance != null ? roundMoney(t.runningBalance) : null,
+      paymentNote: t.paymentNote,
+      narration: t.narration,
+      txnDate: t.txnDate,
+      matchStatus: t.matchStatus,
+      matchedPaymentId: t.matchedPaymentId,
+      matchConfidence: t.matchConfidence,
+      matchReason: t.matchReason,
+      rawLine: t.rawLine,
+    };
   }
 
   async findOpenSelfOnline(feeRecordId) {
@@ -393,6 +501,7 @@ class SelfOnlineService {
     let sourceKind = 'pdf';
     let fileFormat = 'pdf';
     let rows = [];
+    let statementHeader = {};
     let excerpt = '';
 
     if (name.endsWith('.pdf') || mimeType === 'application/pdf') {
@@ -414,7 +523,9 @@ class SelfOnlineService {
             ? parsed
             : String(parsed?.text || parsed || '');
         excerpt = text.slice(0, 8000);
-        rows = parseStatementText(text);
+        const result = parseStatementText(text);
+        statementHeader = result.header || {};
+        rows = result.rows || [];
       } finally {
         await parser.destroy?.().catch?.(() => undefined);
       }
@@ -423,7 +534,7 @@ class SelfOnlineService {
       fileFormat = 'csv';
       const text = buffer.toString('utf8');
       excerpt = text.slice(0, 4000);
-      rows = parseTabularRows(this.csvToObjects(text));
+      rows = parseTabularRows(this.csvToObjects(text), statementHeader);
     } else if (
       name.endsWith('.xlsx') ||
       name.endsWith('.xls') ||
@@ -444,7 +555,7 @@ class SelfOnlineService {
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const objects = XLSX.utils.sheet_to_json(sheet, { defval: '' });
       excerpt = JSON.stringify(objects.slice(0, 3)).slice(0, 4000);
-      rows = parseTabularRows(objects);
+      rows = parseTabularRows(objects, statementHeader);
     } else {
       throw AppError.badRequest(
         'Unsupported file. Upload a merchant statement PDF (preferred), or CSV/Excel.',
@@ -471,6 +582,7 @@ class SelfOnlineService {
           (sourceKind === 'pdf'
             ? null
             : 'Secondary editable format — prefer PDF for audit integrity'),
+        ...this.buildStatementFromHeader(statementHeader),
       }),
     );
 
@@ -480,19 +592,9 @@ class SelfOnlineService {
         continue;
       }
       const txn = await this.statementTxnRepo.save(
-        this.statementTxnRepo.create({
-          statementId: statement.id,
-          utr: r.utr,
-          merchantReference: r.merchantReference,
-          transactionReference: r.transactionReference,
-          amount: r.amount,
-          txnDate: r.txnDate,
-          payerName: r.payerName ? String(r.payerName).slice(0, 150) : null,
-          payerUpi: r.payerUpi ? String(r.payerUpi).slice(0, 150) : null,
-          statusRaw: r.statusRaw,
-          rawLine: r.rawLine,
-          matchStatus: 'unmatched',
-        }),
+        this.statementTxnRepo.create(
+          this.buildTxnFromParsedRow(statement.id, r),
+        ),
       );
       savedTxns.push(txn);
     }
@@ -603,23 +705,7 @@ class SelfOnlineService {
       qb.andWhere('t.matchStatus = :ms', { ms: filters.matchStatus });
     }
     const rows = await qb.getMany();
-    return rows.map((t) => ({
-      id: t.id,
-      statementId: t.statementId,
-      fileName: t.statement?.fileName,
-      sourceKind: t.statement?.sourceKind,
-      utr: t.utr,
-      merchantReference: t.merchantReference,
-      transactionReference: t.transactionReference,
-      amount: roundMoney(t.amount),
-      txnDate: t.txnDate,
-      payerName: t.payerName,
-      payerUpi: t.payerUpi,
-      matchStatus: t.matchStatus,
-      matchedPaymentId: t.matchedPaymentId,
-      matchConfidence: t.matchConfidence,
-      matchReason: t.matchReason,
-    }));
+    return rows.map((t) => this.toStatementTxnDto(t));
   }
 
   async listSuggestedMatches() {
@@ -1024,17 +1110,18 @@ class SelfOnlineService {
       );
       txn = await this.statementTxnRepo.save(
         this.statementTxnRepo.create({
-          statementId: statement.id,
-          utr: parsedUtr,
-          merchantReference: payment.transactionReference,
-          transactionReference: payment.transactionReference,
-          amount: payment.amountPaid,
-          txnDate: new Date(),
-          payerName: null,
-          payerUpi: null,
-          statusRaw: 'success',
-          rawLine: rawLine || `UTR:${parsedUtr}`,
-          matchStatus: 'unmatched',
+          ...this.buildTxnFromParsedRow(statement.id, {
+            ...(parsed || {}),
+            utr: parsedUtr,
+            merchantReference:
+              parsed?.merchantReference || payment.transactionReference,
+            transactionReference:
+              parsed?.transactionReference || payment.transactionReference,
+            amount: parsed?.amount ?? payment.amountPaid,
+            txnDate: parsed?.postDate || parsed?.txnDate || new Date(),
+            rawLine: rawLine || `UTR:${parsedUtr}`,
+            narration: parsed?.narration || rawLine || `UTR:${parsedUtr}`,
+          }),
         }),
       );
     } else {

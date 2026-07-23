@@ -40,6 +40,8 @@ export default function SelfOnlineReconcilePage() {
   const [bankLine, setBankLine] = useState('');
   const [manualUtr, setManualUtr] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
+  const [rowFilter, setRowFilter] = useState<'all' | 'unmatched' | 'matched'>('all');
+  const [directionFilter, setDirectionFilter] = useState<'all' | 'credit' | 'debit'>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,7 +55,7 @@ export default function SelfOnlineReconcilePage() {
       setPending(p);
       setSuggestions(s);
       setStatements(st);
-      const rows = await api.listSelfOnlineStatementTxns({ matchStatus: 'unmatched' });
+      const rows = await api.listSelfOnlineStatementTxns();
       setParsedRows(rows);
     } catch (err) {
       setError(
@@ -154,6 +156,24 @@ export default function SelfOnlineReconcilePage() {
   }
 
   const awaiting = pending.filter((p) => p.status === 'awaiting_verification');
+
+  const filteredRows = parsedRows.filter((row) => {
+    if (rowFilter !== 'all' && row.matchStatus !== rowFilter) return false;
+    if (directionFilter !== 'all' && row.txnDirection !== directionFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  function fmtDate(value: string | null) {
+    if (!value) return '—';
+    return new Date(value).toLocaleDateString('en-IN');
+  }
+
+  function fmtMoney(value: number | null) {
+    if (value == null) return '—';
+    return money(value);
+  }
 
   return (
     <PermissionGate
@@ -392,40 +412,164 @@ export default function SelfOnlineReconcilePage() {
         <Card>
           <CardHeader
             title="Parsed statement rows"
-            description="These are the rows extracted from the uploaded statements. Each row shows the fields that the matcher sees and why it stays unmatched."
+            description="Full fields extracted from uploaded bank statements — dates, direction, UTR, parties, amounts, balance, and narration."
           />
-          <CardBody>
+          <CardBody className="space-y-3">
+            <div className="flex flex-wrap gap-3">
+              <label className="text-xs text-[var(--muted)]">
+                Match status{' '}
+                <select
+                  value={rowFilter}
+                  onChange={(e) =>
+                    setRowFilter(e.target.value as 'all' | 'unmatched' | 'matched')
+                  }
+                  className="ml-1 rounded border border-[var(--border)] px-2 py-1 text-sm"
+                >
+                  <option value="all">All</option>
+                  <option value="unmatched">Unmatched</option>
+                  <option value="matched">Matched</option>
+                </select>
+              </label>
+              <label className="text-xs text-[var(--muted)]">
+                Direction{' '}
+                <select
+                  value={directionFilter}
+                  onChange={(e) =>
+                    setDirectionFilter(
+                      e.target.value as 'all' | 'credit' | 'debit',
+                    )
+                  }
+                  className="ml-1 rounded border border-[var(--border)] px-2 py-1 text-sm"
+                >
+                  <option value="all">All</option>
+                  <option value="credit">Credit</option>
+                  <option value="debit">Debit</option>
+                </select>
+              </label>
+              <span className="text-xs text-[var(--muted)] self-center">
+                Showing {filteredRows.length} of {parsedRows.length} rows
+              </span>
+            </div>
+
             {parsedRows.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No parsed rows available yet.</p>
+              <p className="text-sm text-[var(--muted)]">
+                No parsed rows available yet.
+              </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-[var(--border)] text-xs uppercase text-[var(--muted)]">
+                <table className="min-w-[2200px] text-left text-xs">
+                  <thead className="border-b border-[var(--border)] uppercase text-[var(--muted)]">
                     <tr>
-                      <th className="px-2 py-2">Row</th>
+                      <th className="px-2 py-2">#</th>
+                      <th className="px-2 py-2">Post date</th>
+                      <th className="px-2 py-2">Value date</th>
+                      <th className="px-2 py-2">Txn type</th>
+                      <th className="px-2 py-2">Method</th>
+                      <th className="px-2 py-2">Rail</th>
+                      <th className="px-2 py-2">Direction</th>
                       <th className="px-2 py-2">UTR</th>
-                      <th className="px-2 py-2">Merchant ref</th>
+                      <th className="px-2 py-2">Bank ref</th>
+                      <th className="px-2 py-2">EMS ref</th>
+                      <th className="px-2 py-2">IFSC</th>
+                      <th className="px-2 py-2">Terminal</th>
+                      <th className="px-2 py-2">Branch</th>
                       <th className="px-2 py-2">Payer</th>
+                      <th className="px-2 py-2">Payee</th>
+                      <th className="px-2 py-2">Payer bank</th>
+                      <th className="px-2 py-2">Payer UPI</th>
+                      <th className="px-2 py-2">Recv bank</th>
+                      <th className="px-2 py-2">Recv IFSC</th>
+                      <th className="px-2 py-2">Debit</th>
+                      <th className="px-2 py-2">Credit</th>
                       <th className="px-2 py-2">Amount</th>
-                      <th className="px-2 py-2">Status</th>
-                      <th className="px-2 py-2">Raw</th>
+                      <th className="px-2 py-2">Balance</th>
+                      <th className="px-2 py-2">Note</th>
+                      <th className="px-2 py-2">Narration</th>
+                      <th className="px-2 py-2">Match</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {parsedRows.map((row) => (
-                      <tr key={row.id} className="border-b border-[var(--border)] align-top">
-                        <td className="px-2 py-2 text-xs font-mono">{row.id}</td>
-                        <td className="px-2 py-2 font-mono text-xs">{row.utr || '—'}</td>
-                        <td className="px-2 py-2 font-mono text-xs">{row.merchantReference || '—'}</td>
-                        <td className="px-2 py-2 font-mono text-xs">{row.payerName || '—'}</td>
-                        <td className="px-2 py-2 tabular-nums">{money(row.amount)}</td>
+                    {filteredRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-[var(--border)] align-top"
+                      >
+                        <td className="px-2 py-2 font-mono">{row.id}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          {fmtDate(row.postDate)}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          {fmtDate(row.valueDate)}
+                        </td>
+                        <td className="px-2 py-2">{row.txnType || '—'}</td>
+                        <td className="px-2 py-2">{row.paymentMethod || '—'}</td>
+                        <td className="px-2 py-2">{row.paymentRail || '—'}</td>
                         <td className="px-2 py-2">
-                          <Badge variant={row.matchStatus === 'matched' ? 'success' : 'warning'}>
-                            {row.matchStatus}
+                          <Badge
+                            variant={
+                              row.txnDirection === 'credit'
+                                ? 'success'
+                                : row.txnDirection === 'debit'
+                                  ? 'warning'
+                                  : 'default'
+                            }
+                          >
+                            {row.txnDirection || '—'}
                           </Badge>
                         </td>
-                        <td className="px-2 py-2 max-w-[18rem] text-xs text-[var(--muted)]">
-                          {row.matchReason || (row.merchantReference ? `${row.merchantReference} · ${row.utr || 'no utr'}` : 'No parsed reference yet')}
+                        <td className="px-2 py-2 font-mono">{row.utr || '—'}</td>
+                        <td className="px-2 py-2 font-mono">
+                          {row.internalBankRef || '—'}
+                        </td>
+                        <td className="px-2 py-2 font-mono">
+                          {row.merchantReference || '—'}
+                        </td>
+                        <td className="px-2 py-2 font-mono">{row.ifsc || '—'}</td>
+                        <td className="px-2 py-2">{row.terminal || '—'}</td>
+                        <td className="px-2 py-2 max-w-[10rem] truncate">
+                          {row.branchLocation || '—'}
+                        </td>
+                        <td className="px-2 py-2">{row.payerName || '—'}</td>
+                        <td className="px-2 py-2">{row.payeeName || '—'}</td>
+                        <td className="px-2 py-2">{row.payerBankCode || '—'}</td>
+                        <td className="px-2 py-2 font-mono">
+                          {row.payerUpi || '—'}
+                        </td>
+                        <td className="px-2 py-2">{row.receiverBankCode || '—'}</td>
+                        <td className="px-2 py-2 font-mono">
+                          {row.receiverIfsc || '—'}
+                        </td>
+                        <td className="px-2 py-2 tabular-nums">
+                          {fmtMoney(row.debitAmount)}
+                        </td>
+                        <td className="px-2 py-2 tabular-nums">
+                          {fmtMoney(row.creditAmount)}
+                        </td>
+                        <td className="px-2 py-2 tabular-nums font-medium">
+                          {fmtMoney(row.amount)}
+                        </td>
+                        <td className="px-2 py-2 tabular-nums">
+                          {fmtMoney(row.runningBalance)}
+                        </td>
+                        <td className="px-2 py-2 max-w-[8rem] truncate">
+                          {row.paymentNote || '—'}
+                        </td>
+                        <td
+                          className="px-2 py-2 max-w-[16rem] truncate text-[var(--muted)]"
+                          title={row.narration || row.rawLine || ''}
+                        >
+                          {row.narration || row.rawLine || '—'}
+                        </td>
+                        <td className="px-2 py-2">
+                          <Badge
+                            variant={
+                              row.matchStatus === 'matched'
+                                ? 'success'
+                                : 'warning'
+                            }
+                          >
+                            {row.matchStatus}
+                          </Badge>
                         </td>
                       </tr>
                     ))}
