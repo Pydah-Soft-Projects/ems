@@ -10,6 +10,7 @@ import { ApiError, api } from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
 import type {
   SelfOnlinePendingRow,
+  SelfOnlineStatementTxn,
   SelfOnlineSuggestion,
 } from '@/types/self-online';
 import { PermissionGate } from '@/components/auth/PermissionGate';
@@ -19,6 +20,7 @@ export default function SelfOnlineReconcilePage() {
   const user = getStoredUser();
   const [pending, setPending] = useState<SelfOnlinePendingRow[]>([]);
   const [suggestions, setSuggestions] = useState<SelfOnlineSuggestion[]>([]);
+  const [parsedRows, setParsedRows] = useState<SelfOnlineStatementTxn[]>([]);
   const [statements, setStatements] = useState<
     {
       id: number;
@@ -51,6 +53,8 @@ export default function SelfOnlineReconcilePage() {
       setPending(p);
       setSuggestions(s);
       setStatements(st);
+      const rows = await api.listSelfOnlineStatementTxns({ matchStatus: 'unmatched' });
+      setParsedRows(rows);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -337,7 +341,7 @@ export default function SelfOnlineReconcilePage() {
         <Card>
           <CardHeader
             title="Suggested matches"
-            description="High confidence (order ID / UTR) can be approved quickly. Amount+date suggestions need manual review."
+            description="High confidence matches from order ID, merchant reference, or UTR can be approved quickly. Amount+date suggestions need manual review."
           />
           <CardBody>
             {suggestions.length === 0 ? (
@@ -351,7 +355,8 @@ export default function SelfOnlineReconcilePage() {
                   >
                     <div className="text-sm">
                       <p className="font-medium">
-                        {s.studentName} · {s.orderRef} ↔ UTR {s.utr || '—'}
+                        {s.studentName} · order {s.orderRef} · ref{' '}
+                        {s.merchantReference || '—'} · UTR {s.utr || '—'}
                       </p>
                       <p className="text-xs text-[var(--muted)]">
                         {money(s.paymentAmount)} · {s.reason} · confidence{' '}
@@ -379,6 +384,53 @@ export default function SelfOnlineReconcilePage() {
                     </PermissionGate>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Parsed statement rows"
+            description="These are the rows extracted from the uploaded statements. Each row shows the fields that the matcher sees and why it stays unmatched."
+          />
+          <CardBody>
+            {parsedRows.length === 0 ? (
+              <p className="text-sm text-[var(--muted)]">No parsed rows available yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-[var(--border)] text-xs uppercase text-[var(--muted)]">
+                    <tr>
+                      <th className="px-2 py-2">Row</th>
+                      <th className="px-2 py-2">UTR</th>
+                      <th className="px-2 py-2">Merchant ref</th>
+                      <th className="px-2 py-2">Payer</th>
+                      <th className="px-2 py-2">Amount</th>
+                      <th className="px-2 py-2">Status</th>
+                      <th className="px-2 py-2">Raw</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsedRows.map((row) => (
+                      <tr key={row.id} className="border-b border-[var(--border)] align-top">
+                        <td className="px-2 py-2 text-xs font-mono">{row.id}</td>
+                        <td className="px-2 py-2 font-mono text-xs">{row.utr || '—'}</td>
+                        <td className="px-2 py-2 font-mono text-xs">{row.merchantReference || '—'}</td>
+                        <td className="px-2 py-2 font-mono text-xs">{row.payerName || '—'}</td>
+                        <td className="px-2 py-2 tabular-nums">{money(row.amount)}</td>
+                        <td className="px-2 py-2">
+                          <Badge variant={row.matchStatus === 'matched' ? 'success' : 'warning'}>
+                            {row.matchStatus}
+                          </Badge>
+                        </td>
+                        <td className="px-2 py-2 max-w-[18rem] text-xs text-[var(--muted)]">
+                          {row.matchReason || (row.merchantReference ? `${row.merchantReference} · ${row.utr || 'no utr'}` : 'No parsed reference yet')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </CardBody>

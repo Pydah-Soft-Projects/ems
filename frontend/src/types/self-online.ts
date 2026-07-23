@@ -74,3 +74,21 @@ export type SelfOnlineSuggestion = {
   reason: string;
   autoEligible: boolean;
 };
+
+export type SelfOnlineStatementTxn = {
+  id: number;
+  statementId: number;
+  fileName?: string;
+  sourceKind?: string;
+  utr: string | null;
+  merchantReference: string | null;
+  transactionReference: string | null;
+  amount: number;
+  txnDate: string | null;
+  payerName: string | null;
+  payerUpi: string | null;
+  matchStatus: string;
+  matchedPaymentId: number | null;
+  matchConfidence: string | null;
+  matchReason: string | null;
+};

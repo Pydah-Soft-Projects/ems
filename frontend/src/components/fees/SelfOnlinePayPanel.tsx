@@ -205,13 +205,20 @@ export function SelfOnlinePayPanel({
               ))}
             </ul>
 
-            <Input
-              label="UTR / UPI reference (optional)"
-              value={utr}
-              onChange={(e) => setUtr(e.target.value)}
-              placeholder="Enter after paying — helps faster verification"
-              autoComplete="off"
-            />
+            <div className="space-y-1">
+              <Input
+                label="UTR / UPI reference (optional)"
+                value={utr}
+                onChange={(e) => setUtr(e.target.value)}
+                placeholder="Paste the UTR from the bank app"
+                autoComplete="off"
+              />
+              <p className="text-xs text-[var(--muted)]">
+                Use this for the bank UTR. The order reference shown on the QR is
+                <span className="mx-1 font-mono">{order.orderRef}</span> and is used
+                by accounts for reconciliation.
+              </p>
+            </div>
 
             <div className="flex flex-wrap gap-2">
               <Button
