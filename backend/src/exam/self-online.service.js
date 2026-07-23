@@ -745,46 +745,52 @@ class SelfOnlineService {
   }
 
   scoreMatch(pay, txn) {
+    console.log('    scoreMatch: Checking txn id', txn.id, '- amount:', txn.amount);
     const amountOk =
       roundMoney(pay.amount) === roundMoney(txn.amount);
     if (!amountOk) {
+      console.log('    scoreMatch: ❌ amount mismatch (payment amount:', pay.amount, 'txn amount:', txn.amount, ')');
       return { confidence: 'none', reason: 'amount_mismatch', autoEligible: false };
     }
+    console.log('    scoreMatch: ✓ amount matches');
 
     const orderRef = normalizeRef(pay.orderRef);
     const refs = [
-      normalizeRef(txn.merchantReference),
-      normalizeRef(txn.transactionReference),
-      normalizeRef(txn.rawLine),
-      normalizeRef(txn.narration),
-      normalizeRef(txn.paymentNote), // Also check payment note
-    ].filter(Boolean);
+      { field: 'merchantReference', value: normalizeRef(txn.merchantReference) },
+      { field: 'transactionReference', value: normalizeRef(txn.transactionReference) },
+      { field: 'rawLine', value: normalizeRef(txn.rawLine) },
+      { field: 'narration', value: normalizeRef(txn.narration) },
+      { field: 'paymentNote', value: normalizeRef(txn.paymentNote) },
+    ].filter(r => r.value);
 
-    if (orderRef && refs.some((r) => r.includes(orderRef))) {
-      return {
-        confidence: 'high',
-        reason: 'order_ref_match',
-        autoEligible: true,
-      };
+    if (orderRef) {
+      console.log('    scoreMatch: Checking for orderRef', orderRef, 'in fields:', refs.map(r => r.field));
+      const matchingRef = refs.find(r => r.value.includes(orderRef));
+      if (matchingRef) {
+        console.log('    scoreMatch: ✓ orderRef match! Found in', matchingRef.field);
+        return {
+          confidence: 'high', reason: 'order_ref_match', autoEligible: true, matchingField: matchingRef.field };
+      }
+      console.log('    scoreMatch: No orderRef match');
     }
 
     const studentUtr = normalizeRef(pay.studentUtr);
     if (studentUtr) {
+      console.log('    scoreMatch: Checking for studentUtr', studentUtr, 'in fields');
       const utrRefs = [
-        normalizeRef(txn.utr),
-        normalizeRef(txn.transactionReference),
-        normalizeRef(txn.internalBankRef),
-        normalizeRef(txn.rawLine),
-        normalizeRef(txn.narration),
-        normalizeRef(txn.paymentNote),
-      ].filter(Boolean);
-      if (utrRefs.some(r => r.includes(studentUtr))) {
-        return {
-          confidence: 'high',
-          reason: 'utr_match',
-          autoEligible: true,
-        };
+        { field: 'utr', value: normalizeRef(txn.utr) },
+        { field: 'transactionReference', value: normalizeRef(txn.transactionReference) },
+        { field: 'internalBankRef', value: normalizeRef(txn.internalBankRef) },
+        { field: 'rawLine', value: normalizeRef(txn.rawLine) },
+        { field: 'narration', value: normalizeRef(txn.narration) },
+        { field: 'paymentNote', value: normalizeRef(txn.paymentNote) },
+      ].filter(r => r.value);
+      const matchingUtrRef = utrRefs.find(r => r.value.includes(studentUtr));
+      if (matchingUtrRef) {
+        console.log('    scoreMatch: ✓ studentUtr match! Found in', matchingUtrRef.field);
+        return { confidence: 'high', reason: 'utr_match', autoEligible: true, matchingField: matchingUtrRef.field };
       }
+      console.log('    scoreMatch: No studentUtr match');
     }
 
     // Amount + date window → suggest only
@@ -793,19 +799,13 @@ class SelfOnlineService {
       const b = new Date(pay.createdAt).getTime();
       const day = 24 * 60 * 60 * 1000;
       if (Math.abs(a - b) <= day) {
-        return {
-          confidence: 'medium',
-          reason: 'amount_and_date',
-          autoEligible: false,
-        };
+        console.log('    scoreMatch: ~ amount + date match (medium confidence)');
+        return { confidence: 'medium', reason: 'amount_and_date', autoEligible: false };
       }
     }
 
-    return {
-      confidence: 'low',
-      reason: 'amount_only',
-      autoEligible: false,
-    };
+    console.log('    scoreMatch: Only amount match (low confidence)');
+    return { confidence: 'low', reason: 'amount_only', autoEligible: false };
   }
 
   async runAutoMatchForStatement(statementId) {
@@ -824,11 +824,15 @@ class SelfOnlineService {
 
   async tryAutoMatchPayment(paymentId) {
     const payment = await this.exam.getPayment(paymentId);
-    if (payment.status !== PaymentStatus.AWAITING_VERIFICATION) return null;
+    if (payment.status !== PaymentStatus.AWAITING_VERIFICATION) {
+      console.log('  tryAutoMatchPayment: Payment', paymentId, 'not in AWAITING_VERIFICATION, skipping');
+      return null;
+    }
     const unmatched = await this.statementTxnRepo.find({
       where: { matchStatus: 'unmatched' },
       take: 500,
     });
+    console.log(`  tryAutoMatchPayment: Checking ${unmatched.length} unmatched transactions`);
     const payView = {
       id: payment.id,
       orderRef: payment.transactionReference,
@@ -841,6 +845,7 @@ class SelfOnlineService {
     for (const txn of unmatched) {
       const score = this.scoreMatch(payView, txn);
       if (score.autoEligible) {
+        console.log('  tryAutoMatchPayment: Found auto‑eligible match! txn id:', txn.id, 'score:', score);
         await this.verifyMatch({
           paymentId: payment.id,
           merchantTxnId: txn.id,
@@ -856,11 +861,13 @@ class SelfOnlineService {
           : 0;
         if (!bestSuggestion || currentRank > bestRank) {
           bestSuggestion = { txn, score };
+          console.log('  tryAutoMatchPayment: New best suggestion found, txn id:', txn.id, 'score:', score);
         }
       }
     }
     if (bestSuggestion) {
       const { txn, score } = bestSuggestion;
+      console.log('  tryAutoMatchPayment: Setting suggestion for txn id:', txn.id);
       txn.matchStatus = 'suggested';
       txn.matchConfidence = score.confidence;
       txn.matchReason = score.reason;
@@ -868,6 +875,7 @@ class SelfOnlineService {
       await this.statementTxnRepo.save(txn);
       return 'suggested';
     }
+    console.log('  tryAutoMatchPayment: No suitable match found');
     return null;
   }
 
@@ -1181,18 +1189,27 @@ class SelfOnlineService {
   }
 
   async runAutoMatchAll() {
+    console.log('=== runAutoMatchAll: Starting ===');
     // Get all awaiting-verification payments
     const pending = await this.listPending();
     const awaiting = pending.filter((p) => p.status === PaymentStatus.AWAITING_VERIFICATION);
+    console.log(`=== runAutoMatchAll: Found ${awaiting.length} payments in AWAITING_VERIFICATION ===`);
     let verifiedCount = 0;
     
     for (const payment of awaiting) {
+      console.log(`--- Processing payment ${payment.id}: orderRef=${payment.orderRef}, amount=${payment.amount}, studentUtr=${payment.studentUtr}`);
       const result = await this.tryAutoMatchPayment(payment.id);
       if (result === 'verified') {
         verifiedCount++;
+        console.log(`✓ Payment ${payment.id} successfully verified!`);
+      } else if (result === 'suggested') {
+        console.log(`~ Payment ${payment.id}: suggested as a match`);
+      } else {
+        console.log(`✗ Payment ${payment.id}: no suitable match found`);
       }
     }
 
+    console.log(`=== runAutoMatchAll: Complete! Verified ${verifiedCount} out of ${awaiting.length} ===`);
     return {
       awaitingCount: awaiting.length,
       verifiedCount,
