@@ -11,7 +11,6 @@ import { getStoredUser } from '@/lib/auth';
 import type {
   SelfOnlinePendingRow,
   SelfOnlineStatementTxn,
-  SelfOnlineSuggestion,
 } from '@/types/self-online';
 import { PermissionGate } from '@/components/auth/PermissionGate';
 import { AccessDenied } from '@/components/auth/AccessDenied';
@@ -19,7 +18,6 @@ import { AccessDenied } from '@/components/auth/AccessDenied';
 export default function SelfOnlineReconcilePage() {
   const user = getStoredUser();
   const [pending, setPending] = useState<SelfOnlinePendingRow[]>([]);
-  const [suggestions, setSuggestions] = useState<SelfOnlineSuggestion[]>([]);
   const [parsedRows, setParsedRows] = useState<SelfOnlineStatementTxn[]>([]);
   const [statements, setStatements] = useState<
     {
@@ -52,13 +50,11 @@ export default function SelfOnlineReconcilePage() {
     setLoading(true);
     setError('');
     try {
-      const [p, s, st] = await Promise.all([
+      const [p, st] = await Promise.all([
         api.listSelfOnlinePending(),
-        api.listSelfOnlineSuggestions(),
         api.listSelfOnlineStatements(),
       ]);
       setPending(p);
-      setSuggestions(s);
       setStatements(st);
       const rows = await api.listSelfOnlineStatementTxns();
       setParsedRows(rows);
@@ -388,57 +384,6 @@ export default function SelfOnlineReconcilePage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            )}
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Suggested matches"
-            description="High confidence matches from order ID, merchant reference, or UTR can be approved quickly. Amount+date suggestions need manual review."
-          />
-          <CardBody>
-            {suggestions.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]">No suggestions yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {suggestions.map((s) => (
-                  <div
-                    key={`${s.paymentId}-${s.merchantTxnId}`}
-                    className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="text-sm">
-                      <p className="font-medium">
-                        {s.studentName} · order {s.orderRef} · ref{' '}
-                        {s.merchantReference || '—'} · UTR {s.utr || '—'}
-                      </p>
-                      <p className="text-xs text-[var(--muted)]">
-                        {money(s.paymentAmount)} · {s.reason} · confidence{' '}
-                        {s.confidence}
-                      </p>
-                    </div>
-                    <PermissionGate user={user} privilege="fees:reconcile">
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            void onVerify(s.paymentId, s.merchantTxnId)
-                          }
-                        >
-                          Verify
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => void onReject(s.merchantTxnId)}
-                        >
-                          Reject
-                        </Button>
-                      </div>
-                    </PermissionGate>
-                  </div>
-                ))}
               </div>
             )}
           </CardBody>
