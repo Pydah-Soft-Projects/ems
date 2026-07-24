@@ -12,9 +12,26 @@ import { SoftSearchField, StatusFilter, KpiTile } from '@/components/ui/SoftSear
 import { ApiError, api } from '@/lib/api';
 import { FeeStatusBadge, money } from '@/components/fees/CollectPaymentModal';
 import { ExamFeeRecord } from '@/types/fee';
-import { SdmsStudent } from '@/types/sdms';
+import { EligibleExamStudent, Exam } from '@/types/exam';
 
 type StatusTab = 'all' | 'pending' | 'paid';
+
+type ListStudent = {
+  id: number;
+  name: string;
+  rollNumber: string;
+  admissionNumber: string | null;
+  section: string | null;
+  studentStatus: string | null;
+  college: string | null;
+  course: string | null;
+  branch: string | null;
+  batch: string | null;
+  currentYear: number;
+  currentSemester: number;
+};
+
+const PAGE_SIZE = 25;
 
 const statusTabs: { id: StatusTab; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -22,37 +39,279 @@ const statusTabs: { id: StatusTab; label: string }[] = [
   { id: 'paid', label: 'Paid' },
 ];
 
+const selectClass =
+  'h-10 w-full rounded-[var(--radius)] border border-[var(--border)] bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--ring)] disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)] disabled:text-[var(--muted)]';
+
+function examLabel(exam: Exam) {
+  const scope = [
+    exam.college,
+    exam.course,
+    exam.batch ? `Batch ${exam.batch}` : null,
+    `Y${exam.yearOfStudy}/S${exam.semester}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return scope ? `${exam.name} — ${scope}` : exam.name;
+}
+
+function fromEligible(s: EligibleExamStudent): ListStudent {
+  return {
+    id: s.id,
+    name: s.name,
+    rollNumber: s.rollNumber,
+    admissionNumber: s.admissionNumber,
+    section: s.section,
+    studentStatus: s.studentStatus,
+    college: s.college,
+    course: s.course,
+    branch: s.branch,
+    batch: s.batch,
+    currentYear: s.currentYear,
+    currentSemester: s.currentSemester,
+  };
+}
+
 export default function FeesPage() {
   const router = useRouter();
+
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [loadingExams, setLoadingExams] = useState(true);
+  const [examsError, setExamsError] = useState('');
+  const [examId, setExamId] = useState('');
+
+  const [eligible, setEligible] = useState<EligibleExamStudent[]>([]);
+  const [searchResults, setSearchResults] = useState<ListStudent[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchTotalPages, setSearchTotalPages] = useState(1);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentError, setStudentError] = useState('');
+
+  const [branch, setBranch] = useState('');
+  const [section, setSection] = useState('');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+
   const [records, setRecords] = useState<ExamFeeRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadingRecords, setLoadingRecords] = useState(true);
+  const [recordsError, setRecordsError] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>('pending');
-  const [searchRoll, setSearchRoll] = useState('');
-  const [studentResults, setStudentResults] = useState<SdmsStudent[] | null>(
-    null,
+
+  const selectedExam = useMemo(
+    () => exams.find((e) => String(e.id) === examId) ?? null,
+    [exams, examId],
   );
-  const [searchingStudents, setSearchingStudents] = useState(false);
-  const [searchError, setSearchError] = useState('');
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setLoadingExams(true);
+    setExamsError('');
+    api
+      .getExams('published')
+      .then((rows) => {
+        setExams(
+          [...rows].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+          ),
+        );
+      })
+      .catch((err) => {
+        setExams([]);
+        setExamsError(
+          err instanceof ApiError ? err.message : 'Failed to load examinations.',
+        );
+      })
+      .finally(() => setLoadingExams(false));
+  }, []);
+
+  const loadEligible = useCallback(async () => {
+    if (!examId) {
+      setEligible([]);
+      setLoadingStudents(false);
+      return;
+    }
+    setLoadingStudents(true);
+    setStudentError('');
+    try {
+      const res = await api.getExamEligibleStudents(parseInt(examId, 10));
+      setEligible(res.students);
+      setSearchResults([]);
+      setSearchTotal(0);
+      setSearchTotalPages(1);
+    } catch (err) {
+      setEligible([]);
+      setStudentError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to load eligible students.',
+      );
+    } finally {
+      setLoadingStudents(false);
+    }
+  }, [examId]);
+
+  useEffect(() => {
+    void loadEligible();
+  }, [loadEligible]);
+
+  const loadSearchStudents = useCallback(async () => {
+    if (examId || !debouncedSearch) {
+      if (!examId) {
+        setSearchResults([]);
+        setSearchTotal(0);
+        setSearchTotalPages(1);
+        setStudentError('');
+        setLoadingStudents(false);
+      }
+      return;
+    }
+    setLoadingStudents(true);
+    setStudentError('');
+    try {
+      const res = await api.getSdmsStudents({
+        search: debouncedSearch,
+        page,
+        limit: PAGE_SIZE,
+      });
+      setSearchResults(
+        res.items
+          .map((s) => {
+            const roll = (s.pinNo || s.admissionNumber || '').trim();
+            if (!roll) return null;
+            return {
+              id: s.id,
+              name: s.studentName,
+              rollNumber: roll,
+              admissionNumber: s.admissionNumber,
+              section: s.section,
+              studentStatus: s.studentStatus,
+              college: s.college,
+              course: s.course,
+              branch: s.branch,
+              batch: s.batch,
+              currentYear: s.currentYear,
+              currentSemester: s.currentSemester,
+            } satisfies ListStudent;
+          })
+          .filter((s): s is ListStudent => s !== null),
+      );
+      setSearchTotal(res.total);
+      setSearchTotalPages(Math.max(1, res.totalPages || 1));
+    } catch (err) {
+      setSearchResults([]);
+      setSearchTotal(0);
+      setSearchTotalPages(1);
+      setStudentError(
+        err instanceof ApiError ? err.message : 'Student search failed.',
+      );
+    } finally {
+      setLoadingStudents(false);
+    }
+  }, [examId, debouncedSearch, page]);
+
+  useEffect(() => {
+    void loadSearchStudents();
+  }, [loadSearchStudents]);
 
   const loadRecords = useCallback(async () => {
-    setLoading(true);
-    setError('');
+    setLoadingRecords(true);
+    setRecordsError('');
     try {
-      setRecords(await api.getFeeRecords());
+      setRecords(
+        await api.getFeeRecords(
+          examId ? { examId: parseInt(examId, 10) } : {},
+        ),
+      );
     } catch (err) {
       setRecords([]);
-      setError(
+      setRecordsError(
         err instanceof ApiError ? err.message : 'Failed to load fee records.',
       );
     } finally {
-      setLoading(false);
+      setLoadingRecords(false);
     }
-  }, []);
+  }, [examId]);
 
   useEffect(() => {
     void loadRecords();
   }, [loadRecords]);
+
+  const scopedBranches = useMemo(() => {
+    if (!selectedExam) return [] as string[];
+    const fromScopes = (selectedExam.scopes ?? [])
+      .map((s) => s.branch)
+      .filter(Boolean);
+    const fromStudents = eligible
+      .map((s) => s.branch)
+      .filter((b): b is string => Boolean(b));
+    const set = new Set<string>([
+      ...fromScopes,
+      ...fromStudents,
+      ...(selectedExam.branch ? [selectedExam.branch] : []),
+    ]);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [selectedExam, eligible]);
+
+  const scopedSections = useMemo(() => {
+    if (!selectedExam) return [] as string[];
+    const fromScopes = (selectedExam.scopes ?? [])
+      .filter((s) => !branch || s.branch === branch)
+      .map((s) => s.section)
+      .filter((s): s is string => Boolean(s));
+    const fromStudents = eligible
+      .filter((s) => !branch || s.branch === branch)
+      .map((s) => s.section)
+      .filter((s): s is string => Boolean(s));
+    return [...new Set([...fromScopes, ...fromStudents])].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [selectedExam, eligible, branch]);
+
+  const filteredEligible = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return eligible
+      .filter((s) => {
+        if (branch && (s.branch || '') !== branch) return false;
+        if (section && (s.section || '') !== section) return false;
+        if (!q) return true;
+        const hay = [s.name, s.rollNumber, s.admissionNumber || '']
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(q);
+      })
+      .map(fromEligible);
+  }, [eligible, branch, section, debouncedSearch]);
+
+  const examMode = Boolean(examId);
+  const searchingFreely = !examMode && Boolean(debouncedSearch);
+
+  const total = examMode
+    ? filteredEligible.length
+    : searchingFreely
+      ? searchTotal
+      : 0;
+  const totalPages = examMode
+    ? Math.max(1, Math.ceil(total / PAGE_SIZE))
+    : searchingFreely
+      ? searchTotalPages
+      : 1;
+  const safePage = Math.min(page, totalPages);
+  const pageStudents = examMode
+    ? filteredEligible.slice(
+        (safePage - 1) * PAGE_SIZE,
+        safePage * PAGE_SIZE,
+      )
+    : searchingFreely
+      ? searchResults
+      : [];
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const visibleRecords = useMemo(
     () =>
@@ -68,168 +327,349 @@ export default function FeesPage() {
     return {
       pendingCount: pending.length,
       pendingAmount: pending.reduce(
-        (total, record) => total + Number(record.totalAmount || 0),
+        (sum, record) => sum + Number(record.totalAmount || 0),
         0,
       ),
       paidCount: paid.length,
       paidAmount: paid.reduce(
-        (total, record) => total + Number(record.totalAmount || 0),
+        (sum, record) => sum + Number(record.totalAmount || 0),
         0,
       ),
     };
   }, [records]);
 
+  const hasScopedFilters = Boolean(branch || section || search.trim());
+
   function openCollect(roll: string) {
+    if (!roll) return;
     router.push(`/dashboard/fees/collect/${encodeURIComponent(roll)}`);
   }
 
-  function studentRoll(student: SdmsStudent) {
-    return (student.pinNo || student.admissionNumber || '').trim();
-  }
-
-  async function onQuickSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const query = searchRoll.trim();
-    if (!query) return;
-    setSearchingStudents(true);
-    setSearchError('');
-    setStudentResults(null);
-    try {
-      const res = await api.getSdmsStudents({ search: query, limit: 25 });
-      const items = res.items.filter((s) => studentRoll(s));
-      // Exact PIN/admission match → open the desk directly
-      const exact = items.find(
-        (s) =>
-          s.pinNo?.toLowerCase() === query.toLowerCase() ||
-          s.admissionNumber?.toLowerCase() === query.toLowerCase(),
-      );
-      if (exact) {
-        openCollect(studentRoll(exact));
-        return;
-      }
-      if (items.length === 1) {
-        openCollect(studentRoll(items[0]));
-        return;
-      }
-      setStudentResults(items);
-      if (items.length === 0) {
-        setSearchError(
-          'No students matched that name, PIN, or admission number.',
-        );
-      }
-    } catch (err) {
-      setSearchError(
-        err instanceof ApiError ? err.message : 'Student search failed.',
-      );
-    } finally {
-      setSearchingStudents(false);
+  function onExamChange(nextId: string) {
+    setExamId(nextId);
+    setBranch('');
+    setSection('');
+    setPage(1);
+    if (!nextId) {
+      setEligible([]);
+    } else {
+      setSearchResults([]);
+      setSearchTotal(0);
+      setSearchTotalPages(1);
     }
   }
 
+  function clearScopedFilters() {
+    setBranch('');
+    setSection('');
+    setSearch('');
+    setDebouncedSearch('');
+    setPage(1);
+  }
+
+  const rangeStart = total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(safePage * PAGE_SIZE, total);
+
+  const examScopeSummary = selectedExam
+    ? [
+        selectedExam.college,
+        selectedExam.course,
+        selectedExam.batch ? `Batch ${selectedExam.batch}` : null,
+        `Year ${selectedExam.yearOfStudy} · Sem ${selectedExam.semester}`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+
+  const showStudentList = examMode || searchingFreely;
+  const listNoun = examMode ? 'eligible student' : 'student';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Fees & Payments"
-        description="Collect examination fees by student PIN and review payment activity."
+        description="Select an examination for eligible students, or search anytime by name, PIN, or admission number — then select who to collect from."
       />
 
       <Card className="overflow-hidden">
-        <CardBody className="space-y-4">
+        <CardBody className="space-y-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
-              Collection desk
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--primary)]">
+              Fee collection
             </p>
-            <h2 className="mt-1 text-xl font-bold text-slate-900">
-              Find a student to collect fees
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">
+              Students
             </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Search by name, PIN, or admission number to open their fee desk.
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
+              Examination loads eligible students (branch/section stay in that
+              exam&apos;s scope). Search works with or without an exam selected.
             </p>
           </div>
-          <form
-            onSubmit={(e) => void onQuickSearch(e)}
-            className="flex flex-col gap-3 sm:flex-row sm:items-center"
-          >
-            <SoftSearchField
-              className="flex-1"
-              value={searchRoll}
-              onChange={(e) => setSearchRoll(e.target.value)}
-              placeholder="Name / PIN / admission — e.g. 236T1A0501 or Ganesh"
-              aria-label="Student name, PIN, or admission number"
-              autoComplete="off"
-            />
-            <Button
-              type="submit"
-              disabled={!searchRoll.trim()}
-              loading={searchingStudents}
-            >
-              Search student
-            </Button>
-          </form>
 
-          {searchError ? <Alert tone="warning">{searchError}</Alert> : null}
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+            <label className="block space-y-1.5 lg:col-span-1">
+              <span className="text-xs font-medium text-slate-600">
+                Examination
+              </span>
+              <select
+                value={examId}
+                onChange={(e) => onExamChange(e.target.value)}
+                className={selectClass}
+                disabled={loadingExams}
+              >
+                <option value="">
+                  {loadingExams
+                    ? 'Loading examinations…'
+                    : 'All — search by name / PIN'}
+                </option>
+                {exams.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {examLabel(exam)}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          {studentResults && studentResults.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead>
-                  <tr className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
-                    <th className="px-4 py-2.5 font-semibold">Student</th>
-                    <th className="px-4 py-2.5 font-semibold">PIN / Adm. no.</th>
-                    <th className="px-4 py-2.5 font-semibold">Programme</th>
-                    <th className="px-4 py-2.5 font-semibold">Year / Sem</th>
-                    <th className="px-4 py-2.5 font-semibold">Status</th>
-                    <th className="px-4 py-2.5 text-right font-semibold">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {studentResults.map((s) => (
-                    <tr
-                      key={s.id}
-                      className="cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--primary-soft)]/50"
-                      onClick={() => openCollect(studentRoll(s))}
-                    >
-                      <td className="px-4 py-3 font-semibold text-slate-900">
-                        {s.studentName}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {s.pinNo || '—'}
-                        <span className="block text-[var(--muted)]">
-                          {s.admissionNumber || ''}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {s.course || '—'} / {s.branch || '—'}
-                        <span className="block text-[var(--muted)]">
-                          {s.college || ''} · {s.batch || ''}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 tabular-nums">
-                        Y{s.currentYear} / S{s.currentSemester}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {s.studentStatus || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openCollect(studentRoll(s));
-                          }}
-                        >
-                          Open fee desk
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-600">Branch</span>
+              <select
+                value={branch}
+                onChange={(e) => {
+                  setBranch(e.target.value);
+                  setSection('');
+                  setPage(1);
+                }}
+                className={selectClass}
+                disabled={!selectedExam || scopedBranches.length === 0}
+              >
+                <option value="">All branches in exam</option>
+                {scopedBranches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-600">Section</span>
+              <select
+                value={section}
+                onChange={(e) => {
+                  setSection(e.target.value);
+                  setPage(1);
+                }}
+                className={selectClass}
+                disabled={!selectedExam || scopedSections.length === 0}
+              >
+                <option value="">All sections</option>
+                {scopedSections.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-600">Search</span>
+              <SoftSearchField
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Name, PIN, roll, or admission…"
+                aria-label="Search students by name, PIN, roll, or admission number"
+                autoComplete="off"
+              />
+            </label>
+          </div>
+
+          {selectedExam && examScopeSummary ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+              <div>
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-[var(--muted)]">
+                  Exam scope
+                </p>
+                <p className="mt-0.5 text-sm font-medium text-slate-800">
+                  {examScopeSummary}
+                </p>
+                {scopedBranches.length > 1 ? (
+                  <p className="mt-0.5 text-xs text-[var(--muted)]">
+                    {scopedBranches.length} branches in this examination
+                  </p>
+                ) : null}
+              </div>
+              {hasScopedFilters ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearScopedFilters}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+          ) : search.trim() && !examMode ? (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearScopedFilters}
+              >
+                Clear search
+              </Button>
             </div>
           ) : null}
+
+          {examsError ? <Alert tone="danger">{examsError}</Alert> : null}
+          {studentError ? <Alert tone="danger">{studentError}</Alert> : null}
+
+          {!showStudentList ? (
+            <EmptyState
+              title="Find a student"
+              description="Select a published examination to list eligible students, or search by name, PIN, roll, or admission number."
+            />
+          ) : loadingStudents ? (
+            <LoadingBlock
+              label={
+                examMode
+                  ? 'Loading eligible students…'
+                  : 'Searching students…'
+              }
+            />
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
+                <p className="text-xs text-[var(--muted)]">
+                  {total === 0
+                    ? examMode
+                      ? 'No eligible students match these filters'
+                      : 'No students matched that search'
+                    : `Showing ${rangeStart}–${rangeEnd} of ${total} ${listNoun}${total !== 1 ? 's' : ''}`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="min-w-[4.5rem] text-center text-xs font-medium tabular-nums text-slate-600">
+                    {safePage} / {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+
+              {pageStudents.length === 0 ? (
+                <EmptyState
+                  title={examMode ? 'No eligible students' : 'No students found'}
+                  description={
+                    examMode
+                      ? hasScopedFilters
+                        ? 'Try another branch, section, or search within this examination.'
+                        : 'No students are eligible for this examination yet.'
+                      : 'Try a different name, PIN, roll, or admission number.'
+                  }
+                />
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+                  <table className="w-full min-w-[880px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)] bg-slate-50/90 text-[0.6875rem] uppercase tracking-wide text-[var(--muted)]">
+                        <th className="px-4 py-3 font-semibold">Student</th>
+                        <th className="px-4 py-3 font-semibold">PIN / Adm.</th>
+                        <th className="px-4 py-3 font-semibold">Programme</th>
+                        <th className="px-4 py-3 font-semibold">Batch</th>
+                        <th className="px-4 py-3 font-semibold">Year / Sem</th>
+                        <th className="px-4 py-3 font-semibold">Status</th>
+                        <th className="px-4 py-3 text-right font-semibold">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageStudents.map((s) => (
+                        <tr
+                          key={s.id}
+                          className="cursor-pointer border-t border-[var(--border)] transition hover:bg-[var(--primary-soft)]/50"
+                          onClick={() => openCollect(s.rollNumber)}
+                        >
+                          <td className="px-4 py-3.5">
+                            <p className="font-semibold tracking-tight text-slate-900">
+                              {s.name}
+                            </p>
+                            {s.section ? (
+                              <p className="mt-0.5 text-xs text-[var(--muted)]">
+                                Section {s.section}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-xs tabular-nums">
+                            <span className="font-medium text-slate-800">
+                              {s.rollNumber || '—'}
+                            </span>
+                            {s.admissionNumber ? (
+                              <span className="mt-0.5 block text-[var(--muted)]">
+                                {s.admissionNumber}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <p className="text-sm text-slate-800">
+                              {s.course || selectedExam?.course || '—'}
+                              {s.branch ? ` · ${s.branch}` : ''}
+                            </p>
+                            {s.college || selectedExam?.college ? (
+                              <p className="mt-0.5 text-xs text-[var(--muted)]">
+                                {s.college || selectedExam?.college}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-slate-700">
+                            {s.batch || selectedExam?.batch || '—'}
+                          </td>
+                          <td className="px-4 py-3.5 tabular-nums text-sm text-slate-700">
+                            Y{s.currentYear} / S{s.currentSemester}
+                          </td>
+                          <td className="px-4 py-3.5 text-xs text-slate-600">
+                            {s.studentStatus || '—'}
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCollect(s.rollNumber);
+                              }}
+                            >
+                              Select
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
         </CardBody>
       </Card>
 
@@ -237,13 +677,13 @@ export default function FeesPage() {
         <KpiTile
           label="Outstanding"
           value={money(summary.pendingAmount)}
-          hint={`${summary.pendingCount} record${summary.pendingCount !== 1 ? 's' : ''}`}
+          hint={`${summary.pendingCount} record${summary.pendingCount !== 1 ? 's' : ''}${examId ? ' for this exam' : ''}`}
           tone="warning"
         />
         <KpiTile
           label="Collected"
           value={money(summary.paidAmount)}
-          hint={`${summary.paidCount} record${summary.paidCount !== 1 ? 's' : ''}`}
+          hint={`${summary.paidCount} record${summary.paidCount !== 1 ? 's' : ''}${examId ? ' for this exam' : ''}`}
           tone="success"
         />
       </section>
@@ -252,9 +692,9 @@ export default function FeesPage() {
         <CardHeader
           title="Payment ledger"
           description={
-            loading
+            loadingRecords
               ? 'Loading…'
-              : `${visibleRecords.length} ${statusTab === 'all' ? '' : `${statusTab} `}record${visibleRecords.length !== 1 ? 's' : ''}`
+              : `${visibleRecords.length} ${statusTab === 'all' ? '' : `${statusTab} `}record${visibleRecords.length !== 1 ? 's' : ''}${selectedExam ? ` · ${selectedExam.name}` : ''}`
           }
           action={
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -268,7 +708,7 @@ export default function FeesPage() {
                 variant="secondary"
                 size="sm"
                 onClick={() => void loadRecords()}
-                disabled={loading}
+                disabled={loadingRecords}
               >
                 Refresh
               </Button>
@@ -276,20 +716,22 @@ export default function FeesPage() {
           }
         />
         <CardBody className="space-y-4 !pt-0">
-          {error ? <Alert tone="danger">{error}</Alert> : null}
+          {recordsError ? <Alert tone="danger">{recordsError}</Alert> : null}
 
-          {loading ? (
+          {loadingRecords ? (
             <LoadingBlock label="Loading fee records…" />
           ) : visibleRecords.length === 0 ? (
             <EmptyState
               title={
                 records.length === 0
-                  ? 'No payment activity yet'
+                  ? examId
+                    ? 'No payment activity for this exam'
+                    : 'No payment activity yet'
                   : `No ${statusTab} fee records`
               }
               description={
                 records.length === 0
-                  ? 'Fee records are created when students submit examination applications. Use the collection desk above when a student provides their PIN.'
+                  ? 'Fee records appear when students apply for the examination. Select an eligible student above to collect at the desk.'
                   : `There are currently no fee records with ${statusTab} status.`
               }
             />
@@ -297,14 +739,14 @@ export default function FeesPage() {
             <div className="-mx-6 overflow-x-auto">
               <table className="w-full min-w-[880px] text-left text-sm">
                 <thead>
-                  <tr className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                  <tr className="text-[0.6875rem] uppercase tracking-wide text-[var(--muted)]">
                     <th className="px-6 py-3 font-semibold">Student</th>
                     <th className="px-4 py-3 font-semibold">Examination</th>
                     <th className="px-4 py-3 font-semibold">Base</th>
                     <th className="px-4 py-3 font-semibold">Late</th>
                     <th className="px-4 py-3 font-semibold">Total</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-6 py-3 font-semibold text-right">Action</th>
+                    <th className="px-6 py-3 text-right font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,10 +757,10 @@ export default function FeesPage() {
                       onClick={() => openCollect(record.studentRollNumber)}
                     >
                       <td className="px-6 py-4 align-top">
-                        <p className="font-semibold text-slate-900">
+                        <p className="font-semibold tracking-tight text-slate-900">
                           {record.studentName}
                         </p>
-                        <p className="mt-0.5 text-xs tabular-nums text-[var(--muted)]">
+                        <p className="mt-0.5 font-mono text-xs tabular-nums text-[var(--muted)]">
                           {record.studentRollNumber}
                         </p>
                       </td>

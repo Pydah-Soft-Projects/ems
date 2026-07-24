@@ -55,4 +55,11 @@ module.exports = () => ({
     keySecret: process.env.RAZORPAY_KEY_SECRET || '',
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
   },
+  selfOnline: {
+    enabled: (process.env.SELF_ONLINE_ENABLED || '').toLowerCase() === 'true',
+    upiId: process.env.SELF_ONLINE_UPI_ID || '',
+    merchantName: process.env.SELF_ONLINE_MERCHANT_NAME || '',
+    paymentNote: process.env.SELF_ONLINE_PAYMENT_NOTE || '',
+    expiryHours: parseInt(process.env.SELF_ONLINE_EXPIRY_HOURS || '0', 10) || 0,
+  },
 });

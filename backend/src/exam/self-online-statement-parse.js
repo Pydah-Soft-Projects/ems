@@ -2,7 +2,7 @@
 
 /**
  * Parse merchant statement text / tabular rows into normalized txn objects.
- * Optimised for SBI account statement PDFs; CSV/XLS and pasted lines supported.
+ * Supports SBI and Canara account statement PDFs; CSV/XLS and pasted lines too.
  */
 
 function roundMoney(n) {
@@ -23,15 +23,36 @@ function parseDateLoose(value) {
   const s = String(value).trim();
   const iso = new Date(s);
   if (!Number.isNaN(iso.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(s)) return iso;
-  const m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-  if (m) {
-    const day = parseInt(m[1], 10);
-    const month = parseInt(m[2], 10) - 1;
-    let year = parseInt(m[3], 10);
+
+  const dmy = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (dmy) {
+    const day = parseInt(dmy[1], 10);
+    const month = parseInt(dmy[2], 10) - 1;
+    let year = parseInt(dmy[3], 10);
     if (year < 100) year += 2000;
-    const dt = new Date(year, month, day);
+    const hour = dmy[4] != null ? parseInt(dmy[4], 10) : 0;
+    const min = dmy[5] != null ? parseInt(dmy[5], 10) : 0;
+    const sec = dmy[6] != null ? parseInt(dmy[6], 10) : 0;
+    const dt = new Date(year, month, day, hour, min, sec);
     if (!Number.isNaN(dt.getTime())) return dt;
   }
+
+  const mon = s.match(
+    /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})/i,
+  );
+  if (mon) {
+    const months = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+    };
+    const dt = new Date(
+      parseInt(mon[3], 10),
+      months[mon[2].slice(0, 3).toLowerCase()],
+      parseInt(mon[1], 10),
+    );
+    if (!Number.isNaN(dt.getTime())) return dt;
+  }
+
   return null;
 }
 
@@ -43,7 +64,8 @@ function extractOrderRefs(text) {
     /\b(SO20\d{2}\d{6,})\b/gi,
     /\b(FM20\d{2}\d{6,})\b/gi,
     /\b(SO[-\s]?20\d{2}[-\s]?\d{4,})\b/gi,
-    /\b(E[0-9A-Z]{3})\b/gi, // New pattern for our short E-prefixed order refs
+    // E018 (base36 short) and longer notes like E0131802 — must include a digit
+    /\b(E\d[0-9A-Z]{2,11})\b/gi,
   ];
   for (const re of patterns) {
     let m;
@@ -54,17 +76,40 @@ function extractOrderRefs(text) {
   return [...found];
 }
 
+/** Strip Indian/Western thousand separators from money tokens */
+function parseMoneyToken(token) {
+  if (token == null || token === '') return null;
+  return roundMoney(String(token).replace(/,/g, ''));
+}
+
+function detectStatementBank(rawText) {
+  const text = String(rawText || '');
+  if (
+    /Canara Bank/i.test(text) ||
+    /\bIFSC Code\s*CNRB/i.test(text) ||
+    (/\bCNRB\d{7}\b/i.test(text) &&
+      /Current & Saving Account Statement/i.test(text))
+  ) {
+    return 'canara';
+  }
+  if (/State Bank of India/i.test(text) || /\bSBIN\d{7}\b/i.test(text)) {
+    return 'sbi';
+  }
+  return 'unknown';
+}
+
 function parseAmountColumns(text) {
   const s = String(text).trim();
+  // Prefer Western SBI shapes first (debit/credit dash columns)
   let m = s.match(
     /-\s*-\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s+([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:CR|DR)?\s*$/i,
   );
   if (m) {
-    const creditAmount = roundMoney(m[1].replace(/,/g, ''));
+    const creditAmount = parseMoneyToken(m[1]);
     return {
       debitAmount: null,
       creditAmount,
-      runningBalance: roundMoney(m[2].replace(/,/g, '')),
+      runningBalance: parseMoneyToken(m[2]),
       txnDirection: 'credit',
       amount: creditAmount,
     };
@@ -73,11 +118,11 @@ function parseAmountColumns(text) {
     /--\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s+([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:CR|DR)?\s*$/i,
   );
   if (m) {
-    const creditAmount = roundMoney(m[1].replace(/,/g, ''));
+    const creditAmount = parseMoneyToken(m[1]);
     return {
       debitAmount: null,
       creditAmount,
-      runningBalance: roundMoney(m[2].replace(/,/g, '')),
+      runningBalance: parseMoneyToken(m[2]),
       txnDirection: 'credit',
       amount: creditAmount,
     };
@@ -86,13 +131,49 @@ function parseAmountColumns(text) {
     /-\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*-\s*([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\s*(?:CR|DR)?\s*$/i,
   );
   if (m) {
-    const debitAmount = roundMoney(m[1].replace(/,/g, ''));
+    const debitAmount = parseMoneyToken(m[1]);
     return {
       debitAmount,
       creditAmount: null,
-      runningBalance: roundMoney(m[2].replace(/,/g, '')),
+      runningBalance: parseMoneyToken(m[2]),
       txnDirection: 'debit',
       amount: debitAmount,
+    };
+  }
+  return null;
+}
+
+/**
+ * Canara trailing columns: BranchCode [Debit] Credit Balance
+ * Amounts may use Indian grouping (2,70,510.00).
+ */
+function parseCanaraTrailingAmounts(text) {
+  const s = String(text || '').trim();
+  const three = s.match(
+    /\b(\d{1,5})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$/,
+  );
+  if (three) {
+    const debitAmount = parseMoneyToken(three[2]);
+    const creditAmount = parseMoneyToken(three[3]);
+    return {
+      branchCode: three[1],
+      debitAmount,
+      creditAmount,
+      runningBalance: parseMoneyToken(three[4]),
+      txnDirection: creditAmount != null && creditAmount > 0 ? 'credit' : 'debit',
+      amount: creditAmount != null && creditAmount > 0 ? creditAmount : debitAmount,
+    };
+  }
+  const two = s.match(/\b(\d{1,5})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*$/);
+  if (two) {
+    const creditAmount = parseMoneyToken(two[2]);
+    return {
+      branchCode: two[1],
+      debitAmount: null,
+      creditAmount,
+      runningBalance: parseMoneyToken(two[3]),
+      txnDirection: 'credit',
+      amount: creditAmount,
     };
   }
   return null;
@@ -102,6 +183,8 @@ function repairBrokenUpiNarration(text) {
   return String(text || '')
     .replace(/\/([A-Z]{1,3})\s+IN\//gi, '/$1IN/')
     .replace(/\/([A-Z]{1,4})\s+(\d{6,15})\//gi, '/$1/$2/')
+    // Canara PDF wraps mid-path: ".../KOTE PRUD/\nCNRB/**37772@..."
+    .replace(/\/\s+([A-Z]{4})\//gi, '/$1/')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -109,10 +192,14 @@ function repairBrokenUpiNarration(text) {
 function cleanPaymentNote(note) {
   if (!note) return null;
   let s = String(note).trim();
+  // Canara UPI notes sit before the PSP id: E0131802//AXL...
+  s = s.split('//')[0].trim();
   s = s.split(/\s+\d{13}\s+AT\s+/i)[0].trim();
   s = s.split(/\s+(?:DEP TFR|WDL TFR|CEMTEX DEP)\b/i)[0].trim();
   s = s.split(/\s+\d{2}\/\d{2}\/\d{4}\b/)[0].trim();
   s = s.split(/\s+-\s+-?\s*[0-9]/)[0].trim();
+  // Drop trailing path fragments left from wrap/repair
+  s = s.replace(/\/+$/, '').trim();
   if (!s) return null;
   const token = s.split(/\s+/)[0];
   return token.slice(0, 100) || null;
@@ -328,6 +415,7 @@ function parseSbiTransactionBlock(block, header = {}) {
 
 function parseStatementHeader(rawText) {
   const text = String(rawText || '');
+  const bank = detectStatementBank(text);
   const header = {
     bankName: null,
     branchName: null,
@@ -346,21 +434,35 @@ function parseStatementHeader(rawText) {
     creditCount: null,
   };
 
-  if (/State Bank of India/i.test(text)) header.bankName = 'State Bank of India';
+  if (bank === 'canara' || /Canara Bank/i.test(text)) {
+    header.bankName = 'Canara Bank';
+  } else if (/State Bank of India/i.test(text)) {
+    header.bankName = 'State Bank of India';
+  }
+
+  const canaraIfsc = text.match(/\b(CNRB\d{7})\b/i);
+  if (canaraIfsc) {
+    header.receiverIfsc = canaraIfsc[1].toUpperCase();
+    header.receiverBankCode = 'CNRB';
+  }
 
   const ifscMatch = text.match(/\b(SBIN\d{7})\b/i);
-  if (ifscMatch) {
+  if (ifscMatch && !header.receiverIfsc) {
     header.receiverIfsc = ifscMatch[1].toUpperCase();
     header.receiverBankCode = 'SBIN';
   }
 
-  const branchNameMatch = text.match(/Branch Name\s*:\s*([A-Z0-9\s]+?)(?:\s+Balance|\s*$)/im);
+  const branchNameMatch =
+    text.match(/Branch Name\s*:\s*([A-Z0-9\s]+?)(?:\s+Balance|\s*$)/im) ||
+    text.match(/Branch Name\s+([A-Z0-9 ,]+?)(?:\n|MICR|IFSC)/i);
   if (branchNameMatch) header.branchName = branchNameMatch[1].trim();
 
   const branchCodeMatch = text.match(/Branch Code[\s\S]{0,40}?:\s*(\d{4,5})/i);
   if (branchCodeMatch) header.branchCode = branchCodeMatch[1];
 
-  const acctMatch = text.match(/Account Number[\s\S]{0,80}?(\d{10,18})/i);
+  const acctMatch =
+    text.match(/Account Number[\s\S]{0,80}?(\d{10,18})/i) ||
+    text.match(/Account Number\s+(\d{10,18})/i);
   if (acctMatch) header.accountNumber = acctMatch[1];
 
   const welcomeMatch = text.match(/Welcome:\s*\n?\s*(Mr\.|Mrs\.|Ms\.|Dr\.)?\s*([A-Za-z .]+?)(?:\n|C\/O)/i);
@@ -368,11 +470,29 @@ function parseStatementHeader(rawText) {
     header.accountHolderName = `${welcomeMatch[1] || ''} ${welcomeMatch[2]}`.trim();
   }
 
+  const canaraHolder = text.match(
+    /Account Holders? Name\s+([A-Z0-9 .,&'-]+?)(?:\n|Customer Id)/i,
+  );
+  if (canaraHolder) header.accountHolderName = canaraHolder[1].trim();
+
   const periodMatch = text.match(/Statement From\s*:\s*(\d{2}-\d{2}-\d{4})\s+to\s+(\d{2}-\d{2}-\d{4})/i);
   if (periodMatch) {
     header.statementFrom = parseDateLoose(periodMatch[1].replace(/-/g, '/'));
     header.statementTo = parseDateLoose(periodMatch[2].replace(/-/g, '/'));
   }
+
+  const canaraPeriod = text.match(
+    /Searched By From\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+To\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i,
+  );
+  if (canaraPeriod) {
+    header.statementFrom = parseDateLoose(canaraPeriod[1]);
+    header.statementTo = parseDateLoose(canaraPeriod[2]);
+  }
+
+  const canaraOpen = text.match(/Opening Balance\s+Rs\.?\s*([\d,]+\.\d{2})/i);
+  if (canaraOpen) header.openingBalance = parseMoneyToken(canaraOpen[1]);
+  const canaraClose = text.match(/Closing Balance\s+Rs\.?\s*([\d,]+\.\d{2})/i);
+  if (canaraClose) header.closingBalance = parseMoneyToken(canaraClose[1]);
 
   const summaryMatch = text.match(
     /Brought Forward[\s\S]*?Closing Balance[\s\S]*?([0-9,]+\.\d{2})\s*CR?\s+([0-9,]+\.\d{2})\s+([0-9,]+\.\d{2})\s+([0-9,]+\.\d{2})\s*CR?\s+(\d+)\s+(\d+)/i,
@@ -397,16 +517,123 @@ function splitTransactionBlocks(rawText) {
     .filter((s) => s.length > 25);
 }
 
+function splitCanaraTransactionBlocks(rawText) {
+  const text = String(rawText || '');
+  return text
+    .split(/\n(?=\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}:\d{2}\b)/)
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s.length > 40 && /\bUPI\//i.test(s));
+}
+
+function parseCanaraValueDate(text) {
+  const m = String(text || '').match(
+    /\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{4})\b/i,
+  );
+  if (!m) return null;
+  return parseDateLoose(`${m[1]} ${m[2]} ${m[3]}`);
+}
+
+function parseCanaraTransactionBlock(block, header = {}) {
+  let normalized = repairBrokenUpiNarration(
+    String(block || '').replace(/\s+/g, ' ').trim(),
+  );
+  // Page footers / disclaimers often glue onto the last txn of a page
+  normalized = normalized
+    .split(/\bDisclaimer\b/i)[0]
+    .split(/\bEND OF STATEMENT\b/i)[0]
+    .replace(/\bPage\s+\d+\s+of\s+\d+\b[\s\S]*$/i, '')
+    .replace(/--\s*\d+\s+of\s+\d+\s*--[\s\S]*$/i, '')
+    .trim();
+  if (!normalized || !/\bUPI\//i.test(normalized)) {
+    return null;
+  }
+
+  const headerMatch = normalized.match(
+    /^(\d{2}-\d{2}-\d{4})\s+(\d{2}:\d{2}:\d{2})\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(\d{10,22})\s+(.*)$/i,
+  );
+  if (!headerMatch) return null;
+
+  const postDate = parseDateLoose(
+    `${headerMatch[1].replace(/-/g, '/')} ${headerMatch[2]}`,
+  );
+  const valueDate = parseDateLoose(headerMatch[3]) || parseCanaraValueDate(headerMatch[3]);
+  const chequeNo = headerMatch[4];
+  const rest = headerMatch[5];
+
+  const amounts = parseCanaraTrailingAmounts(rest);
+  if (!amounts || amounts.amount == null || amounts.amount <= 0) return null;
+
+  // Strip trailing branch/amount columns from narration body
+  const narrationBody = repairBrokenUpiNarration(
+    rest
+      .replace(/\b\d{1,5}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s*$/, '')
+      .replace(/\b\d{1,5}\s+[\d,]+\.\d{2}\s+[\d,]+\.\d{2}\s*$/, '')
+      .trim(),
+  );
+
+  const upi = parseUpiNarration(narrationBody, amounts.txnDirection);
+  const neft = !upi ? parseNeftNarration(narrationBody) : null;
+  const imps = !upi && !neft ? parseImpsNarration(narrationBody) : null;
+  const payment = upi || neft || imps;
+
+  const refs = extractOrderRefs(normalized);
+  const noteRefs = extractOrderRefs(payment?.paymentNote || '');
+  const merchantReference = refs[0] || noteRefs[0] || null;
+  const utr = payment?.utr || chequeNo || null;
+
+  if (!utr && !merchantReference) return null;
+
+  return {
+    postDate,
+    valueDate,
+    txnDate: postDate || valueDate,
+    txnType: amounts.txnDirection === 'credit' ? 'UPI CR' : 'UPI DR',
+    paymentMethod: payment?.paymentMethod || 'UPI',
+    paymentRail: payment?.paymentRail || null,
+    txnDirection: payment?.txnDirection || amounts.txnDirection,
+    utr,
+    internalBankRef: chequeNo !== utr ? chequeNo : null,
+    merchantReference,
+    transactionReference: merchantReference || utr,
+    ifsc: payment?.ifsc || extractIfsc(narrationBody) || header.receiverIfsc || null,
+    terminal: amounts.branchCode || null,
+    branchLocation: header.branchName || null,
+    payerName: payment?.payerName || null,
+    payeeName: payment?.payeeName || null,
+    payerBankCode: payment?.payerBankCode || null,
+    payerUpi: payment?.payerUpi || null,
+    receiverBankCode: header.receiverBankCode || 'CNRB',
+    receiverIfsc: header.receiverIfsc || null,
+    debitAmount: amounts.debitAmount,
+    creditAmount: amounts.creditAmount,
+    amount: amounts.amount,
+    runningBalance: amounts.runningBalance,
+    paymentNote: payment?.paymentNote || merchantReference || null,
+    narration: narrationBody.slice(0, 2000),
+    rawLine: normalized.slice(0, 2000),
+    statusRaw: 'success',
+  };
+}
+
 function parseStatementText(rawText) {
   const header = parseStatementHeader(rawText);
-  const blocks = splitTransactionBlocks(rawText);
+  const bank = detectStatementBank(rawText);
   const rows = [];
 
-  for (const block of blocks) {
-    const parsed = parseSbiTransactionBlock(block, header);
-    if (!parsed) continue;
-    if (!parsed.utr && !parsed.merchantReference) continue;
-    rows.push(parsed);
+  if (bank === 'canara') {
+    for (const block of splitCanaraTransactionBlocks(rawText)) {
+      const parsed = parseCanaraTransactionBlock(block, header);
+      if (!parsed) continue;
+      if (!parsed.utr && !parsed.merchantReference) continue;
+      rows.push(parsed);
+    }
+  } else {
+    for (const block of splitTransactionBlocks(rawText)) {
+      const parsed = parseSbiTransactionBlock(block, header);
+      if (!parsed) continue;
+      if (!parsed.utr && !parsed.merchantReference) continue;
+      rows.push(parsed);
+    }
   }
 
   if (!rows.length) {
@@ -430,12 +657,15 @@ function parseBankNarrationLine(line, header = {}) {
   if (!raw) return null;
   const normalized = raw.replace(/\s+/g, ' ');
 
+  const canaraBlock = parseCanaraTransactionBlock(normalized, header);
+  if (canaraBlock) return canaraBlock;
+
   const sbiBlock = parseSbiTransactionBlock(normalized, header);
   if (sbiBlock) return sbiBlock;
 
   if (!/\b(?:UPI\/|NEFT\*|IMPS\b)/i.test(normalized)) return null;
 
-  const amounts = parseAmountColumns(normalized);
+  const amounts = parseAmountColumns(normalized) || parseCanaraTrailingAmounts(normalized);
   const upi = parseUpiNarration(normalized, amounts?.txnDirection);
   const neft = !upi ? parseNeftNarration(normalized) : null;
   const imps = !upi && !neft ? parseImpsNarration(normalized) : null;
@@ -445,8 +675,8 @@ function parseBankNarrationLine(line, header = {}) {
   const refs = extractOrderRefs(normalized);
   const amount =
     amounts?.amount ??
-    roundMoney(
-      normalized.match(/\b([0-9]+(?:,[0-9]{3})*\.[0-9]{2})\b/)?.[1]?.replace(/,/g, ''),
+    parseMoneyToken(
+      normalized.match(/\b([\d,]+\.\d{2})\b/)?.[1],
     );
 
   if (amount != null && amount <= 0) return null;
@@ -466,7 +696,7 @@ function parseBankNarrationLine(line, header = {}) {
     merchantReference: refs[0] || null,
     transactionReference: refs[0] || payment.utr || null,
     ifsc: payment.ifsc || extractIfsc(normalized),
-    terminal,
+    terminal: terminal || amounts?.branchCode || null,
     branchLocation: extractBranchLocation(normalized),
     payerName: payment.payerName,
     payeeName: payment.payeeName,
@@ -597,7 +827,10 @@ module.exports = {
   parseTabularRows,
   parseBankNarrationLine,
   parseSbiTransactionBlock,
+  parseCanaraTransactionBlock,
   parseAmountColumns,
+  parseCanaraTrailingAmounts,
+  detectStatementBank,
   extractOrderRefs,
   extractUtr,
   extractAmount,

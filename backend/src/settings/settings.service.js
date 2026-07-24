@@ -38,12 +38,26 @@ class SettingsService {
   }
 
   selfOnlinePublicFromRow(row) {
-    const upiId = row.selfOnlineUpiId?.trim() || '';
+    const env = config.selfOnline || {};
+    const dbUpi = row.selfOnlineUpiId?.trim() || '';
+    const envUpi = env.upiId?.trim() || '';
+    const upiId = dbUpi || envUpi;
     const merchantName =
-      row.selfOnlineMerchantName?.trim() || 'College Examination Fees';
-    const note = row.selfOnlinePaymentNote?.trim() || 'Exam Fee';
-    const expiryHours = Number(row.selfOnlineExpiryHours) || 48;
-    const enabled = Boolean(row.selfOnlineEnabled);
+      row.selfOnlineMerchantName?.trim() ||
+      env.merchantName?.trim() ||
+      'College Examination Fees';
+    const note =
+      row.selfOnlinePaymentNote?.trim() ||
+      env.paymentNote?.trim() ||
+      'Exam Fee';
+    const expiryHours =
+      Number(row.selfOnlineExpiryHours) ||
+      Number(env.expiryHours) ||
+      48;
+    // Prefer DB enable. Env enable only when DB has no UPI yet (empty row).
+    const enabled = dbUpi
+      ? Boolean(row.selfOnlineEnabled)
+      : Boolean(row.selfOnlineEnabled) || Boolean(env.enabled);
     const configured = Boolean(upiId);
     return {
       enabled,
@@ -84,41 +98,51 @@ class SettingsService {
 
   async updatePaymentSettings(dto) {
     const row = await this.getOrCreateRow();
+    const patch = {};
+
     if (typeof dto.enabled === 'boolean') {
-      row.enabled = dto.enabled;
+      patch.enabled = dto.enabled;
     }
     if (typeof dto.razorpayKeyId === 'string') {
       const v = dto.razorpayKeyId.trim();
-      if (v) row.razorpayKeyId = v;
+      if (v) patch.razorpayKeyId = v;
     }
     if (typeof dto.razorpayKeySecret === 'string') {
       const v = dto.razorpayKeySecret.trim();
-      if (v && !v.startsWith('••••')) row.razorpayKeySecret = v;
+      if (v && !v.startsWith('••••')) patch.razorpayKeySecret = v;
     }
     if (typeof dto.razorpayWebhookSecret === 'string') {
       const v = dto.razorpayWebhookSecret.trim();
-      if (v && !v.startsWith('••••')) row.razorpayWebhookSecret = v;
+      if (v && !v.startsWith('••••')) patch.razorpayWebhookSecret = v;
     }
     if (typeof dto.selfOnlineEnabled === 'boolean') {
-      row.selfOnlineEnabled = dto.selfOnlineEnabled;
+      patch.selfOnlineEnabled = dto.selfOnlineEnabled;
     }
     if (typeof dto.selfOnlineUpiId === 'string') {
-      row.selfOnlineUpiId = dto.selfOnlineUpiId.trim() || null;
+      patch.selfOnlineUpiId = dto.selfOnlineUpiId.trim() || null;
     }
     if (typeof dto.selfOnlineMerchantName === 'string') {
-      row.selfOnlineMerchantName = dto.selfOnlineMerchantName.trim() || null;
+      patch.selfOnlineMerchantName =
+        dto.selfOnlineMerchantName.trim() || null;
     }
     if (typeof dto.selfOnlinePaymentNote === 'string') {
-      row.selfOnlinePaymentNote = dto.selfOnlinePaymentNote.trim() || 'Exam Fee';
+      patch.selfOnlinePaymentNote =
+        dto.selfOnlinePaymentNote.trim() || 'Exam Fee';
     }
     if (dto.selfOnlineExpiryHours != null) {
       const h = parseInt(String(dto.selfOnlineExpiryHours), 10);
       if (!Number.isFinite(h) || h < 1 || h > 720) {
-        throw AppError.badRequest('selfOnlineExpiryHours must be between 1 and 720');
+        throw AppError.badRequest(
+          'selfOnlineExpiryHours must be between 1 and 720',
+        );
       }
-      row.selfOnlineExpiryHours = h;
+      patch.selfOnlineExpiryHours = h;
     }
-    await this.settingsRepo.save(row);
+
+    if (Object.keys(patch).length > 0) {
+      // Partial UPDATE only — never rewrite unrelated columns to null/default.
+      await this.settingsRepo.update({ id: row.id }, patch);
+    }
     return this.getPaymentSettingsPublic();
   }
 

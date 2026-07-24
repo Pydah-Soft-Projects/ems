@@ -8,7 +8,7 @@ See also: [Self Online Payment & Reconciliation](./18-self-online-payment.md).
 
 ## Desk collection UI
 
-`/dashboard/fees` → click student / Collect → `/dashboard/fees/collect/[roll]`
+`/dashboard/fees` — select a **published examination** first (only eligible students load). Narrow with branch / section / search scoped to that exam, then **Select** → `/dashboard/fees/collect/[roll]`. The fee desk does not open until a student is chosen.
 
 Screenshot-style desk page:
 - Student banner (PIN, admission, year, total due)

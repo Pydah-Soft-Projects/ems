@@ -22,7 +22,7 @@ function createExamRoutes(services) {
   );
   router.get(
     '/',
-    requirePrivilege('exams:read'),
+    requirePrivilege('exams:read', 'fees:read', 'fees:collect'),
     asyncHandler(async (req, res) => {
       const status = req.query.status;
       res.json(await services.exam.findAll(status));
@@ -102,7 +102,7 @@ function createExamRoutes(services) {
   );
   router.get(
     '/:id/eligible-students',
-    requirePrivilege('exams:read', 'exams:publish'),
+    requirePrivilege('exams:read', 'exams:publish', 'fees:read', 'fees:collect'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.exam.listEligibleStudents(parseId(req.params.id)),

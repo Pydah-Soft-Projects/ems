@@ -146,6 +146,13 @@ async function bootstrap() {
     'Exam portal database connected',
   );
 
+  if (!config.simulate.useSqlite) {
+    const {
+      ensurePaymentGatewaySelfOnlineColumns,
+    } = require('./settings/ensure-self-online-columns');
+    await ensurePaymentGatewaySelfOnlineColumns(examPortalDataSource, logger);
+  }
+
   studentDataSource = createStudentDataSource();
   await studentDataSource.initialize();
   logger.info(

@@ -164,3 +164,79 @@ test('parses the sample SBI account statement PDF when available locally', async
   assert.equal(firstDebit.debitAmount, 20);
   assert.equal(firstDebit.amount, 20);
 });
+
+test('parses Canara UPI credit blocks with EMS payment note E0131802', () => {
+  const sample = [
+    'Current & Saving Account Statement',
+    'PYDAH COLLEGE OF ENGINEERING',
+    'IFSC Code CNRB0013258',
+    'Account Holders Name PYDAH COLLEGE OF ENGINEERING',
+    'Branch Name VAKALAPUDI, KAKINADA',
+    'Account Number 120000042715',
+    'Opening Balance Rs. 25,000.00',
+    'Closing Balance Rs. 2,70,510.00',
+    'Searched By From 23 Jul 2026 To 23 Jul 2026',
+    'Txn Date Value Date Cheque No. Description Branch Code Debit Credit Balance',
+    '23-07-2026 16:30:50 23 Jul 2026 411906747873 UPI/CR/411906747873/Boyidi Su/',
+    'SBIN/**94963@ybl/Payment //',
+    'YBL1384f2768cc0408b882a2db0e4a3116c/23/07/2026',
+    '16:30:50',
+    '33 10,400.00 2,70,500.00',
+    '23-07-2026 16:31:15 23 Jul 2026 496261161212 UPI/CR/496261161212/Buraga R/',
+    'SBIN/**62357@axl/E0131802//',
+    'AXL267f5898a1be47f9bbe242d15a02e6c4/23/07/2026',
+    '16:31:15',
+    '33 10.00 2,70,510.00',
+    'Disclaimer: Unless the constituent brings to the notice',
+  ].join('\n');
+
+  const { header, rows } = parseStatementText(sample);
+  assert.equal(header.bankName, 'Canara Bank');
+  assert.equal(header.receiverIfsc, 'CNRB0013258');
+  assert.equal(header.accountNumber, '120000042715');
+  assert.equal(header.openingBalance, 25000);
+  assert.equal(header.closingBalance, 270510);
+  assert.equal(rows.length, 2);
+
+  assert.equal(rows[0].utr, '411906747873');
+  assert.equal(rows[0].amount, 10400);
+  assert.equal(rows[0].creditAmount, 10400);
+
+  const hit = rows[1];
+  assert.equal(hit.utr, '496261161212');
+  assert.equal(hit.amount, 10);
+  assert.equal(hit.creditAmount, 10);
+  assert.equal(hit.paymentNote, 'E0131802');
+  assert.equal(hit.merchantReference, 'E0131802');
+  assert.equal(hit.payerName, 'Buraga R');
+  assert.equal(hit.payerBankCode, 'SBIN');
+  assert.equal(hit.txnDirection, 'credit');
+  assert.equal(hit.receiverBankCode, 'CNRB');
+});
+
+test('parses the sample Canara account statement PDF when available locally', async () => {
+  const pdfPath = 'e:/downloads/1784804801378.pdf';
+  if (!fs.existsSync(pdfPath)) {
+    console.log('Skipping Canara PDF integration test — sample file not found');
+    return;
+  }
+
+  const { PDFParse } = require('pdf-parse');
+  const buf = fs.readFileSync(pdfPath);
+  const parser = new PDFParse({ data: buf });
+  const parsed = await parser.getText();
+  const text =
+    typeof parsed === 'string' ? parsed : String(parsed?.text || parsed || '');
+  await parser.destroy?.().catch?.(() => undefined);
+
+  const { header, rows } = parseStatementText(text);
+  assert.equal(header.bankName, 'Canara Bank');
+  assert.equal(header.receiverIfsc, 'CNRB0013258');
+  assert.ok(rows.length >= 29, `expected ~29 rows, got ${rows.length}`);
+
+  const hit = rows.find((r) => r.paymentNote === 'E0131802');
+  assert.ok(hit);
+  assert.equal(hit.utr, '496261161212');
+  assert.equal(hit.amount, 10);
+  assert.equal(hit.merchantReference, 'E0131802');
+});

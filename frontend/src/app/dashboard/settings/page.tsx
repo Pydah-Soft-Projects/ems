@@ -8,6 +8,31 @@ import { Input } from '@/components/ui/Input';
 import { ApiError, api } from '@/lib/api';
 import type { PaymentGatewaySettings } from '@/lib/razorpayCheckout';
 
+function applySettingsToForms(
+  data: PaymentGatewaySettings,
+  setters: {
+    setSettings: (v: PaymentGatewaySettings) => void;
+    setEnabled: (v: boolean) => void;
+    setKeyId: (v: string) => void;
+    setKeySecret: (v: string) => void;
+    setSelfOnlineEnabled: (v: boolean) => void;
+    setSelfOnlineUpiId: (v: string) => void;
+    setSelfOnlineMerchantName: (v: string) => void;
+    setSelfOnlinePaymentNote: (v: string) => void;
+    setSelfOnlineExpiryHours: (v: string) => void;
+  },
+) {
+  setters.setSettings(data);
+  setters.setEnabled(data.enabled);
+  setters.setKeyId(data.razorpayKeyId ?? '');
+  setters.setKeySecret('');
+  setters.setSelfOnlineEnabled(Boolean(data.selfOnlineEnabled));
+  setters.setSelfOnlineUpiId(data.selfOnlineUpiId ?? '');
+  setters.setSelfOnlineMerchantName(data.selfOnlineMerchantName ?? '');
+  setters.setSelfOnlinePaymentNote(data.selfOnlinePaymentNote ?? 'Exam Fee');
+  setters.setSelfOnlineExpiryHours(String(data.selfOnlineExpiryHours ?? 48));
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<PaymentGatewaySettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,21 +51,26 @@ export default function SettingsPage() {
   const [selfOnlinePaymentNote, setSelfOnlinePaymentNote] = useState('Exam Fee');
   const [selfOnlineExpiryHours, setSelfOnlineExpiryHours] = useState('48');
 
+  const formSetters = {
+    setSettings,
+    setEnabled,
+    setKeyId,
+    setKeySecret,
+    setSelfOnlineEnabled,
+    setSelfOnlineUpiId,
+    setSelfOnlineMerchantName,
+    setSelfOnlinePaymentNote,
+    setSelfOnlineExpiryHours,
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const data = await api.getPaymentSettings();
-      setSettings(data);
-      setEnabled(data.enabled);
-      setKeyId(data.razorpayKeyId ?? '');
-      setKeySecret('');
-      setSelfOnlineEnabled(Boolean(data.selfOnlineEnabled));
-      setSelfOnlineUpiId(data.selfOnlineUpiId ?? '');
-      setSelfOnlineMerchantName(data.selfOnlineMerchantName ?? '');
-      setSelfOnlinePaymentNote(data.selfOnlinePaymentNote ?? 'Exam Fee');
-      setSelfOnlineExpiryHours(String(data.selfOnlineExpiryHours ?? 48));
+      applySettingsToForms(data, formSetters);
     } catch (err) {
+      setSettings(null);
       setError(
         err instanceof ApiError
           ? err.message
@@ -49,6 +79,8 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
+    // formSetters are stable setState fns
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -66,10 +98,7 @@ export default function SettingsPage() {
         razorpayKeyId: keyId.trim() || undefined,
         razorpayKeySecret: keySecret.trim() || undefined,
       });
-      setSettings(updated);
-      setEnabled(updated.enabled);
-      setKeyId(updated.razorpayKeyId ?? '');
-      setKeySecret('');
+      applySettingsToForms(updated, formSetters);
       setSuccess('Razorpay settings saved.');
     } catch (err) {
       setError(
@@ -93,16 +122,13 @@ export default function SettingsPage() {
         selfOnlinePaymentNote: selfOnlinePaymentNote.trim() || 'Exam Fee',
         selfOnlineExpiryHours: parseInt(selfOnlineExpiryHours, 10) || 48,
       });
-      setSettings(updated);
-      setSelfOnlineEnabled(Boolean(updated.selfOnlineEnabled));
-      setSelfOnlineUpiId(updated.selfOnlineUpiId ?? '');
-      setSelfOnlineMerchantName(updated.selfOnlineMerchantName ?? '');
-      setSelfOnlinePaymentNote(updated.selfOnlinePaymentNote ?? 'Exam Fee');
-      setSelfOnlineExpiryHours(String(updated.selfOnlineExpiryHours ?? 48));
+      applySettingsToForms(updated, formSetters);
       setSuccess('Self Online UPI settings saved.');
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Failed to save Self Online settings.',
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to save Self Online settings.',
       );
     } finally {
       setSavingSelf(false);
@@ -116,6 +142,27 @@ export default function SettingsPage() {
         description="Razorpay gateway and Self Online college UPI configuration"
       />
 
+      {error ? (
+        <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3.5 py-2.5 text-sm text-[var(--danger)]">
+          {error}
+          <div className="mt-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => void load()}
+            >
+              Retry load
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {success ? (
+        <div className="rounded-[var(--radius)] bg-[var(--success-soft)] px-3.5 py-2.5 text-sm text-[var(--success)]">
+          {success}
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader
           title="Razorpay payments"
@@ -124,6 +171,10 @@ export default function SettingsPage() {
         <CardBody>
           {loading ? (
             <p className="text-sm text-[var(--muted)]">Loading…</p>
+          ) : !settings && error ? (
+            <p className="text-sm text-[var(--muted)]">
+              Could not load saved Razorpay settings. Use Retry load above.
+            </p>
           ) : (
             <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
               <label className="flex items-center gap-3 text-sm font-medium text-slate-800">
@@ -186,11 +237,16 @@ export default function SettingsPage() {
       <Card>
         <CardHeader
           title="Self Online UPI"
-          description="College merchant UPI QR — no payment gateway. Fee Management transaction is created only after statement verification."
+          description="College merchant UPI QR — no payment gateway. Fee Management transaction is created only after statement verification. Saved in the database (same place as Razorpay)."
         />
         <CardBody>
           {loading ? (
             <p className="text-sm text-[var(--muted)]">Loading…</p>
+          ) : !settings && error ? (
+            <p className="text-sm text-[var(--muted)]">
+              Could not load saved Self Online settings. Use Retry load above —
+              empty fields here do not mean they were wiped.
+            </p>
           ) : (
             <form
               onSubmit={(e) => void onSubmitSelfOnline(e)}
@@ -242,9 +298,15 @@ export default function SettingsPage() {
                 <p className="font-medium text-slate-800">How it works</p>
                 <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-[var(--muted)]">
                   <li>Student gets UPI QR with EMS order ID in the payment note</li>
-                  <li>After paying, student marks “I have paid” (temporary acknowledgement)</li>
+                  <li>
+                    After paying, student marks “I have paid” (temporary
+                    acknowledgement)
+                  </li>
                   <li>Accounts uploads merchant PDF statement and verifies matches</li>
-                  <li>Only then fee becomes paid and Fee Management gets the transaction</li>
+                  <li>
+                    Only then fee becomes paid and Fee Management gets the
+                    transaction
+                  </li>
                 </ul>
                 <p className="mt-2 text-xs text-[var(--muted)]">
                   Status:{' '}
@@ -263,17 +325,6 @@ export default function SettingsPage() {
           )}
         </CardBody>
       </Card>
-
-      {error && (
-        <div className="rounded-[var(--radius)] bg-[var(--danger-soft)] px-3.5 py-2.5 text-sm text-[var(--danger)]">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-[var(--radius)] bg-[var(--success-soft)] px-3.5 py-2.5 text-sm text-[var(--success)]">
-          {success}
-        </div>
-      )}
     </div>
   );
 }
