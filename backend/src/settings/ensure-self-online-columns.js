@@ -32,6 +32,11 @@ const SELF_ONLINE_COLUMNS = [
     definition:
       "INT NOT NULL DEFAULT 48 COMMENT 'Pending Self Online expiry hours'",
   },
+  {
+    name: 'restrictExamApplyOnFeeDues',
+    definition:
+      "TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Block exam apply / hall tickets when student has overdue fee dues'",
+  },
 ];
 
 async function ensurePaymentGatewaySelfOnlineColumns(dataSource, log = console) {

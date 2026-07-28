@@ -31,6 +31,7 @@ class SettingsService {
         selfOnlineMerchantName: null,
         selfOnlinePaymentNote: 'Exam Fee',
         selfOnlineExpiryHours: 48,
+        restrictExamApplyOnFeeDues: true,
       });
       row = await this.settingsRepo.save(row);
     }
@@ -92,8 +93,19 @@ class SettingsService {
       selfOnlineMerchantName: selfOnline.merchantName,
       selfOnlinePaymentNote: selfOnline.paymentNote,
       selfOnlineExpiryHours: selfOnline.expiryHours,
+      restrictExamApplyOnFeeDues:
+        row.restrictExamApplyOnFeeDues !== false &&
+        row.restrictExamApplyOnFeeDues !== 0,
       updatedAt: row.updatedAt,
     };
+  }
+
+  async isExamDueRestrictionEnabled() {
+    const row = await this.getOrCreateRow();
+    return (
+      row.restrictExamApplyOnFeeDues !== false &&
+      row.restrictExamApplyOnFeeDues !== 0
+    );
   }
 
   async updatePaymentSettings(dto) {
@@ -137,6 +149,9 @@ class SettingsService {
         );
       }
       patch.selfOnlineExpiryHours = h;
+    }
+    if (typeof dto.restrictExamApplyOnFeeDues === 'boolean') {
+      patch.restrictExamApplyOnFeeDues = dto.restrictExamApplyOnFeeDues;
     }
 
     if (Object.keys(patch).length > 0) {

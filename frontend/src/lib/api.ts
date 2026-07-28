@@ -708,6 +708,7 @@ export const api = {
     selfOnlineMerchantName?: string;
     selfOnlinePaymentNote?: string;
     selfOnlineExpiryHours?: number;
+    restrictExamApplyOnFeeDues?: boolean;
   }) {
     return request<import('./razorpayCheckout').PaymentGatewaySettings>(
       '/settings/payments',

@@ -20,6 +20,9 @@ Students may open exam details freely. If overdue dues exist, **Apply is disable
 | Concessions | Use currently stored **APPROVED** values as final |
 | Override | Users with `fees:due_override`; Super Admin always |
 | Hall tickets | Same overdue-due gate |
+| Settings toggle | `restrictExamApplyOnFeeDues` (Settings page) — default **ON** |
+
+When the toggle is **OFF**, dues may still be calculated and shown, but apply/submit and hall tickets are **not** blocked.
 
 ## Data source
 

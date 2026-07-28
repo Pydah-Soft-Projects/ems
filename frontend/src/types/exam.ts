@@ -180,6 +180,10 @@ export interface DueClearanceHead {
 
 export interface DueClearance {
   blocked: boolean;
+  /** True when overdue dues exist (independent of Settings toggle). */
+  hasOverdue?: boolean;
+  /** From Settings → restrict exam apply on fee dues. */
+  restrictionEnabled?: boolean;
   canApply: boolean;
   asOfDate: string;
   totalDue: number;

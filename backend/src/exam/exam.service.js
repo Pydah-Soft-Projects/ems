@@ -677,9 +677,30 @@ class ExamService {
         if (actor.isSuperAdmin) return true;
         return hasPrivilege(actor.privileges, 'fees:due_override');
     }
+    async isExamDueRestrictionEnabled() {
+        if (!this.settings?.isExamDueRestrictionEnabled) return true;
+        try {
+            return await this.settings.isExamDueRestrictionEnabled();
+        }
+        catch {
+            return true;
+        }
+    }
     async getDueClearanceForStudent(student) {
-        if (!this.feeManagement?.getStudentDueClearance) {
+        const restrictionEnabled = await this.isExamDueRestrictionEnabled();
+        const applyRestriction = (due) => {
+            const hasOverdue = Boolean(due?.blocked);
             return {
+                ...due,
+                hasOverdue,
+                restrictionEnabled,
+                // canApply respects the Settings toggle; blocked still means overdue exists
+                canApply: !restrictionEnabled || !hasOverdue,
+                blocked: hasOverdue,
+            };
+        };
+        if (!this.feeManagement?.getStudentDueClearance) {
+            return applyRestriction({
                 blocked: false,
                 canApply: true,
                 asOfDate: new Date().toISOString().slice(0, 10),
@@ -691,14 +712,15 @@ class ExamService {
                 verification: { matched: true, notes: [] },
                 skipped: true,
                 reason: 'fee_management_service_missing',
-            };
+            });
         }
         try {
-            return await this.feeManagement.getStudentDueClearance(student);
+            const due = await this.feeManagement.getStudentDueClearance(student);
+            return applyRestriction(due);
         }
         catch (err) {
             log.error({ err, studentId: student?.id }, 'Fee due clearance check failed');
-            return {
+            return applyRestriction({
                 blocked: false,
                 canApply: true,
                 asOfDate: new Date().toISOString().slice(0, 10),
@@ -710,18 +732,24 @@ class ExamService {
                 verification: { matched: true, notes: [] },
                 skipped: true,
                 reason: 'due_check_failed',
-            };
+            });
         }
     }
     async assertNoOverdueDues(student, { overrideDues = false, actor = null } = {}) {
         const dueClearance = await this.getDueClearanceForStudent(student);
-        if (!dueClearance.blocked) {
+        if (!dueClearance.restrictionEnabled) {
+            return { ...dueClearance, canApply: true };
+        }
+        if (!dueClearance.hasOverdue && !dueClearance.blocked) {
             return dueClearance;
         }
-        if (overrideDues && this.canOverrideDues(actor)) {
-            return { ...dueClearance, overridden: true, canApply: true };
+        if (dueClearance.blocked || dueClearance.hasOverdue) {
+            if (overrideDues && this.canOverrideDues(actor)) {
+                return { ...dueClearance, overridden: true, canApply: true };
+            }
+            throw AppError.badRequest(dueClearance.message || 'Clear all overdue fee dues before continuing.');
         }
-        throw AppError.badRequest(dueClearance.message || 'Clear all overdue fee dues before continuing.');
+        return dueClearance;
     }
     summarizeDueClearance(studentsWithDue) {
         let blockedCount = 0;

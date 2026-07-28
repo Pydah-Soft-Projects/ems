@@ -145,7 +145,11 @@ export function StaffApplyModal({
       );
       return;
     }
-    if (detail?.dueClearance?.blocked && !(canOverrideDues && overrideDues)) {
+    if (
+      detail?.dueClearance?.restrictionEnabled !== false &&
+      (detail?.dueClearance?.hasOverdue || detail?.dueClearance?.blocked) &&
+      !(canOverrideDues && overrideDues)
+    ) {
       setError(
         detail.dueClearance.message ||
           'Student has overdue fee dues. Clear dues or use override privilege.',
@@ -213,7 +217,7 @@ export function StaffApplyModal({
           </p>
         ) : !detail ? null : (
           <div className="space-y-4">
-            {detail.dueClearance?.blocked ? (
+            {detail.dueClearance?.hasOverdue || detail.dueClearance?.blocked ? (
               <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <h3 className="text-sm font-semibold text-amber-950">
                   Overdue fee dues — {money(detail.dueClearance.totalDue)}
@@ -221,6 +225,12 @@ export function StaffApplyModal({
                 <p className="mt-1 text-sm text-amber-900">
                   {detail.dueClearance.message}
                 </p>
+                {detail.dueClearance.restrictionEnabled === false ? (
+                  <p className="mt-2 text-xs font-medium text-amber-800">
+                    Apply restriction is off in Settings — application is
+                    allowed.
+                  </p>
+                ) : null}
                 {detail.dueClearance.byHead?.length ? (
                   <ul className="mt-2 space-y-1 text-xs text-amber-900">
                     {detail.dueClearance.byHead.map((h) => (
@@ -230,7 +240,8 @@ export function StaffApplyModal({
                     ))}
                   </ul>
                 ) : null}
-                {canOverrideDues ? (
+                {canOverrideDues &&
+                detail.dueClearance.restrictionEnabled !== false ? (
                   <label className="mt-3 flex items-start gap-2 text-sm text-amber-950">
                     <input
                       type="checkbox"
@@ -243,11 +254,12 @@ export function StaffApplyModal({
                       fees:due_override)
                     </span>
                   </label>
-                ) : (
+                ) : detail.dueClearance.restrictionEnabled !== false &&
+                  !canOverrideDues ? (
                   <p className="mt-2 text-xs text-amber-800">
                     Application is blocked until dues are cleared.
                   </p>
-                )}
+                ) : null}
               </section>
             ) : null}
             <section className="rounded-xl border border-[var(--border)] p-4">
@@ -425,13 +437,14 @@ export function StaffApplyModal({
                   submitting ||
                   !(detail.openTypes?.length ?? 0) ||
                   !enrollType ||
-                  (Boolean(detail.dueClearance?.blocked) &&
+                  (detail.canApply === false &&
                     !(canOverrideDues && overrideDues))
                 }
               >
                 {submitting
                   ? 'Submitting…'
-                  : detail.dueClearance?.blocked && !(canOverrideDues && overrideDues)
+                  : detail.canApply === false &&
+                      !(canOverrideDues && overrideDues)
                     ? 'Clear dues to apply'
                     : 'Submit application'}
               </Button>

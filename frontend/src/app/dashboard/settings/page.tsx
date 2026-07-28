@@ -20,6 +20,7 @@ function applySettingsToForms(
     setSelfOnlineMerchantName: (v: string) => void;
     setSelfOnlinePaymentNote: (v: string) => void;
     setSelfOnlineExpiryHours: (v: string) => void;
+    setRestrictExamApplyOnFeeDues: (v: boolean) => void;
   },
 ) {
   setters.setSettings(data);
@@ -31,6 +32,9 @@ function applySettingsToForms(
   setters.setSelfOnlineMerchantName(data.selfOnlineMerchantName ?? '');
   setters.setSelfOnlinePaymentNote(data.selfOnlinePaymentNote ?? 'Exam Fee');
   setters.setSelfOnlineExpiryHours(String(data.selfOnlineExpiryHours ?? 48));
+  setters.setRestrictExamApplyOnFeeDues(
+    data.restrictExamApplyOnFeeDues !== false,
+  );
 }
 
 export default function SettingsPage() {
@@ -50,6 +54,9 @@ export default function SettingsPage() {
   const [selfOnlineMerchantName, setSelfOnlineMerchantName] = useState('');
   const [selfOnlinePaymentNote, setSelfOnlinePaymentNote] = useState('Exam Fee');
   const [selfOnlineExpiryHours, setSelfOnlineExpiryHours] = useState('48');
+  const [restrictExamApplyOnFeeDues, setRestrictExamApplyOnFeeDues] =
+    useState(true);
+  const [savingDueRestrict, setSavingDueRestrict] = useState(false);
 
   const formSetters = {
     setSettings,
@@ -61,6 +68,7 @@ export default function SettingsPage() {
     setSelfOnlineMerchantName,
     setSelfOnlinePaymentNote,
     setSelfOnlineExpiryHours,
+    setRestrictExamApplyOnFeeDues,
   };
 
   const load = useCallback(async () => {
@@ -135,11 +143,37 @@ export default function SettingsPage() {
     }
   }
 
+  async function onSubmitDueRestrict(e: FormEvent) {
+    e.preventDefault();
+    setSavingDueRestrict(true);
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await api.updatePaymentSettings({
+        restrictExamApplyOnFeeDues,
+      });
+      applySettingsToForms(updated, formSetters);
+      setSuccess(
+        restrictExamApplyOnFeeDues
+          ? 'Exam apply due restriction enabled.'
+          : 'Exam apply due restriction disabled.',
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to save due restriction setting.',
+      );
+    } finally {
+      setSavingDueRestrict(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Razorpay gateway and Self Online college UPI configuration"
+        description="Payments and examination application rules"
       />
 
       {error ? (
@@ -162,6 +196,69 @@ export default function SettingsPage() {
           {success}
         </div>
       ) : null}
+
+      <Card>
+        <CardHeader
+          title="Exam application — fee due restriction"
+          description="Control whether students with overdue Fee Management dues can apply for examinations and access hall tickets."
+        />
+        <CardBody>
+          {loading ? (
+            <p className="text-sm text-[var(--muted)]">Loading…</p>
+          ) : !settings && error ? (
+            <p className="text-sm text-[var(--muted)]">
+              Could not load settings. Use Retry load above.
+            </p>
+          ) : (
+            <form
+              onSubmit={(e) => void onSubmitDueRestrict(e)}
+              className="space-y-5"
+            >
+              <label className="flex items-start gap-3 text-sm font-medium text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={restrictExamApplyOnFeeDues}
+                  onChange={(e) =>
+                    setRestrictExamApplyOnFeeDues(e.target.checked)
+                  }
+                  className="mt-1 h-4 w-4 rounded border-slate-300"
+                />
+                <span>
+                  Restrict exam application when student has overdue fee dues
+                </span>
+              </label>
+
+              <div className="rounded-lg border border-[var(--border)] bg-slate-50 px-3.5 py-3 text-sm text-slate-600">
+                <p className="font-medium text-slate-800">When enabled</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-[var(--muted)]">
+                  <li>Students with overdue dues can view exam details</li>
+                  <li>Apply / submit is blocked until dues are cleared</li>
+                  <li>Hall tickets are also blocked for overdue students</li>
+                  <li>
+                    Staff with <code>fees:due_override</code> (and Super Admin)
+                    can still override
+                  </li>
+                </ul>
+                <p className="mt-3 font-medium text-slate-800">When disabled</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-[var(--muted)]">
+                  <li>Due amounts can still be shown for information</li>
+                  <li>Students may apply and access hall tickets even with overdue dues</li>
+                </ul>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Status:{' '}
+                  {restrictExamApplyOnFeeDues
+                    ? 'Restriction ON — overdue dues block apply'
+                    : 'Restriction OFF — overdue dues do not block apply'}
+                </p>
+              </div>
+
+              <Button type="submit" disabled={savingDueRestrict}>
+                {savingDueRestrict ? 'Saving…' : 'Save due restriction'}
+              </Button>
+            </form>
+          )}
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader

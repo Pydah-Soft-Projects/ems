@@ -11,9 +11,14 @@ import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
   const router = useRouter();
   const application = exam.applications?.[0] ?? null;
-  const duesBlocked = Boolean(exam.dueClearance?.blocked);
+  const hasOverdue = Boolean(
+    exam.dueClearance?.hasOverdue ?? exam.dueClearance?.blocked,
+  );
+  const restrictionEnabled = exam.dueClearance?.restrictionEnabled !== false;
   const canApply =
-    exam.canApply !== false && !duesBlocked && !application;
+    exam.canApply !== false &&
+    !application &&
+    (!restrictionEnabled || !hasOverdue);
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]">
@@ -39,10 +44,14 @@ export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
               a separate examination.
             </p>
           ) : null}
-          {duesBlocked && !application ? (
+          {hasOverdue && !application ? (
             <p className="mt-2 text-xs font-medium text-[var(--danger)]">
               {exam.dueClearance?.message ||
-                `Outstanding dues ${money(exam.dueClearance?.totalDue ?? 0)}. Clear dues before applying.`}
+                `Outstanding dues ${money(exam.dueClearance?.totalDue ?? 0)}.${
+                  restrictionEnabled
+                    ? ' Clear dues before applying.'
+                    : ' (Apply restriction is currently off.)'
+                }`}
             </p>
           ) : null}
         </div>
@@ -74,8 +83,10 @@ export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
           </div>
         ) : (
           <div className="flex flex-col items-end gap-2">
-            {duesBlocked ? (
+            {hasOverdue && restrictionEnabled ? (
               <Badge variant="danger">Dues pending</Badge>
+            ) : hasOverdue ? (
+              <Badge variant="warning">Dues (not blocking)</Badge>
             ) : null}
             <Button
               type="button"

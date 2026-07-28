@@ -164,9 +164,16 @@ export default function StudentExamApplyPage({
   }
 
   async function submitApplication() {
-    if (detail?.dueClearance?.blocked || detail?.canApply === false) {
+    const restrictionOn = detail?.dueClearance?.restrictionEnabled !== false;
+    const hasOverdue = Boolean(
+      detail?.dueClearance?.hasOverdue ?? detail?.dueClearance?.blocked,
+    );
+    if (
+      detail?.canApply === false ||
+      (restrictionOn && hasOverdue)
+    ) {
       setError(
-        detail.dueClearance?.message ||
+        detail?.dueClearance?.message ||
           'Clear all overdue fee dues before applying for the examination.',
       );
       return;
@@ -320,7 +327,7 @@ export default function StudentExamApplyPage({
         </p>
       </div>
 
-      {detail.dueClearance?.blocked ? (
+      {detail.dueClearance?.hasOverdue || detail.dueClearance?.blocked ? (
         <section className="rounded-[var(--radius-lg)] border border-amber-200 bg-amber-50 p-5 shadow-[var(--shadow-sm)]">
           <h2 className="text-base font-semibold text-amber-950">
             Outstanding fee dues
@@ -328,6 +335,17 @@ export default function StudentExamApplyPage({
           <p className="mt-1 text-sm text-amber-900">
             {detail.dueClearance.message}
           </p>
+          {detail.dueClearance.restrictionEnabled === false ? (
+            <p className="mt-2 text-xs font-medium text-amber-800">
+              Apply restriction is currently off in Settings — you can still
+              submit this application.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-amber-800">
+              You can review examination details below. Clear all overdue dues
+              before submitting an application.
+            </p>
+          )}
           <p className="mt-3 text-sm font-semibold text-amber-950">
             Total overdue: {money(detail.dueClearance.totalDue)}
           </p>
@@ -376,10 +394,6 @@ export default function StudentExamApplyPage({
               </ul>
             </div>
           ) : null}
-          <p className="mt-3 text-xs text-amber-800">
-            You can review examination details below. Clear all overdue dues
-            before submitting an application.
-          </p>
         </section>
       ) : null}
 
@@ -610,13 +624,12 @@ export default function StudentExamApplyPage({
                 submitting ||
                 !(detail.openTypes?.length) ||
                 !enrollType ||
-                Boolean(detail.dueClearance?.blocked) ||
                 detail.canApply === false
               }
             >
               {submitting
                 ? 'Submitting…'
-                : detail.dueClearance?.blocked
+                : detail.canApply === false
                   ? 'Clear dues to apply'
                   : 'Submit & continue to pay'}
             </Button>

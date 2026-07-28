@@ -44,6 +44,8 @@ export type PaymentGatewaySettings = {
   selfOnlineMerchantName?: string;
   selfOnlinePaymentNote?: string;
   selfOnlineExpiryHours?: number;
+  /** When true, overdue Fee Mgmt dues block exam apply + hall tickets. */
+  restrictExamApplyOnFeeDues?: boolean;
   updatedAt: string;
 };
 
