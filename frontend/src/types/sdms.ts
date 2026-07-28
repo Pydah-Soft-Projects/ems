@@ -92,6 +92,27 @@ export interface SdmsStudent {
   email?: string | null;
 }
 
+export interface SdmsEvent {
+  id: number;
+  title: string;
+  description: string | null;
+  eventDate: string;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  eventType: string | null;
+  createdBy: number | null;
+  targetCollege: string | null;
+  targetCourse: string | null;
+  targetBranch: string | null;
+  targetBatch: string | null;
+  targetYear: string | null;
+  targetSemester: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SdmsStudentSection {
   id: number;
   studentId: number;

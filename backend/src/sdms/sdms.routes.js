@@ -183,6 +183,24 @@ function createSdmsRoutes(services) {
       res.json(await sdms.getStudent(parseId(req.params.id)));
     }),
   );
+  router.get(
+    '/events',
+    requirePrivilege('exams:read'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await sdms.listEvents({
+          from: req.query.from,
+          to: req.query.to,
+          targetCollege: req.query.targetCollege,
+          targetCourse: req.query.targetCourse,
+          targetBranch: req.query.targetBranch,
+          targetBatch: req.query.targetBatch,
+          targetYear: req.query.targetYear,
+          targetSemester: req.query.targetSemester,
+        }),
+      );
+    }),
+  );
   return router;
 }
 

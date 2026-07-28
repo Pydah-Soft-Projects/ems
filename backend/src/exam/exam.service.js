@@ -606,7 +606,7 @@ class ExamService {
         exam.rejectionRemarks = dto.remarks;
         return this.examRepo.save(exam);
     }
-    async publish(id, _dto) {
+    async publish(id, _dto, actor) {
         const exam = await this.findOne(id);
         if (exam.status !== ExamStatus.APPROVED) {
             throw AppError.badRequest('Only approved examinations can be published');
@@ -618,7 +618,16 @@ class ExamService {
         exam.status = ExamStatus.PUBLISHED;
         exam.publishedAt = new Date();
         await this.examRepo.save(exam);
-        return this.findOne(id);
+        const publishedExam = await this.findOne(id);
+        // Create SDMS timeline events for scoped students (admin calendar).
+        // Don't block publication if SDMS is temporarily unreachable.
+        try {
+            await this.sdms.createOrReplaceExamEventsForPublishedExam(publishedExam, actor);
+        }
+        catch (err) {
+            log.error({ err, examId: id }, 'Failed to create SDMS exam events');
+        }
+        return publishedExam;
     }
     async releaseHallTickets(id) {
         const exam = await this.findOne(id);

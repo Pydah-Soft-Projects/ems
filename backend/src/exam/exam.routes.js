@@ -69,7 +69,7 @@ function createExamRoutes(services) {
     '/:id/publish',
     requirePrivilege('exams:publish'),
     asyncHandler(async (req, res) => {
-      res.json(await services.exam.publish(parseId(req.params.id), req.body));
+      res.json(await services.exam.publish(parseId(req.params.id), req.body, req.user));
     }),
   );
   router.post(

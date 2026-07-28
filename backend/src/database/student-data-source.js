@@ -15,6 +15,7 @@ const { SdmsStudentSection } = require('../sdms/entities/student-section.entity'
 const {
   SdmsStudentCredentials,
 } = require('../sdms/entities/student-credentials.entity');
+const { SdmsEvent } = require('../sdms/entities/event.entity');
 
 const sdmsEntities = [
   SdmsCollege,
@@ -26,6 +27,7 @@ const sdmsEntities = [
   SdmsStudent,
   SdmsStudentSection,
   SdmsStudentCredentials,
+  SdmsEvent,
 ];
 
 function createStudentDataSource() {

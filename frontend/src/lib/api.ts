@@ -56,6 +56,7 @@ import {
   SdmsStudentListResponse,
   SdmsStudentSection,
   SdmsStudent,
+  SdmsEvent,
   SdmsStudentFilters,
 } from '@/types/sdms';
 import {
@@ -376,6 +377,24 @@ export const api = {
 
   getSdmsStudent(id: number) {
     return request<SdmsStudent>(`/sdms/students/${id}`);
+  },
+
+  getSdmsEvents(filters: {
+    from?: string;
+    to?: string;
+    targetCollege?: string;
+    targetCourse?: string;
+    targetBranch?: string;
+    targetBatch?: string;
+    targetYear?: string;
+    targetSemester?: string;
+  } = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') params.set(key, String(value));
+    });
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request<SdmsEvent[]>(`/sdms/events${query}`);
   },
 
   getExams(status?: ExamStatus) {

@@ -11,6 +11,7 @@ const { SdmsSemester } = require('./entities/semester.entity');
 const { SdmsStudent } = require('./entities/student.entity');
 const { SdmsStudentSection } = require('./entities/student-section.entity');
 const { SdmsStudentCredentials } = require('./entities/student-credentials.entity');
+const { SdmsEvent } = require('./entities/event.entity');
 class SdmsService {
     constructor(collegeRepo, courseRepo, branchRepo, academicYearRepo, branchAcademicYearRepo, semesterRepo, studentRepo, studentSectionRepo, credentialsRepo, dataSource) {
         this.collegeRepo = collegeRepo;
@@ -720,6 +721,204 @@ class SdmsService {
             collegeName = college.name;
         }
         return { collegeId, courseId, collegeName, courseName, branchName };
+    }
+
+    async listEvents(filters = {}) {
+        const eventRepo = this.dataSource.getRepository(SdmsEvent);
+        const from = filters.from ? new Date(String(filters.from)) : null;
+        const to = filters.to ? new Date(String(filters.to)) : null;
+
+        // If the client didn't specify a range, default to a broad 1-month window around now.
+        const now = new Date();
+        const fromDate = from ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const toDate = to ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+        const qb = eventRepo.createQueryBuilder('e')
+            .select([
+            'e.id',
+            'e.title',
+            'e.description',
+            'e.event_date',
+            'e.end_date',
+            'e.start_time',
+            'e.end_time',
+            'e.event_type',
+            'e.created_by',
+            'e.target_college',
+            'e.target_course',
+            'e.target_branch',
+            'e.target_batch',
+            'e.target_year',
+            'e.target_semester',
+            'e.is_active',
+            'e.created_at',
+            'e.updated_at',
+        ])
+            .where('e.is_active = 1')
+            .andWhere('e.event_date <= :toDate', { toDate: toDate.toISOString().slice(0, 10) })
+            // Spanning events: included if end_date is NULL (open-ended) OR >= fromDate
+            .andWhere('(e.end_date IS NULL OR e.end_date >= :fromDate)', { fromDate: fromDate.toISOString().slice(0, 10) })
+            .orderBy('e.event_date', 'ASC')
+            .addOrderBy('e.id', 'ASC');
+
+        if (filters.targetCollege !== undefined) qb.andWhere('e.target_college = :v', { v: filters.targetCollege || null });
+        if (filters.targetCourse !== undefined) qb.andWhere('e.target_course = :v', { v: filters.targetCourse || null });
+        if (filters.targetBranch !== undefined) qb.andWhere('e.target_branch = :v', { v: filters.targetBranch || null });
+        if (filters.targetBatch !== undefined) qb.andWhere('e.target_batch = :v', { v: filters.targetBatch || null });
+        if (filters.targetYear !== undefined) qb.andWhere('e.target_year = :v', { v: filters.targetYear || null });
+        if (filters.targetSemester !== undefined) qb.andWhere('e.target_semester = :v', { v: filters.targetSemester || null });
+
+        const rows = await qb.getRawMany();
+        return rows.map((r) => ({
+            id: Number(r.id),
+            title: r.title,
+            description: r.description,
+            eventDate: r.event_date,
+            endDate: r.end_date,
+            startTime: r.start_time,
+            endTime: r.end_time,
+            eventType: r.event_type,
+            createdBy: r.created_by != null ? Number(r.created_by) : null,
+            targetCollege: r.target_college,
+            targetCourse: r.target_course,
+            targetBranch: r.target_branch,
+            targetBatch: r.target_batch,
+            targetYear: r.target_year,
+            targetSemester: r.target_semester,
+            isActive: Number(r.is_active) === 1,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+        }));
+    }
+
+    async createOrReplaceExamEventsForPublishedExam(exam, actor = {}) {
+        const eventRepo = this.dataSource.getRepository(SdmsEvent);
+        const examId = Number(exam.id);
+        if (!examId) throw AppError.badRequest('Invalid exam id for SDMS event creation');
+
+        // Marker to keep deletion + re-creation idempotent.
+        const marker = `[ems_exam_id:${examId}]`;
+        const descriptionBase = (suffix) => `${marker} ${suffix}`;
+
+        const deleteResult = await eventRepo.createQueryBuilder()
+            .delete()
+            .where('description LIKE :p', { p: `%${marker}%` })
+            .execute();
+
+        const scopes = (exam.scopes && exam.scopes.length > 0)
+            ? exam.scopes
+            : [
+                {
+                    college: exam.college,
+                    course: exam.course,
+                    branch: exam.branch,
+                    batch: exam.batch,
+                    yearOfStudy: exam.yearOfStudy,
+                    semester: exam.semester,
+                    section: exam.section ?? null,
+                },
+            ];
+
+        const createdBy = actor?.emsUserId != null
+            ? parseInt(String(actor.emsUserId), 10)
+            : (actor?.id != null ? parseInt(String(actor.id), 10) : null);
+
+        const createdAt = new Date();
+        const saveEvent = (payload) => eventRepo.save(eventRepo.create({
+            ...payload,
+            createdBy: createdBy && Number.isFinite(createdBy) ? createdBy : null,
+            isActive: 1,
+            createdAt,
+            updatedAt: createdAt,
+        }));
+
+        const events = [];
+
+        // 1) Application window (applicationStartDate → applicationEndDate)
+        const hasApplicationWindow = !!(exam.applicationStartDate && exam.applicationEndDate);
+        // Late fee slabs
+        const slabs = Array.isArray(exam.lateFeeSlabs) ? exam.lateFeeSlabs : [];
+        const applicationEnd = exam.applicationEndDate ?? null;
+        // 2) Exam window (examinationStartDate → examinationEndDate)
+        const hasExamWindow = !!(exam.examinationStartDate && exam.examinationEndDate);
+
+        for (const scope of scopes) {
+            const targetCollege = scope.college ?? exam.college ?? null;
+            const targetCourse = scope.course ?? exam.course ?? null;
+            const targetBranch = scope.branch ?? exam.branch ?? null;
+            const targetBatch = scope.batch ?? exam.batch ?? null;
+            const targetYear = scope.yearOfStudy != null ? String(scope.yearOfStudy) : null;
+            const targetSemester = scope.semester != null ? String(scope.semester) : null;
+
+            if (hasApplicationWindow) {
+                events.push(
+                    await saveEvent({
+                        title: `Application Open: ${exam.name}`,
+                        description: descriptionBase(`Application window (${scope.course}/${scope.branch ?? ''})`),
+                        eventDate: exam.applicationStartDate,
+                        endDate: exam.applicationEndDate,
+                        eventType: 'exam',
+                        targetCollege,
+                        targetCourse,
+                        targetBranch,
+                        targetBatch,
+                        targetYear,
+                        targetSemester,
+                        startTime: null,
+                        endTime: null,
+                    }),
+                );
+            }
+
+            for (let i = 0; i < slabs.length; i++) {
+                const slab = slabs[i];
+                if (!slab?.fromDate) continue;
+                // Last slab may have toDate = NULL -> treat as until application end.
+                const slabEnd = slab.toDate ?? applicationEnd ?? null;
+                events.push(
+                    await saveEvent({
+                        title: `Late Fee Slab ${i + 1} (${slab.amount ?? '—'}): ${exam.name}`,
+                        description: descriptionBase(`Late fee slab amount=${slab.amount ?? null}`),
+                        eventDate: slab.fromDate,
+                        endDate: slabEnd,
+                        eventType: 'exam',
+                        targetCollege,
+                        targetCourse,
+                        targetBranch,
+                        targetBatch,
+                        targetYear,
+                        targetSemester,
+                        startTime: null,
+                        endTime: null,
+                    }),
+                );
+            }
+
+            if (hasExamWindow) {
+                events.push(
+                    await saveEvent({
+                        title: `Examination: ${exam.name}`,
+                        description: descriptionBase('Examination start/end window'),
+                        eventDate: exam.examinationStartDate,
+                        endDate: exam.examinationEndDate,
+                        eventType: 'exam',
+                        targetCollege,
+                        targetCourse,
+                        targetBranch,
+                        targetBatch,
+                        targetYear,
+                        targetSemester,
+                        startTime: null,
+                        endTime: null,
+                    }),
+                );
+            }
+        }
+
+        return {
+            deleted: deleteResult?.affectedRows ?? null,
+            created: events.length,
+        };
     }
 }
 function createSdmsService(dataSource) {

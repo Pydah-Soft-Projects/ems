@@ -73,6 +73,13 @@ export const navigation: NavGroup[] = [
         privilege: 'exams:read',
       },
       {
+        href: '/dashboard/exam-calendar',
+        label: 'Exam Calendar',
+        description: 'Admin view of exam + late-fee timeline',
+        icon: 'exams',
+        privilege: 'exams:read',
+      },
+      {
         href: '/dashboard/remuneration',
         label: 'Remuneration',
         description: 'Bills for external setters, evaluators & examiners',
