@@ -1,0 +1,972 @@
+{
+  "generatedAt": "2026-07-28T11:31:09.546Z",
+  "feeProbe": {
+    "feeManagementEnabled": true,
+    "studentKeysFromSdms": 254,
+    "matchedStudentFeeRows": 227,
+    "matchedStudentsWithDemand": 102,
+    "cseBranchDemandRows": 5651,
+    "cseBranchDemandStudents": 1102,
+    "structures2023Cse": [
+      {
+        "id": "6a687de114a8ecf1ee408940",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "category": "CONV",
+        "studentYear": 4,
+        "semester": null
+      },
+      {
+        "id": "6a687de114a8ecf1ee408941",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "category": "CONV",
+        "studentYear": 4,
+        "semester": null
+      }
+    ]
+  },
+  "sdms": {
+    "total2023Cse": 136,
+    "groups": [
+      {
+        "key": "Pydah College of Engineering | B.Tech | CSE | 2023 | 4 | 1",
+        "n": 110
+      },
+      {
+        "key": "Pydah College of Engineering | B.Tech | CSE | 2023 | 3 | 1",
+        "n": 26
+      }
+    ],
+    "targetScope": {
+      "college": "Pydah College of Engineering",
+      "course": "B.Tech",
+      "branch": "CSE",
+      "batch": "2023",
+      "yearOfStudy": 4,
+      "semester": 1,
+      "scopedCount": 110
+    }
+  },
+  "exam": {
+    "id": 29,
+    "name": "Events Testing",
+    "college": "Pydah College of Engineering",
+    "course": "B.Tech",
+    "branch": "CSE",
+    "batch": "2023",
+    "yearOfStudy": 4,
+    "semester": 1,
+    "createdNewExam": false,
+    "publishDueSummary": null
+  },
+  "dueSummary": {
+    "asOfDate": "2026-07-28",
+    "eligible": 110,
+    "clearCount": 28,
+    "blockedCount": 82,
+    "skippedCount": 0,
+    "totalOverdueAmount": 561700
+  },
+  "totals": {
+    "eligibleDisplayed": 110,
+    "clearToApply": 28,
+    "duesBlocked": 82,
+    "dueCheckSkipped": 0,
+    "totalOverdueAmount": 561700
+  },
+  "topBlocked": [
+    {
+      "roll": "236T1A0547",
+      "name": "Korapu Jahnavi",
+      "admission": "20230393",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 84000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 84000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Hostel Fee",
+          "code": "HST01",
+          "due": 83000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0521",
+      "name": "Damerla Sai Saketh",
+      "admission": "20230353",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 49450,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 49450
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 48200
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "246T5A0507",
+      "name": "Gubbala Vamsi Kiran",
+      "admission": "20240614",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 30800,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 30800
+        }
+      ],
+      "heads": [
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 30800
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "246T5A0511",
+      "name": "Kattunga Abhi",
+      "admission": "20240435",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 28850,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 28850
+        }
+      ],
+      "heads": [
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 28600
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0526",
+      "name": "Durga Veera Venkata Satya Sai Pranathi",
+      "admission": "20230413",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 27050,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 27050
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 25800
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0567",
+      "name": "Peruri Mahalakshmi",
+      "admission": "20230833",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 26950,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 26950
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 25700
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "246T5A0512",
+      "name": "Kondapalli Rajendra Babu",
+      "admission": "20241100",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 26550,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 26550
+        }
+      ],
+      "heads": [
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 26300
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0508",
+      "name": "Bathina Ashlesh",
+      "admission": "20230547",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 26500,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 26500
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 25500
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0546",
+      "name": "Konada Deepika",
+      "admission": "20230162",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 24450,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 24450
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 23200
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "246T5A0518",
+      "name": "PILLI MANOHAR",
+      "admission": "20241935",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 24250,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 24250
+        }
+      ],
+      "heads": [
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 24000
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0571",
+      "name": "Polabattula Satya Abhinaya",
+      "admission": "20230780",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 22650,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 22650
+        }
+      ],
+      "heads": [
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 150
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 22500
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0589",
+      "name": "Vanarasi Maha Lakshmi",
+      "admission": "20230787",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 20550,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 20550
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 19300
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0581",
+      "name": "Sadaf Anjum",
+      "admission": "20230844",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 19050,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 19050
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 17800
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0542",
+      "name": "Karupothu Venkata Durga Rao",
+      "admission": "20231009",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 16150,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 16150
+        }
+      ],
+      "heads": [
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 15900
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0558",
+      "name": "Mereti Suresh",
+      "admission": "20230977",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 15550,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 15550
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 14300
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0504",
+      "name": "Allampalli Abhishek",
+      "admission": "20230988",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 15450,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 15450
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 14200
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0561",
+      "name": "Mummidi Naga Durga Bhavani",
+      "admission": "20230960",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 14950,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 14950
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 13700
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0519",
+      "name": "Chukka Vidya Sree",
+      "admission": "20230959",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 12900,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 12900
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "LATE FEE",
+          "code": "LAT01",
+          "due": 250
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 11650
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0518",
+      "name": "Chotupalli Navya Satya Sai",
+      "admission": "20230788",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 12600,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 12600
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Transport Fee",
+          "code": "TRN01",
+          "due": 11600
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0501",
+      "name": "Achanta Mohini Naga Durga",
+      "admission": "20230793",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 1000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 1000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0502",
+      "name": "Achanta Umamaheswari",
+      "admission": "20230197",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 1000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 1000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0503",
+      "name": "Adapa Ganika Lakshmi",
+      "admission": "20230319",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 1000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 1000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0505",
+      "name": "Baddhi Pallavi",
+      "admission": "20230778",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 1000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 1000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0506",
+      "name": "Bagudu Balaji",
+      "admission": "20230961",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 1000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 1000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    },
+    {
+      "roll": "236T1A0507",
+      "name": "Balla Tharuni",
+      "admission": "20230839",
+      "year": 4,
+      "sem": 1,
+      "totalDue": 1000,
+      "byTerm": [
+        {
+          "termNumber": 1,
+          "due": 1000
+        }
+      ],
+      "heads": [
+        {
+          "name": "APPLICATION FEE",
+          "code": "APPL01",
+          "due": 1000
+        },
+        {
+          "name": "Tuition Fee",
+          "code": "TUI01",
+          "due": 0
+        }
+      ],
+      "verificationNotes": []
+    }
+  ],
+  "clearSample": [
+    {
+      "roll": "236T1A0511",
+      "name": "Bezawada Moulika",
+      "admission": "20230459"
+    },
+    {
+      "roll": "236T1A0532",
+      "name": "Gummalla Ramya",
+      "admission": "20231003"
+    },
+    {
+      "roll": "236T1A0539",
+      "name": "Kamuju Soma Sekhar",
+      "admission": "20230269"
+    },
+    {
+      "roll": "236T1A0550",
+      "name": "Kotichukkala Sai Teja",
+      "admission": "20230286"
+    },
+    {
+      "roll": "236T1A0553",
+      "name": "Malladi Hemanth Kumar",
+      "admission": "20230314"
+    },
+    {
+      "roll": "236T1A0559",
+      "name": "Mortha Avinash",
+      "admission": "20230923"
+    },
+    {
+      "roll": "236T1A0566",
+      "name": "Pavisetti Sai Rajesh",
+      "admission": "20230172"
+    },
+    {
+      "roll": "236T1A0568",
+      "name": "Pidugu Sravani",
+      "admission": "20230480"
+    },
+    {
+      "roll": "236T1A0577",
+      "name": "Rayudu Jaya Raju",
+      "admission": "20230211"
+    },
+    {
+      "roll": "236T1A0578",
+      "name": "Rayudu Sudarshan",
+      "admission": "20230210"
+    },
+    {
+      "roll": "246T5A0502",
+      "name": "Badugu Venkata Santosh Kumar",
+      "admission": "20240628"
+    },
+    {
+      "roll": "246T5A0503",
+      "name": "Bondada Surya Prabha",
+      "admission": "20241162"
+    },
+    {
+      "roll": "246T5A0504",
+      "name": "Chappidi Tharun Kumar",
+      "admission": "20241144"
+    },
+    {
+      "roll": "246T5A0505",
+      "name": "Duggirala Umesh",
+      "admission": "20241114"
+    },
+    {
+      "roll": "246T5A0506",
+      "name": "Gorrela Sai Chakra Praveen",
+      "admission": "20241098"
+    },
+    {
+      "roll": "246T5A0508",
+      "name": "Gunji Manianta",
+      "admission": "20241167"
+    },
+    {
+      "roll": "246T5A0509",
+      "name": "Kamisetti D V Devi Kishore",
+      "admission": "20240305"
+    },
+    {
+      "roll": "246T5A0510",
+      "name": "Karri Sai Satya Prasad",
+      "admission": "20241141"
+    },
+    {
+      "roll": "246T5A0513",
+      "name": "Musidipalli Jahnavi",
+      "admission": "20241180"
+    },
+    {
+      "roll": "246T5A0514",
+      "name": "Mutha Ashok Kumar",
+      "admission": "20241106"
+    }
+  ],
+  "skippedSample": []
+}

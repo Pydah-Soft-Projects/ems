@@ -3,6 +3,11 @@
 /**
  * Student overdue-due calculation against Fee Management Mongo.
  * See docs/modules/19-exam-due-clearance.md
+ *
+ * Term model:
+ * - StudentFee may store one full demand with isTermsDivided=true and no termNumber.
+ * - Actual Term 1..N amounts / due dates come from linked FeeStructure.terms.
+ * - When StudentFee already has per-term rows (termNumber set), those rows are used.
  */
 
 function roundMoney(n) {
@@ -73,55 +78,37 @@ function netTransactionAmount(txn) {
   const type = String(txn.transactionType || 'DEBIT').toUpperCase();
   const mode = String(txn.paymentMode || '').toLowerCase();
 
-  // Refunds / credits increase outstanding due.
   if (type === 'CREDIT' || mode === 'refund' || mode === 'credit') {
     return -amount;
   }
-  // Everything else (DEBIT, Waiver, Adjustment, Cash, …) reduces due.
   return amount;
 }
 
-function extractStructureTerms(structure, feeHeadId) {
-  if (!structure) return [];
-  const headId = idStr(feeHeadId);
-  const heads =
-    structure.feeHeads ||
-    structure.heads ||
-    structure.feeHeadDetails ||
-    structure.items ||
-    [];
-
-  let matched = null;
-  if (Array.isArray(heads) && heads.length) {
-    matched =
-      heads.find((h) => {
-        const hid = idStr(h.feeHead || h.feeHeadId || h.headId || h._id);
-        return hid && hid === headId;
-      }) || null;
-  }
-
-  const source = matched || structure;
-  const terms =
-    source.terms ||
-    source.termSplits ||
-    source.installments ||
-    structure.terms ||
-    [];
-
+function normalizeStructureTerms(terms) {
   if (!Array.isArray(terms)) return [];
   return terms
     .map((t, idx) => ({
       termNumber: Number(t.termNumber ?? t.term ?? idx + 1) || idx + 1,
       amount: t.amount != null ? Number(t.amount) : null,
-      percent: t.percent ?? t.percentage ?? null,
-      dueDate: toDateOnly(t.dueDate || t.due_date || t.fixedDueDate),
+      percent:
+        t.percent != null
+          ? Number(t.percent)
+          : t.percentage != null
+            ? Number(t.percentage)
+            : null,
+      dueDateMode: String(t.dueDateMode || t.due_date_mode || '').toLowerCase() || null,
+      dueDate: toDateOnly(
+        t.fixedDueDate || t.dueDate || t.due_date || t.fixed_due_date,
+      ),
+      fixedDueDate: toDateOnly(t.fixedDueDate || t.fixed_due_date),
+      referenceSemester: yearNum(t.referenceSemester ?? t.reference_semester),
       offsetDays:
-        t.offsetDays != null
-          ? Number(t.offsetDays)
-          : t.dueDays != null
-            ? Number(t.dueDays)
-            : t.dueOffsetDays != null
-              ? Number(t.dueOffsetDays)
+        t.dueOffsetDays != null
+          ? Number(t.dueOffsetDays)
+          : t.offsetDays != null
+            ? Number(t.offsetDays)
+            : t.dueDays != null
+              ? Number(t.dueDays)
               : null,
       lateFeeAmount:
         t.lateFeeAmount != null
@@ -131,6 +118,46 @@ function extractStructureTerms(structure, feeHeadId) {
             : null,
     }))
     .sort((a, b) => a.termNumber - b.termNumber);
+}
+
+/**
+ * FeeStructure in Fee Mgmt is usually one document per fee head
+ * (top-level feeHead + terms). Older/nested shapes are also supported.
+ */
+function extractStructureTerms(structure, feeHeadId) {
+  if (!structure) return [];
+  const headId = idStr(feeHeadId);
+
+  // Per-head structure document
+  if (Array.isArray(structure.terms) && structure.terms.length) {
+    if (!structure.feeHead || idStr(structure.feeHead) === headId) {
+      return normalizeStructureTerms(structure.terms);
+    }
+  }
+
+  const heads =
+    structure.feeHeads ||
+    structure.heads ||
+    structure.feeHeadDetails ||
+    structure.items ||
+    [];
+
+  if (Array.isArray(heads) && heads.length) {
+    const matched =
+      heads.find((h) => {
+        const hid = idStr(h.feeHead || h.feeHeadId || h.headId || h._id);
+        return hid && hid === headId;
+      }) || null;
+    if (matched) {
+      return normalizeStructureTerms(
+        matched.terms || matched.termSplits || matched.installments || [],
+      );
+    }
+  }
+
+  return normalizeStructureTerms(
+    structure.termSplits || structure.installments || [],
+  );
 }
 
 function formatInr(amount) {
@@ -144,6 +171,164 @@ function formatInr(amount) {
   } catch {
     return `₹${n}`;
   }
+}
+
+/**
+ * Build working term rows for a demand group.
+ * Prefer explicit StudentFee.termNumber rows; otherwise expand from FeeStructure.
+ */
+function buildTermsForGroup(g, structure, structureTerms, notes) {
+  const demands = g.demands
+    .slice()
+    .sort(
+      (a, b) =>
+        (Number(a.termNumber) || 0) - (Number(b.termNumber) || 0) ||
+        String(a._id).localeCompare(String(b._id)),
+    );
+
+  const totalDemand = roundMoney(
+    demands.reduce((s, d) => s + (Number(d.amount) || 0), 0),
+  );
+
+  const explicitTermRows = demands.filter(
+    (d) => d.termNumber != null && d.termNumber !== '',
+  );
+  const hasMultipleExplicitTerms = explicitTermRows.length > 1;
+  const hasSingleExplicitTerm =
+    explicitTermRows.length === 1 && demands.length === 1;
+
+  const dividedFlag =
+    demands.some((d) => d.isTermsDivided === true) ||
+    structure?.isTermsDivided === true;
+
+  // Case A: StudentFee already stores per-term rows
+  if (hasMultipleExplicitTerms || (hasSingleExplicitTerm && !dividedFlag)) {
+    return {
+      terms: demands.map((d) => ({
+        termNumber: Number(d.termNumber) || 1,
+        demand: roundMoney(d.amount),
+        declaration: 0,
+        paid: 0,
+        application: 0,
+        balance: 0,
+        dueDate: null,
+        overdue: false,
+        studentFeeId: idStr(d._id),
+        source: 'student_fee_row',
+      })),
+      totalDemand,
+      expandedFromStructure: false,
+    };
+  }
+
+  // Case B: one (or lumped) StudentFee + structure terms → expand
+  if (dividedFlag && structureTerms.length > 0 && totalDemand > 0) {
+    const structureSum = roundMoney(
+      structureTerms.reduce((s, t) => s + (Number(t.amount) || 0), 0),
+    );
+    const useStructureAmounts =
+      structureSum > 0 && Math.abs(structureSum - totalDemand) <= 0.05;
+    const hasPercents = structureTerms.some(
+      (t) => t.percent != null && Number(t.percent) > 0,
+    );
+
+    if (structureSum > 0 && !useStructureAmounts) {
+      notes.push(
+        `Structure ${g.structureId} term sum ${structureSum} vs StudentFee ${totalDemand} for head ${g.feeHeadId}; scaling to StudentFee total`,
+      );
+    }
+
+    let allocated = 0;
+    const terms = structureTerms.map((st, idx) => {
+      let demand = 0;
+      if (useStructureAmounts && st.amount != null) {
+        demand = roundMoney(st.amount);
+      } else if (hasPercents && st.percent != null) {
+        demand = roundMoney((totalDemand * Number(st.percent)) / 100);
+      } else if (structureSum > 0 && st.amount != null) {
+        demand = roundMoney((totalDemand * Number(st.amount)) / structureSum);
+      } else {
+        demand = roundMoney(totalDemand / structureTerms.length);
+      }
+
+      if (idx === structureTerms.length - 1) {
+        demand = roundMoney(totalDemand - allocated);
+      } else {
+        allocated = roundMoney(allocated + demand);
+      }
+
+      return {
+        termNumber: st.termNumber,
+        demand: Math.max(0, demand),
+        declaration: 0,
+        paid: 0,
+        application: 0,
+        balance: 0,
+        dueDate: null,
+        overdue: false,
+        studentFeeId: idStr(demands[0]?._id),
+        source: 'fee_structure_expand',
+        structureTerm: st,
+      };
+    });
+
+    return { terms, totalDemand, expandedFromStructure: true };
+  }
+
+  // Case C: single undivided demand
+  return {
+    terms: [
+      {
+        termNumber: Number(demands[0]?.termNumber) || 1,
+        demand: totalDemand,
+        declaration: 0,
+        paid: 0,
+        application: 0,
+        balance: 0,
+        dueDate: null,
+        overdue: false,
+        studentFeeId: idStr(demands[0]?._id),
+        source: 'student_fee_single',
+      },
+    ],
+    totalDemand,
+    expandedFromStructure: false,
+  };
+}
+
+function resolveTermDueDate(term, structureTerm, g, semesterStartByYearSem, asOf) {
+  const st = structureTerm || term.structureTerm || null;
+
+  if (st?.dueDateMode === 'fixed' || st?.fixedDueDate || st?.dueDate) {
+    const fixed = st.fixedDueDate || st.dueDate;
+    if (fixed) return fixed;
+  }
+
+  if (st) {
+    const refSem =
+      st.referenceSemester != null
+        ? st.referenceSemester
+        : g.semester != null
+          ? g.semester
+          : 1;
+    const semKey = `${g.studentYear}|${refSem}`;
+    const semesterStart = semesterStartByYearSem?.get(semKey) || null;
+    if (st.offsetDays != null && semesterStart) {
+      return addDays(semesterStart, st.offsetDays);
+    }
+    if (semesterStart && (st.dueDateMode === 'offset' || st.offsetDays == null)) {
+      // offset mode with 0 days, or missing offset → semester start
+      return addDays(semesterStart, st.offsetDays || 0);
+    }
+  }
+
+  // Fallbacks when no structure term config
+  const semKey = `${g.studentYear}|${g.semester ?? 1}`;
+  const semesterStart = semesterStartByYearSem?.get(semKey) || null;
+  if (semesterStart && term.termNumber === 1) return semesterStart;
+
+  // Active demand with no configured date → already due
+  return asOf;
 }
 
 /**
@@ -166,7 +351,6 @@ function computeDueClearance({
     (f) => f.isActive !== false && Number(f.amount) > 0,
   );
 
-  // Group demands
   const groups = new Map();
   for (const fee of activeFees) {
     const key = groupKey(
@@ -198,29 +382,14 @@ function computeDueClearance({
   let totalDue = 0;
 
   for (const g of groups.values()) {
-    const demands = g.demands
-      .slice()
-      .sort(
-        (a, b) =>
-          (Number(a.termNumber) || 1) - (Number(b.termNumber) || 1) ||
-          String(a._id).localeCompare(String(b._id)),
-      );
+    const structure = g.structureId ? structuresById.get(g.structureId) : null;
+    const structureTerms = extractStructureTerms(structure, g.feeHeadId);
 
-    const terms = demands.map((d) => ({
-      termNumber: Number(d.termNumber) || 1,
-      demand: roundMoney(d.amount),
-      declaration: 0,
-      paid: 0,
-      application: 0,
-      balance: 0,
-      dueDate: null,
-      overdue: false,
-      studentFeeId: idStr(d._id),
-    }));
+    const built = buildTermsForGroup(g, structure, structureTerms, notes);
+    const terms = built.terms;
+    const totalDemand = built.totalDemand;
 
-    const totalDemand = roundMoney(terms.reduce((s, t) => s + t.demand, 0));
-
-    // --- Declaration concession (OverallConcessionRequest): split across terms
+    // --- Declaration concession: split across all terms by share
     let declarationTotal = 0;
     for (const req of overallConcessions || []) {
       for (const entry of req.concessions || []) {
@@ -228,7 +397,11 @@ function computeDueClearance({
         const entryYear = yearNum(entry.studentYear);
         const entrySem = yearNum(entry.semester);
         if (entryHead !== g.feeHeadId) continue;
-        if (entryYear != null && g.studentYear != null && entryYear !== g.studentYear) {
+        if (
+          entryYear != null &&
+          g.studentYear != null &&
+          entryYear !== g.studentYear
+        ) {
           continue;
         }
         if (
@@ -255,12 +428,11 @@ function computeDueClearance({
       }
     }
 
-    // Remaining after declaration
     for (const t of terms) {
       t.balance = roundMoney(Math.max(0, t.demand - t.declaration));
     }
 
-    // --- Payments: waterfall earliest term first
+    // --- Payments waterfall
     let netPaid = 0;
     for (const txn of transactions || []) {
       if (String(txn.status || 'active').toLowerCase() === 'cancelled') continue;
@@ -269,7 +441,6 @@ function computeDueClearance({
       const ts = yearNum(txn.semester);
       if (ty != null && g.studentYear != null && ty !== g.studentYear) continue;
       if (ts != null && g.semester != null && ts !== g.semester) continue;
-      // If txn has no year/sem, still count it for this head (legacy rows).
       netPaid = roundMoney(netPaid + netTransactionAmount(txn));
     }
     netPaid = Math.max(0, netPaid);
@@ -282,7 +453,7 @@ function computeDueClearance({
       payLeft = roundMoney(payLeft - apply);
     }
 
-    // --- Application concession (ConcessionRequest): waterfall unpaid terms
+    // --- Application concession waterfall
     let appTotal = 0;
     for (const req of applicationConcessions || []) {
       if (idStr(req.feeHead) !== g.feeHeadId) continue;
@@ -302,25 +473,19 @@ function computeDueClearance({
       appLeft = roundMoney(appLeft - apply);
     }
 
-    // --- Due dates from FeeStructure (+ optional semester start)
-    const structure = g.structureId ? structuresById.get(g.structureId) : null;
-    const structureTerms = extractStructureTerms(structure, g.feeHeadId);
-    const semKey = `${g.studentYear}|${g.semester}`;
-    const semesterStart = semesterStartByYearSem?.get(semKey) || null;
-
-    if (structure && totalDemand > 0) {
+    // --- Due dates
+    if (structure && totalDemand > 0 && structureTerms.length) {
       const expected = roundMoney(
         structureTerms.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       );
-      // Prefer explicit head amount on structure when terms have no amounts.
       const headAmount =
-        structure.amount != null
-          ? Number(structure.amount)
-          : structure.totalAmount != null
-            ? Number(structure.totalAmount)
-            : null;
+        structure.amount != null ? Number(structure.amount) : null;
       const compareTo = expected > 0 ? expected : headAmount;
-      if (compareTo != null && Math.abs(compareTo - totalDemand) > 0.05) {
+      if (
+        compareTo != null &&
+        Math.abs(compareTo - totalDemand) > 0.05 &&
+        !built.expandedFromStructure
+      ) {
         notes.push(
           `Structure ${g.structureId} expected ${compareTo} vs StudentFee ${totalDemand} for head ${g.feeHeadId}`,
         );
@@ -328,17 +493,17 @@ function computeDueClearance({
     }
 
     for (const t of terms) {
-      const st = structureTerms.find((x) => x.termNumber === t.termNumber);
-      if (st?.dueDate) {
-        t.dueDate = st.dueDate;
-      } else if (st?.offsetDays != null && semesterStart) {
-        t.dueDate = addDays(semesterStart, st.offsetDays);
-      } else if (semesterStart && t.termNumber === 1) {
-        t.dueDate = semesterStart;
-      } else {
-        // Active demand with no configured date → treat as already due.
-        t.dueDate = asOf;
-      }
+      const st =
+        t.structureTerm ||
+        structureTerms.find((x) => x.termNumber === t.termNumber) ||
+        null;
+      t.dueDate = resolveTermDueDate(
+        t,
+        st,
+        g,
+        semesterStartByYearSem,
+        asOf,
+      );
       t.overdue = t.balance > 0 && t.dueDate <= asOf;
     }
 
@@ -374,6 +539,7 @@ function computeDueClearance({
         due: t.overdue ? t.balance : 0,
         dueDate: t.dueDate,
         overdue: t.overdue,
+        source: t.source,
       });
 
       if (t.overdue && t.balance > 0) {
@@ -436,6 +602,8 @@ module.exports = {
   roundMoney,
   formatInr,
   extractStructureTerms,
+  buildTermsForGroup,
+  resolveTermDueDate,
   groupKey,
   idStr,
 };

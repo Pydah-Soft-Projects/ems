@@ -41,7 +41,11 @@ Student identity in Fee Mgmt is preferred as **admission number**, with **PIN** 
 For each active `StudentFee` group keyed by `(feeHead, academicYear, studentYear, semester)`:
 
 ```
-1. Load term demands (StudentFee rows), ordered by termNumber
+1. Resolve working terms:
+   a. If StudentFee already has multiple termNumber rows → use those rows
+   b. Else if isTermsDivided (on StudentFee or FeeStructure) → expand
+      StudentFee total into FeeStructure.terms (amount / percentage)
+   c. Else treat as a single Term 1 demand
 2. Load APPROVED OverallConcessionRequest entries for that head/year/sem
    → split concession across all terms by term share
 3. Load active Transactions for that head/year/sem
@@ -50,14 +54,16 @@ For each active `StudentFee` group keyed by `(feeHead, academicYear, studentYear
 4. Load APPROVED ConcessionRequest for that head/year/sem
    → waterfall onto first unpaid term balances
 5. termBalance = max(0, demand − declaration − paid − application)
-6. Resolve term dueDate:
-   a. FeeStructure term fixed dueDate, else
-   b. semester start (SDMS) + term offset days, else
-   c. treat as already due (active demand with no date)
+6. Resolve term dueDate from FeeStructure term config:
+   a. dueDateMode=fixed → fixedDueDate
+   b. dueDateMode=offset → SDMS semester start(referenceSemester) + dueOffsetDays
+   c. else treat as already due
 7. If termBalance > 0 AND dueDate <= today → include in blockingDue
 ```
 
-Cross-check: if `structureId` is present, compare structure expected amount vs sum of StudentFee demands and attach a `verification` note when they diverge. **StudentFee remains the demand source of truth.**
+**Important:** For tuition-style heads, Fee Management often stores **one** `StudentFee` row (`amount=full year`, `termNumber=null`, `isTermsDivided=true`). Term 1/2/3 live on the linked `FeeStructure`. The calculator expands those structure terms before concession/payment allocation.
+
+Cross-check: if structure term amounts diverge from the StudentFee total, scale to the StudentFee total (StudentFee remains demand source of truth) and note it in `verification`.
 
 ### Concession split detail
 

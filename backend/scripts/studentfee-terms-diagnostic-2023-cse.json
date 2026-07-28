@@ -1,0 +1,4400 @@
+{
+  "generatedAt": "2026-07-28T11:30:44.490Z",
+  "scope": {
+    "college": "Pydah College of Engineering",
+    "course": "B.Tech",
+    "branch": "CSE",
+    "batch": "2023",
+    "year": 4,
+    "semester": 1,
+    "studentCount": 110
+  },
+  "termNumberStatsAcrossAllScopedStudentFees": {
+    "nullOrMissing": 172,
+    "present": 15,
+    "byHeadAndTerm": {
+      "Tuition Fee | term=NULL": 76,
+      "APPLICATION FEE | term=NULL": 76,
+      "Transport Fee | term=NULL": 19,
+      "LATE FEE | term=1": 15,
+      "Hostel Fee | term=NULL": 1
+    }
+  },
+  "sampleStudentCount": 13,
+  "students": [
+    {
+      "student": {
+        "id": 4290,
+        "name": "Achanta Mohini Naga Durga",
+        "pinNo": "236T1A0501",
+        "admissionNumber": "20230793",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230793",
+          "236T1A0501"
+        ]
+      },
+      "rawStudentFeeCount": 2,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408942",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "semester",
+                "studentId",
+                "academicYear",
+                "studentYear",
+                "feeHead",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408988",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "feeHead",
+                "semester",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 1000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 20000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 1000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹1,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4300,
+        "name": "Bezawada Moulika",
+        "pinNo": "236T1A0511",
+        "admissionNumber": "20230459",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230459",
+          "236T1A0511"
+        ]
+      },
+      "rawStudentFeeCount": 0,
+      "heads": [],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a4f3a78ebf67c8ae4c22a63",
+          "feeHeadId": "6996e24c2e1678e398839187",
+          "feeHeadName": "Tuition Fee",
+          "amount": 18500,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-09T06:06:48.408Z",
+          "remarks": "TUT  FEE ",
+          "status": "active"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": false,
+        "canApply": true,
+        "asOfDate": "2026-07-28",
+        "totalDue": 0,
+        "currency": "INR",
+        "byHead": [],
+        "byTerm": [],
+        "message": "No overdue fee dues.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4310,
+        "name": "Damerla Sai Saketh",
+        "pinNo": "236T1A0521",
+        "admissionNumber": "20230353",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230353",
+          "236T1A0521"
+        ]
+      },
+      "rawStudentFeeCount": 5,
+      "heads": [
+        {
+          "feeHeadName": "Transport Fee",
+          "feeHeadCode": "TRN01",
+          "academicYear": "2025-2026",
+          "studentYear": 3,
+          "semester": 2,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 28600,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a64a52f204fc0c0d542b6a6",
+              "amount": 28600,
+              "remarks": "Transport: Kesavaram Via Anaparthi, Sampara - THOSSIPUDI (2025-2026)",
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentName",
+                "feeHead",
+                "college",
+                "course",
+                "branch",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "amount",
+                "isActive",
+                "remarks",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "stud_type",
+                "createdAt",
+                "updatedAt",
+                "__v"
+              ]
+            }
+          ],
+          "structures": []
+        },
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408955",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee4089a4",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "academicYear",
+                "studentYear",
+                "feeHead",
+                "semester",
+                "studentId",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "Transport Fee",
+          "feeHeadCode": "TRN01",
+          "academicYear": "2026-2027",
+          "studentYear": 4,
+          "semester": 1,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 28600,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a4c88152940798dd5d96e1f",
+              "amount": 28600,
+              "remarks": "Transport",
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": null,
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentName",
+                "feeHead",
+                "college",
+                "course",
+                "branch",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "amount",
+                "remarks",
+                "createdAt",
+                "updatedAt",
+                "__v",
+                "isTermsDivided"
+              ]
+            }
+          ],
+          "structures": []
+        },
+        {
+          "feeHeadName": "LATE FEE",
+          "feeHeadCode": "LAT01",
+          "academicYear": "2026-2027",
+          "studentYear": 4,
+          "semester": 1,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            1
+          ],
+          "totalDemand": 250,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a6708c8e3f4074ed42ec246",
+              "termNumber": 1,
+              "amount": 250,
+              "remarks": "Transport Fee (2026-2027) - Term 1 Late Fee - ₹250 | Due: 14-Jul-2026 | Applied: 27-Jul-2026",
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentName",
+                "feeHead",
+                "college",
+                "course",
+                "branch",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "termNumber",
+                "amount",
+                "isActive",
+                "remarks",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "stud_type",
+                "createdAt",
+                "updatedAt",
+                "__v"
+              ]
+            }
+          ],
+          "structures": []
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a4c8a33d85d81a1f57b40b7",
+          "feeHeadId": "6996e24c2e1678e39883918a",
+          "feeHeadName": "Transport Fee",
+          "amount": 9000,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-07T05:10:11.053Z",
+          "remarks": "Transport - BUS FEE ",
+          "status": "active"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 49450,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6a44d32813184eef9619c04b",
+            "feeHeadCode": "LAT01",
+            "feeHeadName": "LATE FEE",
+            "due": 250,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2026-2027",
+                "studentYear": 4,
+                "semester": 1,
+                "demand": 250,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 250,
+                "due": 250,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e39883918a",
+            "feeHeadCode": "TRN01",
+            "feeHeadName": "Transport Fee",
+            "due": 48200,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2026-2027",
+                "studentYear": 4,
+                "semester": 1,
+                "demand": 28600,
+                "declarationConcession": 0,
+                "paid": 9000,
+                "applicationConcession": 0,
+                "balance": 19600,
+                "due": 19600,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              },
+              {
+                "termNumber": 1,
+                "academicYear": "2025-2026",
+                "studentYear": 3,
+                "semester": 2,
+                "demand": 28600,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 28600,
+                "due": 28600,
+                "dueDate": "2025-12-08",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 20000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 49450
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹49,450.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4321,
+        "name": "Gummalla Ramya",
+        "pinNo": "236T1A0532",
+        "admissionNumber": "20231003",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20231003",
+          "236T1A0532"
+        ]
+      },
+      "rawStudentFeeCount": 0,
+      "heads": [],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [],
+      "calculatedDueClearance": {
+        "blocked": false,
+        "canApply": true,
+        "asOfDate": "2026-07-28",
+        "totalDue": 0,
+        "currency": "INR",
+        "byHead": [],
+        "byTerm": [],
+        "message": "No overdue fee dues.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4336,
+        "name": "Korapu Jahnavi",
+        "pinNo": "236T1A0547",
+        "admissionNumber": "20230393",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230393",
+          "236T1A0547"
+        ]
+      },
+      "rawStudentFeeCount": 3,
+      "heads": [
+        {
+          "feeHeadName": "Hostel Fee",
+          "feeHeadCode": "HST01",
+          "academicYear": "2026-2027",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 93000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a4cbee1a62a9c76333e46fd",
+              "amount": 93000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "academicYear",
+                "feeHead",
+                "studentId",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isScholarshipApplicable",
+                "semester",
+                "stud_type",
+                "studentName",
+                "studentYear",
+                "updatedAt",
+                "isTermsDivided"
+              ]
+            }
+          ],
+          "structures": []
+        },
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee40896c",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee4089cc",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "feeHead",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a4ccd0c196a2e5564ebf24b",
+          "feeHeadId": "6996e24d2e1678e398839196",
+          "feeHeadName": "Hostel Fee",
+          "amount": 10000,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": null,
+          "paymentDate": "2026-07-07T09:55:24.161Z",
+          "remarks": "HOSTEL  FEE",
+          "status": "active"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 84000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24d2e1678e398839196",
+            "feeHeadCode": "HST01",
+            "feeHeadName": "Hostel Fee",
+            "due": 83000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2026-2027",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 93000,
+                "declarationConcession": 0,
+                "paid": 10000,
+                "applicationConcession": 0,
+                "balance": 83000,
+                "due": 83000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 20000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 84000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹84,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4291,
+        "name": "Achanta Umamaheswari",
+        "pinNo": "236T1A0502",
+        "admissionNumber": "20230197",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230197",
+          "236T1A0502"
+        ]
+      },
+      "rawStudentFeeCount": 2,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408943",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentYear",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee40898a",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "studentYear",
+                "academicYear",
+                "studentId",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a507b429507ef3aacb80d96",
+          "feeHeadId": "6996e24c2e1678e398839187",
+          "feeHeadName": "Tuition Fee",
+          "amount": 5000,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-10T04:55:30.305Z",
+          "remarks": "RTF  FEE",
+          "status": "active"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 1000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 5000,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 1000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹1,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4292,
+        "name": "Adapa Ganika Lakshmi",
+        "pinNo": "236T1A0503",
+        "admissionNumber": "20230319",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230319",
+          "236T1A0503"
+        ]
+      },
+      "rawStudentFeeCount": 2,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408944",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "feeHead",
+                "semester",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee40898b",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "studentYear",
+                "studentId",
+                "academicYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a48a49d430be77a1a367aa0",
+          "feeHeadId": "6996e24c2e1678e398839187",
+          "feeHeadName": "Tuition Fee",
+          "amount": 10000,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-04T06:13:49.254Z",
+          "remarks": "RTF  SCH  FEE"
+        },
+        {
+          "id": "6a48a49d430be77a1a367aa1",
+          "feeHeadId": "6a3528c8e15dc0beb1ed8752",
+          "feeHeadName": "BUS/HOSTEL/OTHERS",
+          "amount": 5400,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-04T06:13:49.254Z",
+          "remarks": "RTF  SCH  FEE"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 1000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 10000,
+                "applicationConcession": 0,
+                "balance": 10000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 1000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹1,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4293,
+        "name": "Allampalli Abhishek",
+        "pinNo": "236T1A0504",
+        "admissionNumber": "20230988",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230988",
+          "236T1A0504"
+        ]
+      },
+      "rawStudentFeeCount": 4,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408945",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee40898d",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "studentYear",
+                "academicYear",
+                "studentId",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "Transport Fee",
+          "feeHeadCode": "TRN01",
+          "academicYear": "2026-2027",
+          "studentYear": 4,
+          "semester": 1,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 23100,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a4b31838d49a41e5c3f6055",
+              "amount": 23100,
+              "remarks": "Transport",
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": null,
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentName",
+                "feeHead",
+                "college",
+                "course",
+                "branch",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "amount",
+                "remarks",
+                "createdAt",
+                "updatedAt",
+                "__v",
+                "isTermsDivided"
+              ]
+            }
+          ],
+          "structures": []
+        },
+        {
+          "feeHeadName": "LATE FEE",
+          "feeHeadCode": "LAT01",
+          "academicYear": "2026-2027",
+          "studentYear": 4,
+          "semester": 1,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            1
+          ],
+          "totalDemand": 250,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a6708bfe3f4074ed42ec142",
+              "termNumber": 1,
+              "amount": 250,
+              "remarks": "Transport Fee (2026-2027) - Term 1 Late Fee - ₹250 | Due: 14-Jul-2026 | Applied: 27-Jul-2026",
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentName",
+                "feeHead",
+                "college",
+                "course",
+                "branch",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "termNumber",
+                "amount",
+                "isActive",
+                "remarks",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "stud_type",
+                "createdAt",
+                "updatedAt",
+                "__v"
+              ]
+            }
+          ],
+          "structures": []
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a4b4f8b2bd3dc0b901efc22",
+          "feeHeadId": "6996e24c2e1678e398839187",
+          "feeHeadName": "Tuition Fee",
+          "amount": 9100,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-06T06:47:39.773Z",
+          "remarks": "RTF  BUS UTF "
+        },
+        {
+          "id": "6a4b4f8b2bd3dc0b901efc24",
+          "feeHeadId": "6a3528c8e15dc0beb1ed8752",
+          "feeHeadName": "BUS/HOSTEL/OTHERS",
+          "amount": 10000,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-06T06:47:39.774Z",
+          "remarks": "RTF  BUS UTF "
+        },
+        {
+          "id": "6a4b4f8b2bd3dc0b901efc23",
+          "feeHeadId": "6996e24c2e1678e39883918a",
+          "feeHeadName": "Transport Fee",
+          "amount": 8900,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-06T06:47:39.774Z",
+          "remarks": "Transport - RTF  BUS UTF "
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 15450,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6a44d32813184eef9619c04b",
+            "feeHeadCode": "LAT01",
+            "feeHeadName": "LATE FEE",
+            "due": 250,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2026-2027",
+                "studentYear": 4,
+                "semester": 1,
+                "demand": 250,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 250,
+                "due": 250,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e39883918a",
+            "feeHeadCode": "TRN01",
+            "feeHeadName": "Transport Fee",
+            "due": 14200,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2026-2027",
+                "studentYear": 4,
+                "semester": 1,
+                "demand": 23100,
+                "declarationConcession": 0,
+                "paid": 8900,
+                "applicationConcession": 0,
+                "balance": 14200,
+                "due": 14200,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 9100,
+                "applicationConcession": 0,
+                "balance": 10900,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 15450
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹15,450.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4294,
+        "name": "Baddhi Pallavi",
+        "pinNo": "236T1A0505",
+        "admissionNumber": "20230778",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230778",
+          "236T1A0505"
+        ]
+      },
+      "rawStudentFeeCount": 2,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408946",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee40898f",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "studentYear",
+                "academicYear",
+                "studentId",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 1000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 20000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 1000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹1,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4476,
+        "name": "Badugu Venkata Santosh Kumar",
+        "pinNo": "246T5A0502",
+        "admissionNumber": "20240628",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20240628",
+          "246T5A0502"
+        ]
+      },
+      "rawStudentFeeCount": 0,
+      "heads": [],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a4745aca2d77f84b5a2fddb",
+          "feeHeadId": "6a3528c8e15dc0beb1ed8752",
+          "feeHeadName": "BUS/HOSTEL/OTHERS",
+          "amount": 5000,
+          "transactionType": "DEBIT",
+          "paymentMode": "UPI",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-03T05:16:28.598Z",
+          "remarks": "UTF FEE"
+        },
+        {
+          "id": "6a50e1bb8240f9b6ed59786b",
+          "feeHeadId": "6a3b6f4568ebd4c36933b362",
+          "feeHeadName": "Others fee",
+          "amount": 1400,
+          "transactionType": "DEBIT",
+          "paymentMode": "UPI",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-10T12:12:43.968Z",
+          "remarks": null,
+          "status": "active"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": false,
+        "canApply": true,
+        "asOfDate": "2026-07-28",
+        "totalDue": 0,
+        "currency": "INR",
+        "byHead": [],
+        "byTerm": [],
+        "message": "No overdue fee dues.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4295,
+        "name": "Bagudu Balaji",
+        "pinNo": "236T1A0506",
+        "admissionNumber": "20230961",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230961",
+          "236T1A0506"
+        ]
+      },
+      "rawStudentFeeCount": 2,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408947",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "semester",
+                "studentId",
+                "academicYear",
+                "studentYear",
+                "feeHead",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408991",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "academicYear",
+                "studentYear",
+                "feeHead",
+                "semester",
+                "studentId",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [
+        {
+          "id": "6a489fac43cb15ac484c8e4b",
+          "feeHeadId": "6996e24c2e1678e398839187",
+          "feeHeadName": "Tuition Fee",
+          "amount": 10000,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-04T05:52:44.375Z",
+          "remarks": "RTF  UTF  SCH  FEE"
+        },
+        {
+          "id": "6a489fac43cb15ac484c8e4c",
+          "feeHeadId": "6a3528c8e15dc0beb1ed8752",
+          "feeHeadName": "BUS/HOSTEL/OTHERS",
+          "amount": 10400,
+          "transactionType": "DEBIT",
+          "paymentMode": "Cash",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-04T05:52:44.375Z",
+          "remarks": "RTF  UTF  SCH  FEE"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 1000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 10000,
+                "applicationConcession": 0,
+                "balance": 10000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 1000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹1,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4296,
+        "name": "Balla Tharuni",
+        "pinNo": "236T1A0507",
+        "admissionNumber": "20230839",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230839",
+          "236T1A0507"
+        ]
+      },
+      "rawStudentFeeCount": 2,
+      "heads": [
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408948",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "academicYear",
+                "studentYear",
+                "feeHead",
+                "semester",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408992",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "studentYear",
+                "studentId",
+                "academicYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [],
+      "transactions": [],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 1000,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 20000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 1000
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹1,000.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    },
+    {
+      "student": {
+        "id": 4297,
+        "name": "Bathina Ashlesh",
+        "pinNo": "236T1A0508",
+        "admissionNumber": "20230547",
+        "college": "Pydah College of Engineering",
+        "course": "B.Tech",
+        "branch": "CSE",
+        "batch": "2023",
+        "currentYear": 4,
+        "currentSemester": 1,
+        "lookupKeys": [
+          "20230547",
+          "236T1A0508"
+        ]
+      },
+      "rawStudentFeeCount": 3,
+      "heads": [
+        {
+          "feeHeadName": "Transport Fee",
+          "feeHeadCode": "TRN01",
+          "academicYear": "2025-2026",
+          "studentYear": 3,
+          "semester": 2,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 25500,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a61e557c8128278859bdf6e",
+              "amount": 25500,
+              "remarks": "Transport: Peddapuram Via Samalkot - SAMALKOT (VIGNESWARA THEATER) (2025-2026)",
+              "isTermsDivided": true,
+              "structureId": null,
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "studentId",
+                "studentName",
+                "feeHead",
+                "college",
+                "course",
+                "branch",
+                "academicYear",
+                "studentYear",
+                "semester",
+                "amount",
+                "isActive",
+                "remarks",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "stud_type",
+                "createdAt",
+                "updatedAt",
+                "__v"
+              ]
+            }
+          ],
+          "structures": []
+        },
+        {
+          "feeHeadName": "Tuition Fee",
+          "feeHeadCode": "TUI01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 50000,
+          "isTermsDividedFlags": [
+            true
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408949",
+              "amount": 50000,
+              "remarks": null,
+              "isTermsDivided": true,
+              "structureId": "6a687de114a8ecf1ee408941",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408941",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "semester",
+                "college",
+                "category",
+                "course",
+                "feeHead",
+                "batch",
+                "branch",
+                "studentYear",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 20000,
+                  "percent": 40,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "fixedDueDate",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 1,
+                  "termNumber": 2,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 15,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                },
+                {
+                  "index": 2,
+                  "termNumber": 3,
+                  "amount": 15000,
+                  "percent": 30,
+                  "dueDate": null,
+                  "offsetDays": 60,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "referenceSemester",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "feeHeadName": "APPLICATION FEE",
+          "feeHeadCode": "APPL01",
+          "academicYear": "2023",
+          "studentYear": 4,
+          "semester": null,
+          "termRowCount": 1,
+          "distinctTermNumbers": [
+            null
+          ],
+          "totalDemand": 1000,
+          "isTermsDividedFlags": [
+            false
+          ],
+          "studentFeeTerms": [
+            {
+              "studentFeeId": "6a687de214a8ecf1ee408993",
+              "amount": 1000,
+              "remarks": null,
+              "isTermsDivided": false,
+              "structureId": "6a687de114a8ecf1ee408940",
+              "stud_type": "CONV",
+              "rawKeys": [
+                "_id",
+                "feeHead",
+                "semester",
+                "academicYear",
+                "studentId",
+                "studentYear",
+                "__v",
+                "amount",
+                "branch",
+                "college",
+                "course",
+                "createdAt",
+                "isActive",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "structureId",
+                "stud_type",
+                "studentName",
+                "updatedAt"
+              ]
+            }
+          ],
+          "structures": [
+            {
+              "id": "6a687de114a8ecf1ee408940",
+              "batch": "2023",
+              "category": "CONV",
+              "studentYear": 4,
+              "semester": null,
+              "structureKeys": [
+                "_id",
+                "branch",
+                "category",
+                "course",
+                "studentYear",
+                "semester",
+                "college",
+                "feeHead",
+                "batch",
+                "__v",
+                "amount",
+                "createdAt",
+                "history",
+                "isGroupWiseLateFee",
+                "isScholarshipApplicable",
+                "isTermsDivided",
+                "lateFeeHead",
+                "terms",
+                "updatedAt"
+              ],
+              "matchedHeadKeys": null,
+              "structureTerms": [
+                {
+                  "index": 0,
+                  "termNumber": 1,
+                  "amount": 1000,
+                  "percent": 100,
+                  "dueDate": null,
+                  "offsetDays": 0,
+                  "keys": [
+                    "termNumber",
+                    "percentage",
+                    "amount",
+                    "lateFeeAmount",
+                    "dueDateMode",
+                    "dueOffsetDays",
+                    "dueDescription",
+                    "_id"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "overallConcessionsApproved": [],
+      "applicationConcessionsApproved": [
+        {
+          "id": "6a635bb29ce26bdaeca31b08",
+          "status": "APPROVED",
+          "feeHeadId": "6a51e4c59121baa2e1f5a054",
+          "feeHeadName": "CONDONATION FEE",
+          "feeHeadCode": "CON001",
+          "amount": 500,
+          "studentYear": "4",
+          "semester": "1",
+          "reason": "huhuhuhuhuhuhuhuhuhuhuhu"
+        }
+      ],
+      "transactions": [
+        {
+          "id": "6a48ea682bd3dc0b901ef270",
+          "feeHeadId": "6996e24c2e1678e398839187",
+          "feeHeadName": "Tuition Fee",
+          "amount": 13000,
+          "transactionType": "DEBIT",
+          "paymentMode": "UPI",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-04T11:11:36.894Z",
+          "remarks": "RTF  FEE"
+        },
+        {
+          "id": "6a48eaaa2bd3dc0b901ef283",
+          "feeHeadId": "6a3528c8e15dc0beb1ed8752",
+          "feeHeadName": "BUS/HOSTEL/OTHERS",
+          "amount": 5800,
+          "transactionType": "DEBIT",
+          "paymentMode": "UPI",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-04T11:12:42.381Z",
+          "remarks": "UTF  SCH INT "
+        },
+        {
+          "id": "6a61e501bb6777da82af9b99",
+          "feeHeadId": "6996e24d2e1678e398839193",
+          "feeHeadName": "Exam Fee",
+          "amount": 1,
+          "transactionType": "DEBIT",
+          "paymentMode": "UPI",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-23T01:41:42.672Z",
+          "remarks": "Verified UTR: 657079074954",
+          "status": "active"
+        },
+        {
+          "id": "6a6462e8097df4deda4f7912",
+          "feeHeadId": "6a51e4c59121baa2e1f5a054",
+          "feeHeadName": "CONDONATION FEE",
+          "amount": 500,
+          "transactionType": "CREDIT",
+          "paymentMode": "Credit",
+          "studentYear": "4",
+          "semester": "1",
+          "paymentDate": "2026-07-25T07:16:56.844Z",
+          "remarks": "Concession: huhuhuhuhuhuhuhuhuhuhuhu",
+          "status": "active"
+        }
+      ],
+      "calculatedDueClearance": {
+        "blocked": true,
+        "canApply": false,
+        "asOfDate": "2026-07-28",
+        "totalDue": 26500,
+        "currency": "INR",
+        "byHead": [
+          {
+            "feeHeadId": "6a37586dd42f3bcaea1cc79b",
+            "feeHeadCode": "APPL01",
+            "feeHeadName": "APPLICATION FEE",
+            "due": 1000,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 1000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 1000,
+                "due": 1000,
+                "dueDate": "2026-07-03",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e39883918a",
+            "feeHeadCode": "TRN01",
+            "feeHeadName": "Transport Fee",
+            "due": 25500,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2025-2026",
+                "studentYear": 3,
+                "semester": 2,
+                "demand": 25500,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 25500,
+                "due": 25500,
+                "dueDate": "2025-12-08",
+                "overdue": true,
+                "source": "student_fee_single"
+              }
+            ]
+          },
+          {
+            "feeHeadId": "6996e24c2e1678e398839187",
+            "feeHeadCode": "TUI01",
+            "feeHeadName": "Tuition Fee",
+            "due": 0,
+            "terms": [
+              {
+                "termNumber": 1,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 20000,
+                "declarationConcession": 0,
+                "paid": 13000,
+                "applicationConcession": 0,
+                "balance": 7000,
+                "due": 0,
+                "dueDate": "2026-07-30",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 2,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-11-05",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              },
+              {
+                "termNumber": 3,
+                "academicYear": "2023",
+                "studentYear": 4,
+                "semester": null,
+                "demand": 15000,
+                "declarationConcession": 0,
+                "paid": 0,
+                "applicationConcession": 0,
+                "balance": 15000,
+                "due": 0,
+                "dueDate": "2026-12-20",
+                "overdue": false,
+                "source": "fee_structure_expand"
+              }
+            ]
+          }
+        ],
+        "byTerm": [
+          {
+            "termNumber": 1,
+            "due": 26500
+          }
+        ],
+        "message": "You have outstanding fee dues of ₹26,500.00. Clear all overdue dues before applying for the examination.",
+        "verification": {
+          "matched": true,
+          "notes": []
+        },
+        "skipped": false
+      }
+    }
+  ]
+}

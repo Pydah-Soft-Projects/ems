@@ -714,6 +714,7 @@ class FeeManagementService {
     const semesterStartByYearSem = await this.resolveSemesterStarts(
       student,
       studentFees,
+      structures,
     );
 
     return computeDueClearance({
@@ -730,9 +731,9 @@ class FeeManagementService {
 
   /**
    * Best-effort SDMS semester start dates for offset-based due dates.
-   * Keyed as `${studentYear}|${semester}`.
+   * Keyed as `${studentYear}|${semester}` (includes FeeStructure referenceSemester).
    */
-  async resolveSemesterStarts(student, studentFees) {
+  async resolveSemesterStarts(student, studentFees, structures = []) {
     const map = new Map();
     if (!this.sdms?.listSemesters) return map;
 
@@ -741,6 +742,27 @@ class FeeManagementService {
       const y = fee.studentYear != null ? Number(fee.studentYear) : null;
       const s = fee.semester != null ? Number(fee.semester) : null;
       if (y != null && s != null) pairs.add(`${y}|${s}`);
+      // Year-level demands (semester null) still need term reference semesters.
+      if (y != null && s == null) {
+        pairs.add(`${y}|1`);
+        pairs.add(`${y}|2`);
+      }
+    }
+    for (const st of structures || []) {
+      const y =
+        st.studentYear != null
+          ? Number(st.studentYear)
+          : null;
+      const terms = Array.isArray(st.terms) ? st.terms : [];
+      for (const t of terms) {
+        const ref =
+          t.referenceSemester != null
+            ? Number(t.referenceSemester)
+            : st.semester != null
+              ? Number(st.semester)
+              : null;
+        if (y != null && ref != null) pairs.add(`${y}|${ref}`);
+      }
     }
     if (pairs.size === 0) return map;
 
