@@ -218,6 +218,55 @@ function createFeesRoutes(services) {
       res.json(await services.exam.getPaymentStatus(parseId(req.params.id)));
     }),
   );
+
+  // —— Canara Bank UPI Collection (dynamic QR) ——
+  router.get(
+    '/canara-upi/status',
+    asyncHandler(async (_req, res) => {
+      res.json(await services.canaraUpi.getPublicStatus());
+    }),
+  );
+
+  router.post(
+    '/canara-upi/order',
+    asyncHandler(async (req, res) => {
+      const feeRecordId = parseInt(String(req.body.feeRecordId), 10);
+      if (!feeRecordId) {
+        res.status(400).json({ message: 'feeRecordId is required' });
+        return;
+      }
+      res.status(201).json(
+        await services.canaraUpi.createOrder(feeRecordId, {
+          actor: {
+            role: req.user?.role,
+            pinNo: req.user?.pinNo,
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/canara-upi/:paymentId/sync',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.canaraUpi.syncPaymentStatus(
+          parseId(req.params.paymentId),
+          {
+            actor: {
+              role: req.user?.role,
+              pinNo: req.user?.pinNo,
+              username: req.user?.username,
+              fullName: req.user?.fullName,
+            },
+          },
+        ),
+      );
+    }),
+  );
+
   router.get(
     '/records/:id',
     asyncHandler(async (req, res) => {

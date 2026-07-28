@@ -2,7 +2,7 @@ import { Exam, ExamType } from './exam';
 
 export type FeeStatus = 'pending' | 'paid';
 
-export type PaymentMode = 'online' | 'offline' | 'self_online';
+export type PaymentMode = 'online' | 'offline' | 'self_online' | 'canara_upi';
 
 export type PaymentMethod =
   | 'upi'

@@ -18,10 +18,11 @@ import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
+import { CanaraUpiPayPanel } from '@/components/fees/CanaraUpiPayPanel';
 import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
 import { calcUpiConvenienceFee, paymentLineLabel } from '@/lib/upiConvenienceFee';
 
-type CollectChannel = PaymentMethod | 'razorpay' | 'self_online';
+type CollectChannel = PaymentMethod | 'razorpay' | 'self_online' | 'canara_upi';
 
 interface FeeCollectionDeskProps {
   rollNumber: string;
@@ -50,11 +51,15 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [payError, setPayError] = useState('');
   const [razorpayReady, setRazorpayReady] = useState(false);
   const [selfOnlineReady, setSelfOnlineReady] = useState(false);
+  const [canaraUpiReady, setCanaraUpiReady] = useState(false);
   const [razorpayRecord, setRazorpayRecord] = useState<ExamFeeRecord | null>(
     null,
   );
   const [selfOnlineRecord, setSelfOnlineRecord] =
     useState<ExamFeeRecord | null>(null);
+  const [canaraUpiRecord, setCanaraUpiRecord] = useState<ExamFeeRecord | null>(
+    null,
+  );
   const [eligibleExams, setEligibleExams] = useState<StudentExamListItem[]>([]);
   const [eligibleError, setEligibleError] = useState('');
   const [applyExam, setApplyExam] = useState<StudentExamListItem | null>(null);
@@ -77,7 +82,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     setLoading(true);
     setError('');
     try {
-      const [lookup, rzStatus, selfStatus] = await Promise.all([
+      const [lookup, rzStatus, selfStatus, canaraStatus] = await Promise.all([
         api.lookupFeeCollection(rollNumber),
         api.getRazorpayStatus().catch(() => ({
           enabled: false,
@@ -93,9 +98,15 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
           paymentNote: '',
           expiryHours: 48,
         })),
+        api.getCanaraUpiStatus().catch(() => ({
+          enabled: false,
+          configured: false,
+          ready: false,
+        })),
       ]);
       setRazorpayReady(rzStatus.ready);
       setSelfOnlineReady(selfStatus.ready);
+      setCanaraUpiReady(canaraStatus.ready);
       setRecords(lookup.records);
       setStudentName(lookup.studentName ?? '');
       const pending = lookup.records.filter((r) => r.status === 'pending');
@@ -235,6 +246,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       }
       setPayError('');
       setSelfOnlineRecord(null);
+      setCanaraUpiRecord(null);
       setRazorpayRecord(selectedPending[0]);
       return;
     }
@@ -252,7 +264,26 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       }
       setPayError('');
       setRazorpayRecord(null);
+      setCanaraUpiRecord(null);
       setSelfOnlineRecord(selectedPending[0]);
+      return;
+    }
+
+    if (paymentMethod === 'canara_upi') {
+      if (!canaraUpiReady) {
+        setPayError(
+          'Canara UPI is not configured. Add credentials under Settings → Canara Bank UPI.',
+        );
+        return;
+      }
+      if (selectedPending.length !== 1) {
+        setPayError('Select exactly one fee row for Canara Bank UPI payment.');
+        return;
+      }
+      setPayError('');
+      setRazorpayRecord(null);
+      setSelfOnlineRecord(null);
+      setCanaraUpiRecord(selectedPending[0]);
       return;
     }
 
@@ -349,6 +380,20 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         }}
         onClaimed={async () => {
           // Don't call load() right now to avoid re-opening the dialog!
+        }}
+      />
+
+      <CanaraUpiPayPanel
+        open={canaraUpiRecord != null}
+        record={canaraUpiRecord}
+        variant="overlay"
+        onClose={() => {
+          setCanaraUpiRecord(null);
+          void load();
+        }}
+        onPaid={(paymentId) => {
+          setCanaraUpiRecord(null);
+          router.push(`/dashboard/fees/receipt/${paymentId}`);
         }}
       />
 
@@ -858,17 +903,21 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     ['bank_transfer', 'Bank'],
                     ['razorpay', 'Razorpay'],
                     ['self_online', 'Self Online'],
+                    ['canara_upi', 'Canara UPI'],
                   ] as const
                 ).map(([value, label]) => {
                   const disabled =
                     (value === 'razorpay' && !razorpayReady) ||
-                    (value === 'self_online' && !selfOnlineReady);
+                    (value === 'self_online' && !selfOnlineReady) ||
+                    (value === 'canara_upi' && !canaraUpiReady);
                   const title =
                     value === 'razorpay' && !razorpayReady
                       ? 'Configure Razorpay in Settings'
                       : value === 'self_online' && !selfOnlineReady
                         ? 'Configure Self Online UPI in Settings'
-                        : undefined;
+                        : value === 'canara_upi' && !canaraUpiReady
+                          ? 'Configure Canara Bank UPI in Settings'
+                          : undefined;
                   return (
                     <button
                       key={value}
@@ -906,6 +955,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   first; official receipt after statement verification.
                 </p>
               )}
+              {paymentMethod === 'canara_upi' && (
+                <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
+                  Exact fee via Canara Bank dynamic QR. Fee marks paid when the
+                  bank confirms (live callback / status).
+                </p>
+              )}
               {!razorpayReady && (
                 <p className="mt-2 text-xs text-amber-700">
                   Razorpay offline — enable keys in{' '}
@@ -930,10 +985,23 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   .
                 </p>
               )}
+              {!canaraUpiReady && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Canara UPI offline — add bank credentials in{' '}
+                  <Link
+                    href="/dashboard/settings"
+                    className="font-semibold underline"
+                  >
+                    Settings
+                  </Link>
+                  .
+                </p>
+              )}
             </div>
 
             {paymentMethod !== 'razorpay' &&
-              paymentMethod !== 'self_online' && (
+              paymentMethod !== 'self_online' &&
+              paymentMethod !== 'canara_upi' && (
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-700">
                 Collected by
@@ -976,7 +1044,8 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             )}
 
             {paymentMethod !== 'razorpay' &&
-              paymentMethod !== 'self_online' && (
+              paymentMethod !== 'self_online' &&
+              paymentMethod !== 'canara_upi' && (
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Remarks / notes (optional)
@@ -1006,7 +1075,9 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   ? 'Pay with Razorpay'
                   : paymentMethod === 'self_online'
                     ? 'Open Self Online QR'
-                    : 'Confirm payment'}
+                    : paymentMethod === 'canara_upi'
+                      ? 'Open Canara UPI QR'
+                      : 'Confirm payment'}
             </Button>
           </form>
         </aside>

@@ -6,7 +6,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ApiError, api } from '@/lib/api';
-import type { PaymentGatewaySettings } from '@/lib/razorpayCheckout';
+import { CanaraUpiSettingsCard } from '@/components/settings/CanaraUpiSettingsCard';
 
 function applySettingsToForms(
   data: PaymentGatewaySettings,
@@ -139,7 +139,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Razorpay gateway and Self Online college UPI configuration"
+        description="Razorpay, Self Online college UPI, and Canara Bank UPI Collection"
       />
 
       {error ? (
@@ -325,6 +325,8 @@ export default function SettingsPage() {
           )}
         </CardBody>
       </Card>
+
+      <CanaraUpiSettingsCard />
     </div>
   );
 }

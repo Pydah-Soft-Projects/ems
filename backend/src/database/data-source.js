@@ -34,6 +34,9 @@ const {
 const {
   PaymentGatewaySettings,
 } = require('../settings/payment-gateway-settings.entity');
+const {
+  CanaraUpiCredentialVersion,
+} = require('../settings/canara-upi-credential-version.entity');
 const { Professional } = require('../remuneration/schemas/professional.schema');
 const {
   RemunerationBill,
@@ -61,6 +64,7 @@ const entities = [
   ResultUpload,
   SubjectResult,
   PaymentGatewaySettings,
+  CanaraUpiCredentialVersion,
   Professional,
   RemunerationBill,
   EmsRole,

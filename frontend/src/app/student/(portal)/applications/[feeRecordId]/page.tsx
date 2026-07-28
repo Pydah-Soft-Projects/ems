@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { money } from '@/components/fees/money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
+import { CanaraUpiPayPanel } from '@/components/fees/CanaraUpiPayPanel';
 import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 
 type Step = 1 | 2;
@@ -42,17 +43,21 @@ export default function StudentApplyPage({
   const [step, setStep] = useState<Step>(1);
   const [consent, setConsent] = useState(false);
   const [declaration, setDeclaration] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod | 'self_online'>('upi');
+  const [method, setMethod] = useState<
+    PaymentMethod | 'self_online' | 'canara_upi'
+  >('upi');
   const [razorpayReady, setRazorpayReady] = useState(false);
   const [selfOnlineReady, setSelfOnlineReady] = useState(false);
+  const [canaraUpiReady, setCanaraUpiReady] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [selfPayOpen, setSelfPayOpen] = useState(false);
+  const [canaraPayOpen, setCanaraPayOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [fees, status, selfStatus] = await Promise.all([
+      const [fees, status, selfStatus, canaraStatus] = await Promise.all([
         api.getStudentFees(),
         api.getRazorpayStatus().catch(() => ({
           enabled: false,
@@ -67,6 +72,11 @@ export default function StudentApplyPage({
           merchantName: '',
           paymentNote: '',
           expiryHours: 48,
+        })),
+        api.getCanaraUpiStatus().catch(() => ({
+          enabled: false,
+          configured: false,
+          ready: false,
         })),
       ]);
       const found = fees.find((f) => f.id === id) ?? null;
@@ -92,10 +102,23 @@ export default function StudentApplyPage({
           setMethod('self_online');
           setSelfPayOpen(true);
         }
+        const canaraOpen = found.payments?.find(
+          (p) =>
+            p.paymentMode === 'canara_upi' &&
+            (p.status === 'processing' || p.status === 'pending'),
+        );
+        if (canaraOpen) {
+          setStep(2);
+          setMethod('canara_upi');
+          setCanaraPayOpen(true);
+        }
       }
       setRazorpayReady(status.ready);
       setSelfOnlineReady(selfStatus.ready);
-      if (!status.ready && selfStatus.ready) {
+      setCanaraUpiReady(canaraStatus.ready);
+      if (!status.ready && canaraStatus.ready) {
+        setMethod('canara_upi');
+      } else if (!status.ready && selfStatus.ready) {
         setMethod('self_online');
       }
     } catch (err) {
@@ -115,7 +138,7 @@ export default function StudentApplyPage({
 
   const split = useMemo(
     () =>
-      record && method !== 'self_online'
+      record && method !== 'self_online' && method !== 'canara_upi'
         ? calcUpiConvenienceFee(record.totalAmount, method)
         : record
           ? {
@@ -136,7 +159,7 @@ export default function StudentApplyPage({
       );
       return;
     }
-    if (!razorpayReady && !selfOnlineReady) {
+    if (!razorpayReady && !selfOnlineReady && !canaraUpiReady) {
       setError(
         'Online payments are not available yet. Contact the examination cell.',
       );
@@ -441,6 +464,8 @@ export default function StudentApplyPage({
                 type="button"
                 onClick={() => {
                   setPayOpen(false);
+                  setSelfPayOpen(false);
+                  setCanaraPayOpen(false);
                   setStep(1);
                 }}
                 className="text-xs font-semibold text-[var(--primary)] hover:underline"
@@ -481,9 +506,15 @@ export default function StudentApplyPage({
               <select
                 value={method}
                 onChange={(e) => {
-                  setMethod(e.target.value as PaymentMethod | 'self_online');
+                  setMethod(
+                    e.target.value as
+                      | PaymentMethod
+                      | 'self_online'
+                      | 'canara_upi',
+                  );
                   setPayOpen(false);
                   setSelfPayOpen(false);
+                  setCanaraPayOpen(false);
                 }}
                 className="w-full max-w-xs rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
               >
@@ -495,6 +526,9 @@ export default function StudentApplyPage({
                     <option value="net_banking">Net banking</option>
                   </>
                 ) : null}
+                {canaraUpiReady ? (
+                  <option value="canara_upi">Canara Bank UPI (QR)</option>
+                ) : null}
                 {selfOnlineReady ? (
                   <option value="self_online">Self Online (College UPI)</option>
                 ) : null}
@@ -502,6 +536,12 @@ export default function StudentApplyPage({
               {method === 'upi' && razorpayReady && (
                 <p className="mt-2 text-xs text-amber-800">
                   UPI payments include a 2.2% convenience / bank charge.
+                </p>
+              )}
+              {method === 'canara_upi' && (
+                <p className="mt-2 text-xs text-slate-600">
+                  Pay exact fee via Canara Bank dynamic QR. Confirmed live when
+                  the bank reports success.
                 </p>
               )}
               {method === 'self_online' && (
@@ -512,7 +552,7 @@ export default function StudentApplyPage({
               )}
             </div>
 
-            {!razorpayReady && !selfOnlineReady && (
+            {!razorpayReady && !selfOnlineReady && !canaraUpiReady && (
               <div className="mt-4 rounded-[var(--radius)] bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                 Online payment is temporarily unavailable. Please pay at the fee
                 counter.
@@ -526,6 +566,7 @@ export default function StudentApplyPage({
                 onClick={() => {
                   setPayOpen(false);
                   setSelfPayOpen(false);
+                  setCanaraPayOpen(false);
                   setStep(1);
                 }}
               >
@@ -536,30 +577,46 @@ export default function StudentApplyPage({
                 disabled={
                   (method === 'self_online'
                     ? !selfOnlineReady || selfPayOpen
-                    : !razorpayReady || payOpen) ||
-                  (!razorpayReady && !selfOnlineReady)
+                    : method === 'canara_upi'
+                      ? !canaraUpiReady || canaraPayOpen
+                      : !razorpayReady || payOpen) ||
+                  (!razorpayReady && !selfOnlineReady && !canaraUpiReady)
                 }
                 onClick={() => {
                   setError('');
                   if (method === 'self_online') {
                     setSelfPayOpen(true);
                     setPayOpen(false);
+                    setCanaraPayOpen(false);
+                  } else if (method === 'canara_upi') {
+                    setCanaraPayOpen(true);
+                    setPayOpen(false);
+                    setSelfPayOpen(false);
                   } else {
                     setPayOpen(true);
                     setSelfPayOpen(false);
+                    setCanaraPayOpen(false);
                   }
                 }}
               >
                 {method === 'self_online'
                   ? `Pay ${money(record.totalAmount)} via UPI`
-                  : `Pay ${money(split?.total ?? record.totalAmount)}`}
+                  : method === 'canara_upi'
+                    ? `Pay ${money(record.totalAmount)} via Canara UPI`
+                    : `Pay ${money(split?.total ?? record.totalAmount)}`}
               </Button>
             </div>
 
             <RazorpayInlinePay
-              open={payOpen && method !== 'self_online'}
+              open={
+                payOpen && method !== 'self_online' && method !== 'canara_upi'
+              }
               record={record}
-              paymentMethod={method === 'self_online' ? 'upi' : method}
+              paymentMethod={
+                method === 'self_online' || method === 'canara_upi'
+                  ? 'upi'
+                  : method
+              }
               variant="panel"
               prefillName={user?.fullName}
               prefillContact={user?.mobile ?? undefined}
@@ -575,13 +632,25 @@ export default function StudentApplyPage({
               open={selfPayOpen && method === 'self_online'}
               record={record}
               onClose={() => {
-              setSelfPayOpen(false);
-              void load();
-            }}
+                setSelfPayOpen(false);
+                void load();
+              }}
               onClaimed={async () => {
-              // Don't call load() right now to avoid re-opening the dialog!
-              // Wait for user to close the dialog, then load (if needed)
-            }}
+                // Don't call load() right now to avoid re-opening the dialog!
+              }}
+            />
+
+            <CanaraUpiPayPanel
+              open={canaraPayOpen && method === 'canara_upi'}
+              record={record}
+              onClose={() => {
+                setCanaraPayOpen(false);
+                void load();
+              }}
+              onPaid={(paymentId) => {
+                setCanaraPayOpen(false);
+                router.push(`/student/receipt/${paymentId}`);
+              }}
             />
           </section>
         </div>

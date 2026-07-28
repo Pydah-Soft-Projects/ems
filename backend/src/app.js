@@ -64,6 +64,21 @@ function createApp(services) {
 
   app.use(express.json({ limit: '1mb' }));
 
+  // Canara QR Call-Back (no staff auth — bank pushes encrypted status)
+  app.post(
+    `/${config.apiPrefix}/fees/canara-upi/callback`,
+    asyncHandler(async (req, res) => {
+      const signature =
+        req.headers['x-signature'] || req.headers['x-canara-signature'];
+      const result = await services.canaraUpi.handleCallback(
+        req.body ?? {},
+        typeof signature === 'string' ? signature : undefined,
+      );
+      // Bank docs: respond with 200 and body 200_OK
+      res.status(200).send(result?.response || '200_OK');
+    }),
+  );
+
   api.post(
     '/auth/login',
     asyncHandler(async (req, res) => {

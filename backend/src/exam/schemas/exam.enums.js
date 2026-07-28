@@ -24,6 +24,7 @@ const PaymentMode = {
   ONLINE: 'online',
   OFFLINE: 'offline',
   SELF_ONLINE: 'self_online',
+  CANARA_UPI: 'canara_upi',
 };
 
 const PaymentMethod = {

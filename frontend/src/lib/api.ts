@@ -705,6 +705,51 @@ export const api = {
     );
   },
 
+  getCanaraUpiStatus() {
+    return request<import('@/types/canara-upi').CanaraUpiStatus>(
+      '/fees/canara-upi/status',
+    );
+  },
+
+  createCanaraUpiOrder(feeRecordId: number) {
+    return request<import('@/types/canara-upi').CanaraUpiOrder>(
+      '/fees/canara-upi/order',
+      {
+        method: 'POST',
+        body: JSON.stringify({ feeRecordId }),
+      },
+    );
+  },
+
+  syncCanaraUpiPayment(paymentId: number) {
+    return request<import('@/types/canara-upi').CanaraUpiSyncResult>(
+      `/fees/canara-upi/${paymentId}/sync`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  },
+
+  getCanaraUpiSettings() {
+    return request<import('@/types/canara-upi').CanaraUpiSettingsResponse>(
+      '/settings/canara-upi',
+    );
+  },
+
+  updateCanaraUpiSettings(data: Record<string, unknown>) {
+    return request<import('@/types/canara-upi').CanaraUpiSettingsResponse>(
+      '/settings/canara-upi',
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      },
+    );
+  },
+
+  listCanaraUpiVersions(take = 50) {
+    return request<{
+      versions: import('@/types/canara-upi').CanaraUpiCredentialVersionPublic[];
+    }>(`/settings/canara-upi/versions?take=${take}`);
+  },
+
   createSelfOnlineOrder(feeRecordId: number) {
     return request<import('@/types/self-online').SelfOnlineOrder>(
       '/fees/self-online/order',

@@ -16,6 +16,7 @@ Reference documentation for the Examination Management System (EMS), derived fro
 | [Fee Generation](./08-fee-generation.md) | ✅ | ✅ | ✅ | Desk via Fees page |
 | [Fee Payment](./09-fee-payment.md) | ✅ | ✅ | ✅ | Done (offline desk) |
 | [Self Online Payment](./18-self-online-payment.md) | ✅ | ✅ | ✅ | UPI QR + PDF reconcile |
+| [Canara UPI Collection](./19-canara-upi-collection.md) | ✅ | ✅ | ✅ | Dynamic QR + callback/sync |
 | [Late Fee & Fine](./10-late-fee.md) | ✅ | ✅ | ✅ | Pay-time slabs |
 | [Hall Tickets](./11-hall-tickets.md) | ✅ | ⏳ | ⏳ | Planned |
 | [Marks & Results](./12-marks-results.md) | ✅ | ⏳ | ⏳ | Planned |

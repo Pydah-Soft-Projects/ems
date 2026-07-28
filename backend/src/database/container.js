@@ -26,10 +26,17 @@ const {
 const { ResultUpload, SubjectResult } = require('../exam/schemas/result.schema');
 const { ResultsService } = require('../exam/results.service');
 const { SelfOnlineService } = require('../exam/self-online.service');
+const { CanaraUpiService } = require('../exam/canara-upi.service');
 const {
   PaymentGatewaySettings,
 } = require('../settings/payment-gateway-settings.entity');
+const {
+  CanaraUpiCredentialVersion,
+} = require('../settings/canara-upi-credential-version.entity');
 const { SettingsService } = require('../settings/settings.service');
+const {
+  CanaraUpiSettingsService,
+} = require('../settings/canara-upi-settings.service');
 const {
   FeeManagementService,
 } = require('../fee-management/fee-management.service');
@@ -89,6 +96,10 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(PaymentGatewaySettings),
   );
 
+  const canaraUpiSettings = new CanaraUpiSettingsService(
+    dataSource.getRepository(CanaraUpiCredentialVersion),
+  );
+
   const feeManagement = new FeeManagementService(sdms);
 
   const exam = new ExamService(
@@ -112,6 +123,13 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(MerchantStatement),
     dataSource.getRepository(MerchantStatementTxn),
     settings,
+    exam,
+  );
+
+  const canaraUpi = new CanaraUpiService(
+    dataSource.getRepository(Payment),
+    dataSource.getRepository(ExamFeeRecord),
+    canaraUpiSettings,
     exam,
   );
 
@@ -147,8 +165,10 @@ function createServices(dataSource, studentDataSource) {
     subjects,
     exam,
     selfOnline,
+    canaraUpi,
     sdms,
     settings,
+    canaraUpiSettings,
     feeManagement,
     results,
     professionals,

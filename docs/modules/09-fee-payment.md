@@ -4,7 +4,7 @@
 
 Unified fee collection — students pay via Razorpay online, Self Online college UPI, or Accounts desk offline (cash/bank).
 
-See also: [Self Online Payment & Reconciliation](./18-self-online-payment.md).
+See also: [Self Online Payment & Reconciliation](./18-self-online-payment.md), [Canara Bank UPI Collection](./19-canara-upi-collection.md).
 
 ## Desk collection UI
 
@@ -19,7 +19,7 @@ Screenshot-style desk page:
 
 Self Online reconcile: `/dashboard/fees/self-online` (merchant PDF upload + match).
 
-Desk collect methods: Cash · Bank · Razorpay · **Self Online** (college UPI QR at counter).
+Desk collect methods: Cash · Bank · Razorpay · **Self Online** · **Canara UPI**.
 
 ## Receipt (A5)
 
@@ -29,13 +29,14 @@ Desk collect methods: Cash · Bank · Razorpay · **Self Online** (college UPI Q
 - QR for receipt number, particulars, authorized signatory
 - Browser **Print receipt** button
 - Self Online: temporary acknowledgement until verified; official receipt after reconcile
+- Canara UPI: official receipt when bank confirms (callback / status sync)
 
 ## Student portal
 
 - Login: `/student/login` — PIN + Admission Number (password)
 - Home: `/student` — exams, subjects, paid/pending, online pay
 - Auth: `POST /auth/student/login`
-- Payment methods: Razorpay and/or Self Online (college UPI QR) when enabled in Settings
+- Payment methods: Razorpay and/or Self Online and/or **Canara Bank UPI** when enabled in Settings
 
 ## API
 
@@ -53,4 +54,8 @@ Desk collect methods: Cash · Bank · Razorpay · **Self Online** (college UPI Q
 | POST | `/fees/self-online/:id/claim` | Student “I have paid” |
 | POST | `/fees/self-online/statements` | Upload merchant PDF/CSV/XLS |
 | POST | `/fees/self-online/verify` | Admin confirm match |
+| GET | `/fees/canara-upi/status` | Canara UPI readiness |
+| POST | `/fees/canara-upi/order` | Dynamic bank QR |
+| POST | `/fees/canara-upi/:id/sync` | Bank status sync |
+| POST | `/fees/canara-upi/callback` | Bank Call-Back |
 
