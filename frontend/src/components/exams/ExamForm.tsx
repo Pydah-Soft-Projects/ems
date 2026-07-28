@@ -121,6 +121,17 @@ function computeDuration(start: string, end: string): number | null {
   return diff > 0 ? diff : null;
 }
 
+function nextDate(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setDate(date.getDate() + 1);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function examTypeLabel(t: ExamType): string {
   return ALL_EXAM_TYPES.find((x) => x.value === t)?.label ?? t;
 }
@@ -777,6 +788,20 @@ export function ExamForm({
           if (s.amount < 0) {
             setError('Late fee slab amount must be non-negative.');
             return false;
+          }
+          if (i > 0) {
+            const prev = slabs[i - 1];
+            if (!prev.toDate) {
+              setError('Each late fee slab before the last one must have a "to date".');
+              return false;
+            }
+            const expectedFrom = nextDate(prev.toDate);
+            if (!expectedFrom || s.fromDate !== expectedFrom) {
+              setError(
+                `Late fee slab ${i + 1} must start on the day after the previous slab ends (${expectedFrom ?? 'invalid previous date'}).`,
+              );
+              return false;
+            }
           }
         }
       }
@@ -1723,11 +1748,7 @@ export function ExamForm({
                     const last = next[next.length - 1];
                     let nextFrom = lateFeeStartDate || '';
                     if (last?.toDate) {
-                      const d = new Date(`${last.toDate}T00:00:00`);
-                      if (!Number.isNaN(d.getTime())) {
-                        d.setDate(d.getDate() + 1);
-                        nextFrom = d.toISOString().slice(0, 10);
-                      }
+                      nextFrom = nextDate(last.toDate) ?? nextFrom;
                     }
                     return [
                       ...next,
@@ -1779,8 +1800,8 @@ export function ExamForm({
                         placeholder={isLast ? 'Until application end' : 'Required'}
                         onChange={(e) => {
                           const raw = e.target.value.trim();
-                          setSlabs((rows) =>
-                            rows.map((r, i) => {
+                          setSlabs((rows) => {
+                            const nextRows = rows.map((r, i) => {
                               if (i !== idx) return r;
                               if (!isLast) {
                                 return { ...r, toDate: raw || '' };
@@ -1789,8 +1810,20 @@ export function ExamForm({
                                 ...r,
                                 toDate: raw === '' ? null : raw,
                               };
-                            }),
-                          );
+                            });
+
+                            if (!isLast && raw) {
+                              const nextFrom = nextDate(raw);
+                              if (nextFrom && nextRows[idx + 1]) {
+                                nextRows[idx + 1] = {
+                                  ...nextRows[idx + 1],
+                                  fromDate: nextFrom,
+                                };
+                              }
+                            }
+
+                            return nextRows;
+                          });
                         }}
                         className={compactInputClass}
                       />

@@ -436,55 +436,24 @@ export default function SelfOnlineReconcilePage() {
                 No parsed rows available yet.
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-[2200px] text-left text-xs">
-                  <thead className="border-b border-[var(--border)] uppercase text-[var(--muted)]">
-                    <tr>
-                      <th className="px-2 py-2">#</th>
-                      <th className="px-2 py-2">Post date</th>
-                      <th className="px-2 py-2">Value date</th>
-                      <th className="px-2 py-2">Txn type</th>
-                      <th className="px-2 py-2">Method</th>
-                      <th className="px-2 py-2">Rail</th>
-                      <th className="px-2 py-2">Direction</th>
-                      <th className="px-2 py-2">UTR</th>
-                      <th className="px-2 py-2">Bank ref</th>
-                      <th className="px-2 py-2">EMS ref</th>
-                      <th className="px-2 py-2">IFSC</th>
-                      <th className="px-2 py-2">Terminal</th>
-                      <th className="px-2 py-2">Branch</th>
-                      <th className="px-2 py-2">Payer</th>
-                      <th className="px-2 py-2">Payee</th>
-                      <th className="px-2 py-2">Payer bank</th>
-                      <th className="px-2 py-2">Payer UPI</th>
-                      <th className="px-2 py-2">Recv bank</th>
-                      <th className="px-2 py-2">Recv IFSC</th>
-                      <th className="px-2 py-2">Debit</th>
-                      <th className="px-2 py-2">Credit</th>
-                      <th className="px-2 py-2">Amount</th>
-                      <th className="px-2 py-2">Balance</th>
-                      <th className="px-2 py-2">Note</th>
-                      <th className="px-2 py-2">Narration</th>
-                      <th className="px-2 py-2">Match</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="border-b border-[var(--border)] align-top"
-                      >
-                        <td className="px-2 py-2 font-mono">{row.id}</td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          {fmtDate(row.postDate)}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          {fmtDate(row.valueDate)}
-                        </td>
-                        <td className="px-2 py-2">{row.txnType || '—'}</td>
-                        <td className="px-2 py-2">{row.paymentMethod || '—'}</td>
-                        <td className="px-2 py-2">{row.paymentRail || '—'}</td>
-                        <td className="px-2 py-2">
+              <>
+                <div className="space-y-3 lg:hidden">
+                  {filteredRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="rounded-[var(--radius-lg)] border border-[var(--border)] p-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="font-medium text-slate-900">
+                            Transaction #{row.id}
+                          </div>
+                          <div className="text-xs text-[var(--muted)]">
+                            {fmtDate(row.postDate)} · {row.paymentMethod || '—'} ·{' '}
+                            {row.paymentRail || '—'}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
                           <Badge
                             variant={
                               row.txnDirection === 'credit'
@@ -496,51 +465,6 @@ export default function SelfOnlineReconcilePage() {
                           >
                             {row.txnDirection || '—'}
                           </Badge>
-                        </td>
-                        <td className="px-2 py-2 font-mono">{row.utr || '—'}</td>
-                        <td className="px-2 py-2 font-mono">
-                          {row.internalBankRef || '—'}
-                        </td>
-                        <td className="px-2 py-2 font-mono">
-                          {row.merchantReference || '—'}
-                        </td>
-                        <td className="px-2 py-2 font-mono">{row.ifsc || '—'}</td>
-                        <td className="px-2 py-2">{row.terminal || '—'}</td>
-                        <td className="px-2 py-2 max-w-[10rem] truncate">
-                          {row.branchLocation || '—'}
-                        </td>
-                        <td className="px-2 py-2">{row.payerName || '—'}</td>
-                        <td className="px-2 py-2">{row.payeeName || '—'}</td>
-                        <td className="px-2 py-2">{row.payerBankCode || '—'}</td>
-                        <td className="px-2 py-2 font-mono">
-                          {row.payerUpi || '—'}
-                        </td>
-                        <td className="px-2 py-2">{row.receiverBankCode || '—'}</td>
-                        <td className="px-2 py-2 font-mono">
-                          {row.receiverIfsc || '—'}
-                        </td>
-                        <td className="px-2 py-2 tabular-nums">
-                          {fmtMoney(row.debitAmount)}
-                        </td>
-                        <td className="px-2 py-2 tabular-nums">
-                          {fmtMoney(row.creditAmount)}
-                        </td>
-                        <td className="px-2 py-2 tabular-nums font-medium">
-                          {fmtMoney(row.amount)}
-                        </td>
-                        <td className="px-2 py-2 tabular-nums">
-                          {fmtMoney(row.runningBalance)}
-                        </td>
-                        <td className="px-2 py-2 max-w-[8rem] truncate">
-                          {row.paymentNote || '—'}
-                        </td>
-                        <td
-                          className="px-2 py-2 max-w-[16rem] truncate text-[var(--muted)]"
-                          title={row.narration || row.rawLine || ''}
-                        >
-                          {row.narration || row.rawLine || '—'}
-                        </td>
-                        <td className="px-2 py-2">
                           <Badge
                             variant={
                               row.matchStatus === 'matched'
@@ -550,12 +474,193 @@ export default function SelfOnlineReconcilePage() {
                           >
                             {row.matchStatus}
                           </Badge>
-                        </td>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <div className="text-[11px] uppercase text-[var(--muted)]">
+                            Amount
+                          </div>
+                          <div className="font-medium tabular-nums">
+                            {fmtMoney(row.amount)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase text-[var(--muted)]">
+                            UTR
+                          </div>
+                          <div className="break-all font-mono text-xs">
+                            {row.utr || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase text-[var(--muted)]">
+                            Payer
+                          </div>
+                          <div className="text-sm break-words">
+                            {row.payerName || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase text-[var(--muted)]">
+                            Payer UPI
+                          </div>
+                          <div className="break-all font-mono text-xs">
+                            {row.payerUpi || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase text-[var(--muted)]">
+                            Bank ref
+                          </div>
+                          <div className="break-all font-mono text-xs">
+                            {row.internalBankRef || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase text-[var(--muted)]">
+                            EMS ref
+                          </div>
+                          <div className="break-all font-mono text-xs">
+                            {row.merchantReference || '—'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <div className="text-[11px] uppercase text-[var(--muted)]">
+                          Narration
+                        </div>
+                        <p className="mt-1 break-words text-xs text-[var(--muted)]">
+                          {row.narration || row.rawLine || '—'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto lg:block">
+                  <table className="min-w-[2200px] text-left text-xs">
+                    <thead className="border-b border-[var(--border)] uppercase text-[var(--muted)]">
+                      <tr>
+                        <th className="px-2 py-2">#</th>
+                        <th className="px-2 py-2">Post date</th>
+                        <th className="px-2 py-2">Value date</th>
+                        <th className="px-2 py-2">Txn type</th>
+                        <th className="px-2 py-2">Method</th>
+                        <th className="px-2 py-2">Rail</th>
+                        <th className="px-2 py-2">Direction</th>
+                        <th className="px-2 py-2">UTR</th>
+                        <th className="px-2 py-2">Bank ref</th>
+                        <th className="px-2 py-2">EMS ref</th>
+                        <th className="px-2 py-2">IFSC</th>
+                        <th className="px-2 py-2">Terminal</th>
+                        <th className="px-2 py-2">Branch</th>
+                        <th className="px-2 py-2">Payer</th>
+                        <th className="px-2 py-2">Payee</th>
+                        <th className="px-2 py-2">Payer bank</th>
+                        <th className="px-2 py-2">Payer UPI</th>
+                        <th className="px-2 py-2">Recv bank</th>
+                        <th className="px-2 py-2">Recv IFSC</th>
+                        <th className="px-2 py-2">Debit</th>
+                        <th className="px-2 py-2">Credit</th>
+                        <th className="px-2 py-2">Amount</th>
+                        <th className="px-2 py-2">Balance</th>
+                        <th className="px-2 py-2">Note</th>
+                        <th className="px-2 py-2">Narration</th>
+                        <th className="px-2 py-2">Match</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {filteredRows.map((row) => (
+                        <tr
+                          key={row.id}
+                          className="border-b border-[var(--border)] align-top"
+                        >
+                          <td className="px-2 py-2 font-mono">{row.id}</td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            {fmtDate(row.postDate)}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            {fmtDate(row.valueDate)}
+                          </td>
+                          <td className="px-2 py-2">{row.txnType || '—'}</td>
+                          <td className="px-2 py-2">{row.paymentMethod || '—'}</td>
+                          <td className="px-2 py-2">{row.paymentRail || '—'}</td>
+                          <td className="px-2 py-2">
+                            <Badge
+                              variant={
+                                row.txnDirection === 'credit'
+                                  ? 'success'
+                                  : row.txnDirection === 'debit'
+                                    ? 'warning'
+                                    : 'default'
+                              }
+                            >
+                              {row.txnDirection || '—'}
+                            </Badge>
+                          </td>
+                          <td className="px-2 py-2 font-mono">{row.utr || '—'}</td>
+                          <td className="px-2 py-2 font-mono">
+                            {row.internalBankRef || '—'}
+                          </td>
+                          <td className="px-2 py-2 font-mono">
+                            {row.merchantReference || '—'}
+                          </td>
+                          <td className="px-2 py-2 font-mono">{row.ifsc || '—'}</td>
+                          <td className="px-2 py-2">{row.terminal || '—'}</td>
+                          <td className="px-2 py-2 max-w-[10rem] truncate">
+                            {row.branchLocation || '—'}
+                          </td>
+                          <td className="px-2 py-2">{row.payerName || '—'}</td>
+                          <td className="px-2 py-2">{row.payeeName || '—'}</td>
+                          <td className="px-2 py-2">{row.payerBankCode || '—'}</td>
+                          <td className="px-2 py-2 font-mono">
+                            {row.payerUpi || '—'}
+                          </td>
+                          <td className="px-2 py-2">{row.receiverBankCode || '—'}</td>
+                          <td className="px-2 py-2 font-mono">
+                            {row.receiverIfsc || '—'}
+                          </td>
+                          <td className="px-2 py-2 tabular-nums">
+                            {fmtMoney(row.debitAmount)}
+                          </td>
+                          <td className="px-2 py-2 tabular-nums">
+                            {fmtMoney(row.creditAmount)}
+                          </td>
+                          <td className="px-2 py-2 tabular-nums font-medium">
+                            {fmtMoney(row.amount)}
+                          </td>
+                          <td className="px-2 py-2 tabular-nums">
+                            {fmtMoney(row.runningBalance)}
+                          </td>
+                          <td className="px-2 py-2 max-w-[8rem] truncate">
+                            {row.paymentNote || '—'}
+                          </td>
+                          <td
+                            className="px-2 py-2 max-w-[16rem] truncate text-[var(--muted)]"
+                            title={row.narration || row.rawLine || ''}
+                          >
+                            {row.narration || row.rawLine || '—'}
+                          </td>
+                          <td className="px-2 py-2">
+                            <Badge
+                              variant={
+                                row.matchStatus === 'matched'
+                                  ? 'success'
+                                  : 'warning'
+                              }
+                            >
+                              {row.matchStatus}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardBody>
         </Card>

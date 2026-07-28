@@ -12,6 +12,25 @@ const { SdmsStudent } = require('./entities/student.entity');
 const { SdmsStudentSection } = require('./entities/student-section.entity');
 const { SdmsStudentCredentials } = require('./entities/student-credentials.entity');
 const { SdmsEvent } = require('./entities/event.entity');
+
+function pad2(value) {
+    return String(value).padStart(2, '0');
+}
+
+function toDateOnly(value) {
+    if (!value)
+        return null;
+    if (typeof value === 'string') {
+        const plain = value.match(/^\d{4}-\d{2}-\d{2}/);
+        if (plain)
+            return plain[0];
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime()))
+        return null;
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
 class SdmsService {
     constructor(collegeRepo, courseRepo, branchRepo, academicYearRepo, branchAcademicYearRepo, semesterRepo, studentRepo, studentSectionRepo, credentialsRepo, dataSource) {
         this.collegeRepo = collegeRepo;
@@ -734,26 +753,24 @@ class SdmsService {
         const toDate = to ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
         const qb = eventRepo.createQueryBuilder('e')
-            .select([
-            'e.id',
-            'e.title',
-            'e.description',
-            'e.event_date',
-            'e.end_date',
-            'e.start_time',
-            'e.end_time',
-            'e.event_type',
-            'e.created_by',
-            'e.target_college',
-            'e.target_course',
-            'e.target_branch',
-            'e.target_batch',
-            'e.target_year',
-            'e.target_semester',
-            'e.is_active',
-            'e.created_at',
-            'e.updated_at',
-        ])
+            .select('e.id', 'id')
+            .addSelect('e.title', 'title')
+            .addSelect('e.description', 'description')
+            .addSelect('e.event_date', 'event_date')
+            .addSelect('e.end_date', 'end_date')
+            .addSelect('e.start_time', 'start_time')
+            .addSelect('e.end_time', 'end_time')
+            .addSelect('e.event_type', 'event_type')
+            .addSelect('e.created_by', 'created_by')
+            .addSelect('e.target_college', 'target_college')
+            .addSelect('e.target_course', 'target_course')
+            .addSelect('e.target_branch', 'target_branch')
+            .addSelect('e.target_batch', 'target_batch')
+            .addSelect('e.target_year', 'target_year')
+            .addSelect('e.target_semester', 'target_semester')
+            .addSelect('e.is_active', 'is_active')
+            .addSelect('e.created_at', 'created_at')
+            .addSelect('e.updated_at', 'updated_at')
             .where('e.is_active = 1')
             .andWhere('e.event_date <= :toDate', { toDate: toDate.toISOString().slice(0, 10) })
             // Spanning events: included if end_date is NULL (open-ended) OR >= fromDate
@@ -773,8 +790,8 @@ class SdmsService {
             id: Number(r.id),
             title: r.title,
             description: r.description,
-            eventDate: r.event_date,
-            endDate: r.end_date,
+            eventDate: toDateOnly(r.event_date),
+            endDate: toDateOnly(r.end_date),
             startTime: r.start_time,
             endTime: r.end_time,
             eventType: r.event_type,
@@ -819,14 +836,12 @@ class SdmsService {
                 },
             ];
 
-        const createdBy = actor?.emsUserId != null
-            ? parseInt(String(actor.emsUserId), 10)
-            : (actor?.id != null ? parseInt(String(actor.id), 10) : null);
+        const createdBy = 43;
 
         const createdAt = new Date();
         const saveEvent = (payload) => eventRepo.save(eventRepo.create({
             ...payload,
-            createdBy: createdBy && Number.isFinite(createdBy) ? createdBy : null,
+            createdBy,
             isActive: 1,
             createdAt,
             updatedAt: createdAt,

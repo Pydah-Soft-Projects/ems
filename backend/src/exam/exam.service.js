@@ -1582,6 +1582,14 @@ class ExamService {
                 return null;
             return s;
         };
+        const nextDate = (isoDate) => {
+            const parsed = new Date(`${isoDate}T00:00:00`);
+            parsed.setDate(parsed.getDate() + 1);
+            const y = parsed.getFullYear();
+            const m = String(parsed.getMonth() + 1).padStart(2, '0');
+            const d = String(parsed.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
         const normalized = slabs.map((s) => {
             const fromDate = toIso(s.fromDate);
             const toDate = toIso(s.toDate);
@@ -1603,6 +1611,16 @@ class ExamService {
             }
             if (s.toDate != null && s.fromDate > s.toDate) {
                 throw AppError.badRequest('Late fee slab "from date" cannot be after "to date"');
+            }
+            if (i > 0) {
+                const prev = normalized[i - 1];
+                if (!prev.toDate) {
+                    throw AppError.badRequest('Each late fee slab before the last one must have a "to date"');
+                }
+                const expectedFrom = nextDate(prev.toDate);
+                if (s.fromDate !== expectedFrom) {
+                    throw AppError.badRequest(`Late fee slab ${i + 1} must start on ${expectedFrom}, the day after the previous slab ends`);
+                }
             }
         }
         return normalized;
