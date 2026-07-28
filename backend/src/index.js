@@ -151,6 +151,10 @@ async function bootstrap() {
       ensurePaymentGatewaySelfOnlineColumns,
     } = require('./settings/ensure-self-online-columns');
     await ensurePaymentGatewaySelfOnlineColumns(examPortalDataSource, logger);
+    const {
+      ensureLateFeeSlabDateColumns,
+    } = require('./exam/ensure-late-fee-slab-dates');
+    await ensureLateFeeSlabDateColumns(examPortalDataSource, logger);
   }
 
   studentDataSource = createStudentDataSource();

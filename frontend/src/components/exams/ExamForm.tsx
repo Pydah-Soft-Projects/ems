@@ -218,8 +218,8 @@ export function ExamForm({
   const [examinationEndDate, setExaminationEndDate] = useState('');
   const [lateFeeStartDate, setLateFeeStartDate] = useState('');
   const [slabs, setSlabs] = useState<
-    { fromDay: number; toDay: number | null; amount: number }[]
-  >([{ fromDay: 1, toDay: null, amount: 100 }]);
+    { fromDate: string; toDate: string | null; amount: number }[]
+  >([{ fromDate: '', toDate: null, amount: 100 }]);
   const [instructions, setInstructions] = useState('');
   const [submitForApproval, setSubmitForApproval] = useState(false);
   const [error, setError] = useState('');
@@ -322,11 +322,17 @@ export function ExamForm({
       setSlabs(
         initial.lateFeeSlabs?.length
           ? initial.lateFeeSlabs.map((s) => ({
-              fromDay: Number(s.fromDay),
-              toDay: s.toDay == null ? null : Number(s.toDay),
+              fromDate: String(s.fromDate ?? '').slice(0, 10),
+              toDate: s.toDate == null ? null : String(s.toDate).slice(0, 10),
               amount: Number(s.amount),
             }))
-          : [{ fromDay: 1, toDay: null, amount: 100 }],
+          : [
+              {
+                fromDate: initial.lateFeeStartDate ?? '',
+                toDate: null,
+                amount: 100,
+              },
+            ],
       );
       const fees: Record<string, SubjectRowState> = {};
       for (const es of initial.examSubjects ?? []) {
@@ -388,7 +394,7 @@ export function ExamForm({
       setExaminationStartDate('');
       setExaminationEndDate('');
       setLateFeeStartDate('');
-      setSlabs([{ fromDay: 1, toDay: null, amount: 100 }]);
+      setSlabs([{ fromDate: '', toDate: null, amount: 100 }]);
       setInstructions('');
       setSubmitForApproval(false);
       setStep(1);
@@ -744,18 +750,28 @@ export function ExamForm({
         for (let i = 0; i < slabs.length; i += 1) {
           const s = slabs[i];
           const isLast = i === slabs.length - 1;
-          if (s.fromDay < 1) {
-            setError('Late fee slab "from day" must be at least 1.');
+          if (!s.fromDate) {
+            setError('Late fee slab "from date" is required.');
             return false;
           }
-          if (!isLast && (s.toDay == null || s.toDay < 1)) {
+          if (!isLast && !s.toDate) {
             setError(
-              'Only the last late fee slab may leave "To day" empty (until application end).',
+              'Only the last late fee slab may leave "To date" empty (until application end).',
             );
             return false;
           }
-          if (s.toDay != null && s.fromDay > s.toDay) {
-            setError('Late fee slab "from day" cannot be after "to day".');
+          if (s.toDate && s.fromDate > s.toDate) {
+            setError('Late fee slab "from date" cannot be after "to date".');
+            return false;
+          }
+          if (
+            lateFeeStartDate &&
+            s.fromDate &&
+            s.fromDate < lateFeeStartDate
+          ) {
+            setError(
+              'Late fee slab dates cannot start before the late fee start date.',
+            );
             return false;
           }
           if (s.amount < 0) {
@@ -855,7 +871,7 @@ export function ExamForm({
           examinationStartDate: examinationStartDate || undefined,
           examinationEndDate: examinationEndDate || undefined,
           lateFeeStartDate: lateFeeStartDate || undefined,
-          lateFeeSlabs: slabs.filter((s) => s.fromDay > 0 && s.amount >= 0),
+          lateFeeSlabs: slabs.filter((s) => s.fromDate && s.amount >= 0),
           instructions: instructions.trim() || undefined,
         });
       } else {
@@ -879,7 +895,7 @@ export function ExamForm({
           examinationStartDate: examinationStartDate || undefined,
           examinationEndDate: examinationEndDate || undefined,
           lateFeeStartDate: lateFeeStartDate || undefined,
-          lateFeeSlabs: slabs.filter((s) => s.fromDay > 0 && s.amount >= 0),
+          lateFeeSlabs: slabs.filter((s) => s.fromDate && s.amount >= 0),
           instructions: instructions.trim() || undefined,
           submitForApproval,
         });
@@ -1685,8 +1701,8 @@ export function ExamForm({
               <div>
                 <p className="text-sm font-semibold text-slate-900">Late fee slabs</p>
                 <p className="text-xs text-[var(--muted)]">
-                  Days are counted from the late fee start date. Only the{' '}
-                  <strong>last slab</strong> may leave &quot;To day&quot; empty —
+                  Set calendar date ranges for each late-fee amount. Only the{' '}
+                  <strong>last slab</strong> may leave &quot;To date&quot; empty —
                   that applies the amount until the application end date.
                 </p>
               </div>
@@ -1695,14 +1711,29 @@ export function ExamForm({
                 variant="secondary"
                 className="!px-3 !py-1.5 text-xs"
                 onClick={() =>
-                  setSlabs((prev) => [
-                    ...prev.map((s, i) =>
-                      i === prev.length - 1 && s.toDay == null
-                        ? { ...s, toDay: 3 }
-                        : s,
-                    ),
-                    { fromDay: 4, toDay: null, amount: 100 },
-                  ])
+                  setSlabs((prev) => {
+                    const next = prev.map((s, i) => {
+                      if (i !== prev.length - 1 || s.toDate != null) return s;
+                      // Close previous open-ended slab so a new last slab can be added.
+                      return {
+                        ...s,
+                        toDate: s.fromDate || lateFeeStartDate || '',
+                      };
+                    });
+                    const last = next[next.length - 1];
+                    let nextFrom = lateFeeStartDate || '';
+                    if (last?.toDate) {
+                      const d = new Date(`${last.toDate}T00:00:00`);
+                      if (!Number.isNaN(d.getTime())) {
+                        d.setDate(d.getDate() + 1);
+                        nextFrom = d.toISOString().slice(0, 10);
+                      }
+                    }
+                    return [
+                      ...next,
+                      { fromDate: nextFrom, toDate: null, amount: 100 },
+                    ];
+                  })
                 }
               >
                 Add slab
@@ -1718,20 +1749,17 @@ export function ExamForm({
                   >
                     <label className="block min-w-0">
                       <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                        From day
+                        From date
                       </span>
                       <input
-                        type="number"
-                        min={1}
-                        value={slab.fromDay}
+                        type="date"
+                        value={slab.fromDate}
+                        min={lateFeeStartDate || undefined}
                         onChange={(e) =>
                           setSlabs((rows) =>
                             rows.map((r, i) =>
                               i === idx
-                                ? {
-                                    ...r,
-                                    fromDay: parseInt(e.target.value, 10) || 0,
-                                  }
+                                ? { ...r, fromDate: e.target.value }
                                 : r,
                             ),
                           )
@@ -1741,12 +1769,13 @@ export function ExamForm({
                     </label>
                     <label className="block min-w-0">
                       <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                        To day {isLast ? '(optional)' : ''}
+                        To date {isLast ? '(optional)' : ''}
                       </span>
                       <input
-                        type="number"
-                        min={1}
-                        value={slab.toDay ?? ''}
+                        type="date"
+                        value={slab.toDate ?? ''}
+                        min={slab.fromDate || lateFeeStartDate || undefined}
+                        max={applicationEndDate || undefined}
                         placeholder={isLast ? 'Until application end' : 'Required'}
                         onChange={(e) => {
                           const raw = e.target.value.trim();
@@ -1754,14 +1783,11 @@ export function ExamForm({
                             rows.map((r, i) => {
                               if (i !== idx) return r;
                               if (!isLast) {
-                                return {
-                                  ...r,
-                                  toDay: parseInt(raw, 10) || 0,
-                                };
+                                return { ...r, toDate: raw || '' };
                               }
                               return {
                                 ...r,
-                                toDay: raw === '' ? null : parseInt(raw, 10) || 0,
+                                toDate: raw === '' ? null : raw,
                               };
                             }),
                           );
@@ -1801,11 +1827,8 @@ export function ExamForm({
                           setSlabs((rows) => {
                             const next = rows.filter((_, i) => i !== idx);
                             if (next.length === 0) return next;
-                            const lastIdx = next.length - 1;
-                            if (next[lastIdx].toDay != null && lastIdx > 0) {
-                              // keep explicit to on new last if it had one
-                            } else if (next.length === 1) {
-                              next[0] = { ...next[0], toDay: null };
+                            if (next.length === 1) {
+                              next[0] = { ...next[0], toDate: null };
                             }
                             return next;
                           })

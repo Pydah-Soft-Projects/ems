@@ -16,7 +16,8 @@
     "seed:pydah-btech-2000": "node scripts/seed-pydah-btech-batch-2000.js",
     "fix:indexes": "node scripts/fix-subject-mapping-indexes.js",
     "migrate:statement-txn-columns": "node scripts/migrate-merchant-statement-txn-columns.js",
-    "migrate:add-self-online": "node scripts/migrate-add-self-online-columns.js"
+    "migrate:add-self-online": "node scripts/migrate-add-self-online-columns.js",
+    "migrate:late-fee-slab-dates": "node scripts/migrate-late-fee-slab-dates.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

@@ -36,17 +36,17 @@ function fmtDateTime(value: string | null | undefined) {
 }
 
 function slabLabel(
-  s: { fromDay: number; toDay: number | null; amount: number | string },
+  s: { fromDate: string; toDate: string | null; amount: number | string },
   isLast: boolean,
   appEnd?: string | null,
 ) {
   const to =
-    s.toDay != null
-      ? `Day ${s.toDay}`
+    s.toDate != null
+      ? fmtDate(s.toDate)
       : isLast
         ? `application end${appEnd ? ` (${fmtDate(appEnd)})` : ''}`
         : '—';
-  return `Day ${s.fromDay} → ${to} · ₹${s.amount}`;
+  return `${fmtDate(s.fromDate)} → ${to} · ₹${s.amount}`;
 }
 
 function MetricCard({
@@ -143,8 +143,8 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
       ? [exam.branch]
       : [];
   const paperCount = exam.examSubjects?.length ?? 0;
-  const sortedSlabs = [...(exam.lateFeeSlabs ?? [])].sort(
-    (a, b) => a.fromDay - b.fromDay,
+  const sortedSlabs = [...(exam.lateFeeSlabs ?? [])].sort((a, b) =>
+    String(a.fromDate).localeCompare(String(b.fromDate)),
   );
 
   /** Papers a student of this branch/section sits for (same rules as application). */

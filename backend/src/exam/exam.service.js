@@ -519,6 +519,7 @@ class ExamService {
                     : uniqueBranches.join(', ').slice(0, 100);
         }
         if (dto.lateFeeSlabs) {
+            await this.lateFeeSlabRepo.delete({ examId: id });
             exam.lateFeeSlabs = this.normalizeLateFeeSlabs(dto.lateFeeSlabs).map((slab) => this.lateFeeSlabRepo.create({ ...slab, examId: id }));
         }
         this.validateDates({
@@ -1549,94 +1550,116 @@ class ExamService {
         return records;
     }
     /**
-     * Last slab may omit toDay (null) — late fee applies from fromDay until
-     * application end. Earlier slabs must have an explicit toDay.
+     * Last slab may omit toDate (null) — late fee applies from fromDate until
+     * application end. Earlier slabs must have an explicit toDate.
      */
     normalizeLateFeeSlabs(slabs) {
         if (!Array.isArray(slabs) || slabs.length === 0)
             return [];
+        const toIso = (value) => {
+            if (value === '' || value === null || value === undefined)
+                return null;
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                const y = value.getFullYear();
+                const m = String(value.getMonth() + 1).padStart(2, '0');
+                const d = String(value.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            const s = String(value).trim().slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(s))
+                return null;
+            const parsed = new Date(`${s}T00:00:00`);
+            if (Number.isNaN(parsed.getTime()))
+                return null;
+            return s;
+        };
         const normalized = slabs.map((s) => {
-            const fromDay = Number(s.fromDay);
-            const rawTo = s.toDay;
-            const toDay = rawTo === '' || rawTo === null || rawTo === undefined
-                ? null
-                : Number(rawTo);
+            const fromDate = toIso(s.fromDate);
+            const toDate = toIso(s.toDate);
             const amount = Number(s.amount);
-            return { fromDay, toDay, amount };
+            return { fromDate, toDate, amount };
         });
-        normalized.sort((a, b) => a.fromDay - b.fromDay);
+        normalized.sort((a, b) => String(a.fromDate).localeCompare(String(b.fromDate)));
         for (let i = 0; i < normalized.length; i += 1) {
             const s = normalized[i];
             const isLast = i === normalized.length - 1;
-            if (!Number.isFinite(s.fromDay) || s.fromDay < 1) {
-                throw AppError.badRequest('Late fee slab "from day" must be at least 1');
+            if (!s.fromDate) {
+                throw AppError.badRequest('Late fee slab "from date" is required');
             }
             if (!Number.isFinite(s.amount) || s.amount < 0) {
                 throw AppError.badRequest('Late fee slab amount must be a non-negative number');
             }
-            if (!isLast && s.toDay == null) {
-                throw AppError.badRequest('Only the last late fee slab may leave "to day" empty (until application end)');
+            if (!isLast && s.toDate == null) {
+                throw AppError.badRequest('Only the last late fee slab may leave "to date" empty (until application end)');
             }
-            if (s.toDay != null) {
-                if (!Number.isFinite(s.toDay) || s.toDay < 1) {
-                    throw AppError.badRequest('Late fee slab "to day" must be at least 1 when set');
-                }
-                if (s.fromDay > s.toDay) {
-                    throw AppError.badRequest('Late fee slab "from day" cannot be after "to day"');
-                }
+            if (s.toDate != null && s.fromDate > s.toDate) {
+                throw AppError.badRequest('Late fee slab "from date" cannot be after "to date"');
             }
         }
         return normalized;
     }
-    /** Day number (1-based) of application end relative to late-fee start. */
-    lateFeeMaxDay(exam) {
-        if (!exam.lateFeeStartDate || !exam.applicationEndDate)
+    dateOnly(value) {
+        if (!value)
             return null;
-        const start = new Date(`${exam.lateFeeStartDate}T00:00:00`);
-        const end = new Date(`${exam.applicationEndDate}T00:00:00`);
-        if (end.getTime() < start.getTime())
-            return 0;
-        return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-    }
-    slabEffectiveToDay(slab, isLast, exam) {
-        if (slab.toDay != null)
-            return Number(slab.toDay);
-        if (isLast) {
-            const maxDay = this.lateFeeMaxDay(exam);
-            return maxDay != null ? maxDay : Number.POSITIVE_INFINITY;
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            // MySQL DATE values come back as JS Dates; use UTC parts to avoid TZ shift.
+            return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
         }
+        const s = String(value).slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s))
+            return null;
+        const d = new Date(`${s}T00:00:00`);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    slabEffectiveToDate(slab, isLast, exam) {
+        if (slab.toDate != null)
+            return this.dateOnly(slab.toDate);
+        if (isLast)
+            return this.dateOnly(exam.applicationEndDate);
         return null;
     }
     calculateLateFee(exam, asOf = new Date()) {
-        if (!exam.lateFeeStartDate || !exam.lateFeeSlabs?.length) {
+        if (!exam.lateFeeSlabs?.length) {
             return { daysLate: 0, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
         }
-        const start = new Date(`${exam.lateFeeStartDate}T00:00:00`);
-        const today = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate());
-        const diffMs = today.getTime() - start.getTime();
-        if (diffMs < 0) {
+        const today = this.dateOnly(asOf);
+        if (!today) {
             return { daysLate: 0, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
         }
-        const daysLate = Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
-        const maxDay = this.lateFeeMaxDay(exam);
-        if (maxDay != null && daysLate > maxDay) {
+        const lateStart = this.dateOnly(exam.lateFeeStartDate);
+        if (lateStart && today.getTime() < lateStart.getTime()) {
+            return { daysLate: 0, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
+        }
+        const appEnd = this.dateOnly(exam.applicationEndDate);
+        if (appEnd && today.getTime() > appEnd.getTime()) {
+            const daysLate = lateStart
+                ? Math.floor((today.getTime() - lateStart.getTime()) / (24 * 60 * 60 * 1000)) + 1
+                : 0;
             return { daysLate, lateFee: 0, matchedSlab: null, beyondLastSlab: true };
         }
-        const slabs = [...exam.lateFeeSlabs].sort((a, b) => a.fromDay - b.fromDay);
+        const daysLate = lateStart
+            ? Math.max(0, Math.floor((today.getTime() - lateStart.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+            : 0;
+        const slabs = [...exam.lateFeeSlabs].sort((a, b) => String(a.fromDate).localeCompare(String(b.fromDate)));
         for (let i = 0; i < slabs.length; i += 1) {
             const s = slabs[i];
             const isLast = i === slabs.length - 1;
-            const endDay = this.slabEffectiveToDay(s, isLast, exam);
-            if (endDay == null || Number.isNaN(endDay))
+            const from = this.dateOnly(s.fromDate);
+            const end = this.slabEffectiveToDate(s, isLast, exam);
+            if (!from)
                 continue;
-            if (daysLate >= s.fromDay && daysLate <= endDay) {
-                return {
-                    daysLate,
-                    lateFee: Number(s.amount),
-                    matchedSlab: s,
-                    beyondLastSlab: false,
-                };
-            }
+            if (today.getTime() < from.getTime())
+                continue;
+            if (end && today.getTime() > end.getTime())
+                continue;
+            if (!end && !isLast)
+                continue;
+            return {
+                daysLate,
+                lateFee: Number(s.amount),
+                matchedSlab: s,
+                beyondLastSlab: false,
+            };
         }
         return { daysLate, lateFee: 0, matchedSlab: null, beyondLastSlab: false };
     }

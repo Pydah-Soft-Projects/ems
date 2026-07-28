@@ -134,9 +134,10 @@ const LateFeeSlab = new EntitySchema({
   columns: {
     id: { type: 'int', primary: true, generated: true },
     examId: { type: 'int' },
-    fromDay: { type: 'int' },
-    /** null on the last slab = until application end date */
-    toDay: { type: 'int', nullable: true },
+    /** Inclusive start date for this late-fee amount */
+    fromDate: { type: 'date' },
+    /** Inclusive end date; null on the last slab = until application end date */
+    toDate: { type: 'date', nullable: true },
     amount: { type: 'decimal', precision: 10, scale: 2 },
   },
   relations: {

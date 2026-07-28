@@ -25,7 +25,7 @@ draft → pending_approval → approved → published
 | `examinationStartDate` / `examinationEndDate` | Exam dates |
 | `applicationStartDate` / `applicationEndDate` | Registration window |
 | `lateFeeStartDate` | Late fee applicability |
-| `lateFeeSlabs[]` | `{ fromDay, toDay, amount }` |
+| `lateFeeSlabs[]` | `{ fromDate, toDate, amount }` (calendar dates; last `toDate` may be null until application end) |
 | `instructions` | Exam instructions text |
 | `status` | Workflow status |
 

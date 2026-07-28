@@ -2,37 +2,37 @@
 
 ## Overview (Workflow 10)
 
-Applies late fees based on slabs configured during exam creation. Computed at fee lookup and payment time (desk + online).
+Applies late fees based on date slabs configured during exam creation. Computed at fee lookup and payment time (desk + online).
 
 ## Late fee slabs (example)
 
 | Period | Additional fee |
 |--------|----------------|
-| Before late-fee start | ₹0 |
-| 1–5 days after start | ₹100 |
-| 6–10 days after start | ₹250 |
-| 11–15 days after start | ₹500 |
-| Beyond last slab | Last slab amount (flagged) |
+| Before late-fee start / before first slab | ₹0 |
+| 2026-08-01 → 2026-08-05 | ₹100 |
+| 2026-08-06 → 2026-08-10 | ₹250 |
+| 2026-08-11 → application end | ₹500 |
+| After application end | ₹0 |
 
-`lateFeeStartDate` counts as **day 1**.
+`lateFeeStartDate` is the earliest day late fees may apply. Each slab uses calendar **from date** / **to date**. The last slab may omit **to date** (applies until application end).
 
 ## Functional flow
 
 1. Staff/student opens fee record (collection search or pay)
-2. System compares today vs `lateFeeStartDate`
-3. Match slab by `fromDay`–`toDay`
+2. System compares today vs `lateFeeStartDate` and application end
+3. Match slab by `fromDate`–`toDate`
 4. Persist `lateFee` and `totalAmount = baseFee + lateFee` on pending records
 5. Payment uses the refreshed total
 
 ## Status
 
-✅ **Pay-time application** — slabs stored on exam; applied on `lookupForCollection`, `listFeeRecords`, `getFeeRecord`, and before `payOnline` / `payOffline`.
+✅ **Pay-time application** — slabs stored on exam; applied on `lookupForCollection`, `listFeeRecords`, `getFeeRecord`, and before online / offline pay.
 
 ⏳ Optional future: nightly scheduler + notifications for unpaid fees.
 
 ## Backend
 
-`ExamService.calculateLateFee` / `refreshLateFee` in `backend/src/exam/exam.service.ts`
+`ExamService.calculateLateFee` / `refreshLateFee` in `backend/src/exam/exam.service.js`
 
 ## Depends on
 
