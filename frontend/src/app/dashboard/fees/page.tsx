@@ -385,7 +385,7 @@ export default function FeesPage() {
   const listNoun = examMode ? 'eligible student' : 'student';
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="Fees & Payments"
         description="Select an examination for eligible students, or search anytime by name, PIN, or admission number — then select who to collect from."
@@ -406,7 +406,7 @@ export default function FeesPage() {
             </p>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
             <label className="block space-y-1.5 lg:col-span-1">
               <span className="text-xs font-medium text-slate-600">
                 Examination
@@ -673,7 +673,7 @@ export default function FeesPage() {
         </CardBody>
       </Card>
 
-      <section className="grid gap-4 sm:grid-cols-2">
+      <section className="grid gap-4 grid-cols-1 sm:grid-cols-2">
         <KpiTile
           label="Outstanding"
           value={money(summary.pendingAmount)}

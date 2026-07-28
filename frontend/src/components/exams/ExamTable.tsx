@@ -73,19 +73,19 @@ export function ExamTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1100px] text-left text-sm">
+    <div className="-mx-3 sm:mx-0 overflow-x-auto">
+      <table className="w-full min-w-[980px] text-left text-xs sm:text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] bg-slate-50/80">
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Name</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Name</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
               Regulation
             </th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Scope</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Type</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Subjects</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Status</th>
-            <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Scope</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Type</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Subjects</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Status</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-right font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
               Actions
             </th>
           </tr>
@@ -93,23 +93,23 @@ export function ExamTable({
         <tbody className="divide-y divide-[var(--border)]">
           {exams.map((exam) => (
             <tr key={exam.id} className="transition hover:bg-slate-50/50">
-              <td className="px-5 py-4">
-                <p className="font-semibold text-slate-900">{exam.name}</p>
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
+                <p className="font-semibold text-slate-900 break-words">{exam.name}</p>
                 {exam.rejectionRemarks && (
-                  <p className="mt-0.5 text-xs text-red-600">
+                  <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-red-600 break-words">
                     Rejected: {exam.rejectionRemarks}
                   </p>
                 )}
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600">
                 {regulationCode(regulations, exam.regulationId)}
               </td>
-              <td className="px-5 py-4 text-slate-600">
-                <p>
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600">
+                <p className="break-words">
                   {exam.college ? `${exam.college} · ` : ''}
                   {exam.course}
                 </p>
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                   {exam.scopes?.length
                     ? [
                         ...new Set(exam.scopes.map((s) => s.branch)),
@@ -122,11 +122,11 @@ export function ExamTable({
                         .join(', ')}`
                     : ''}
                 </p>
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-[0.6875rem] sm:text-xs text-[var(--muted)]">
                   {exam.batch} · Y{exam.yearOfStudy} / S{exam.semester}
                 </p>
               </td>
-              <td className="px-5 py-4">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
                 <Badge variant="default">
                   {(exam.allowedTypes?.length
                     ? exam.allowedTypes
@@ -136,15 +136,15 @@ export function ExamTable({
                     .join(' + ')}
                 </Badge>
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                 {exam.examSubjects?.length ?? 0}
               </td>
-              <td className="px-5 py-4">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
                 <Badge variant={statusVariant(exam.status)}>
                   {statusLabel(exam.status)}
                 </Badge>
               </td>
-              <td className="px-5 py-4">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
                 <div className="flex flex-wrap justify-end gap-1.5">
                   <Button
                     variant="ghost"

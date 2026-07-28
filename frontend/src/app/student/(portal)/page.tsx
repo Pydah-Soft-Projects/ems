@@ -69,44 +69,44 @@ export default function StudentHomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6 shadow-[var(--shadow-md)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
+      <div className="rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-4 sm:p-6 shadow-[var(--shadow-md)]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
               Welcome
             </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+            <h1 className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-slate-900 break-words">
               {user?.fullName}
             </h1>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <div className="mt-2.5 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
               {user?.course ? (
-                <span className="rounded-full bg-[var(--primary-soft)] px-2.5 py-1 font-medium text-[var(--primary)]">
+                <span className="rounded-full bg-[var(--primary-soft)] px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.6875rem] sm:text-xs font-medium text-[var(--primary)]">
                   {user.course}
                 </span>
               ) : null}
               {user?.branch ? (
-                <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 font-medium text-[var(--accent-hover)]">
+                <span className="rounded-full bg-[var(--accent-soft)] px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.6875rem] sm:text-xs font-medium text-[var(--accent-hover)]">
                   {user.branch}
                 </span>
               ) : null}
               {user?.currentYear != null ? (
-                <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 font-medium text-[var(--muted)]">
+                <span className="rounded-full bg-[var(--surface-muted)] px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.6875rem] sm:text-xs font-medium text-[var(--muted)]">
                   Y{user.currentYear} / S{user.currentSemester}
                 </span>
               ) : null}
             </div>
-            <p className="mt-3 text-sm text-[var(--muted)]">
+            <p className="mt-2.5 sm:mt-3 text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words">
               {available.length} open exam{available.length !== 1 ? 's' : ''} ·{' '}
               {pending.length} payment{pending.length !== 1 ? 's' : ''} due ·{' '}
               {hallTickets.length} hall ticket
               {hallTickets.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <div className="rounded-[var(--radius-lg)] bg-[var(--accent-soft)] px-5 py-4 text-right">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-hover)]">
+          <div className="w-full sm:w-auto rounded-[var(--radius-lg)] bg-[var(--accent-soft)] px-4 sm:px-5 py-3 sm:py-4 sm:text-right">
+            <p className="text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-wider text-[var(--accent-hover)]">
               Total due
             </p>
-            <p className="mt-1 text-3xl font-bold text-slate-900">
+            <p className="mt-1 text-2xl sm:text-3xl font-bold text-slate-900">
               {money(totalDue)}
             </p>
           </div>
@@ -115,7 +115,7 @@ export default function StudentHomePage() {
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <AttentionCard
           title="Open exams"
           value={String(available.length)}

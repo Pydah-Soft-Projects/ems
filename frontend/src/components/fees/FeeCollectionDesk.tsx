@@ -366,48 +366,48 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         />
       ) : null}
 
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-3">
+        <div className="min-w-0">
           <Link
             href="/dashboard/fees"
-            className="text-xs font-medium text-[var(--primary)] hover:underline"
+            className="text-[0.6875rem] sm:text-xs font-medium text-[var(--primary)] hover:underline"
           >
             ← Fee list
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-slate-900">
+          <h1 className="mt-1 text-[1.5rem] sm:text-2xl font-bold text-slate-900 break-words">
             Fee Collection
           </h1>
-          <p className="text-sm text-[var(--muted)]">
+          <p className="text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words">
             Collect examination fees for this student
           </p>
         </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-4 min-w-0">
+        <div className="space-y-3 sm:space-y-4 min-w-0">
           {/* Student banner */}
           <div className="overflow-hidden rounded-[var(--radius-xl)] border border-[var(--border)] bg-white shadow-[var(--shadow-md)]">
-            <div className="flex flex-wrap items-center gap-4 px-5 py-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-lg font-bold text-[var(--primary)]">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-5">
+              <div className="flex h-14 sm:h-16 w-14 sm:w-16 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-base sm:text-lg font-bold text-[var(--primary)]">
                 {initials || '?'}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-xl font-bold text-slate-900">
+                  <h2 className="truncate text-lg sm:text-xl font-bold text-slate-900 break-words">
                     {displayName}
                   </h2>
                   {sdms?.course && (
-                    <span className="rounded-full bg-[var(--primary-soft)] px-2.5 py-0.5 text-xs font-semibold uppercase text-[var(--primary)]">
+                    <span className="rounded-full bg-[var(--primary-soft)] px-2 sm:px-2.5 py-0.5 text-[0.6875rem] sm:text-xs font-semibold uppercase text-[var(--primary)]">
                       {sdms.course}
                     </span>
                   )}
                   {sdms?.branch && (
-                    <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-semibold uppercase text-[var(--accent-hover)]">
+                    <span className="rounded-full bg-[var(--accent-soft)] px-2 sm:px-2.5 py-0.5 text-[0.6875rem] sm:text-xs font-semibold uppercase text-[var(--accent-hover)]">
                       {sdms.branch}
                     </span>
                   )}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                <div className="mt-2 flex flex-wrap gap-1.5 text-[0.6875rem]">
                   <MetaChip
                     label="ADM"
                     value={sdms?.admissionNumber ?? '—'}
@@ -428,11 +428,11 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   />
                 </div>
               </div>
-              <div className="rounded-[var(--radius)] bg-[var(--accent-soft)] px-4 py-3 text-right">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent-hover)]">
+              <div className="w-full sm:w-auto rounded-[var(--radius)] bg-[var(--accent-soft)] px-3 sm:px-4 py-2.5 sm:py-3 sm:text-right">
+                <p className="text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-wide text-[var(--accent-hover)]">
                   Total due
                 </p>
-                <p className="text-3xl font-bold tabular-nums text-slate-900">
+                <p className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900">
                   {money(totalDue)}
                 </p>
               </div>
@@ -441,7 +441,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
           {/* Year cards */}
           {yearSummaries.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {yearSummaries.map((y) => {
                 const active = yearFilter === y.year;
                 return (
@@ -453,23 +453,23 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                         prev === y.year ? 'all' : y.year,
                       )
                     }
-                    className={`rounded-[var(--radius-lg)] border bg-white p-4 text-left shadow-[var(--shadow-sm)] transition ${
+                    className={`rounded-[var(--radius-lg)] border bg-white p-3 sm:p-4 text-left shadow-[var(--shadow-sm)] transition ${
                       active
                         ? 'border-[var(--primary)] ring-2 ring-[var(--ring)]'
                         : 'border-[var(--border)] hover:border-[var(--primary)]'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-bold text-[var(--primary)]">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[0.6875rem] sm:text-xs font-bold text-[var(--primary)]">
                           Y{y.year}
                         </p>
-                        <p className="text-sm font-semibold text-slate-900">
+                        <p className="text-xs sm:text-sm font-semibold text-slate-900 break-words">
                           YEAR {y.year}
                         </p>
                       </div>
                       <span
-                        className={`text-xs font-bold ${
+                        className={`shrink-0 text-[0.6875rem] sm:text-xs font-bold ${
                           y.status === 'PAID'
                             ? 'text-[var(--success)]'
                             : 'text-amber-600'
@@ -479,13 +479,13 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                       </span>
                     </div>
                     <p
-                      className={`mt-3 text-lg font-bold tabular-nums ${
-                        y.balance > 0 ? 'text-amber-600' : 'text-[var(--success)]'
-                      }`}
+                      className={`mt-2.5 sm:mt-3 text-base sm:text-lg font-bold tabular-nums ${
+                      y.balance > 0 ? 'text-amber-600' : 'text-[var(--success)]'
+                    }`}
                     >
                       {money(y.balance)}
                     </p>
-                    <p className="text-xs text-[var(--muted)]">
+                    <p className="text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                       Total {money(y.total)} · Paid {money(y.paid)}
                     </p>
                   </button>
@@ -497,35 +497,35 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
           {/* Eligible examinations — apply on behalf of the student */}
           {sdms && (
             <div className="rounded-2xl border border-[var(--border)] bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-                <div>
-                  <h3 className="font-semibold text-slate-900">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2 sm:gap-3 border-b border-[var(--border)] px-3 sm:px-5 py-3 sm:py-4">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-slate-900 break-words">
                     Eligible examinations
                   </h3>
-                  <p className="text-xs text-[var(--muted)]">
+                  <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                     Published exams in this student&apos;s scope — apply here
                     on their behalf, then collect the fee below
                   </p>
                 </div>
               </div>
               {eligibleError ? (
-                <p className="px-5 py-4 text-sm text-[var(--danger)]">
+                <p className="px-3 sm:px-5 py-3 sm:py-4 text-[0.6875rem] sm:text-sm text-[var(--danger)] break-words">
                   {eligibleError}
                 </p>
               ) : eligibleExams.length === 0 ? (
-                <p className="px-5 py-4 text-sm text-[var(--muted)]">
+                <p className="px-3 sm:px-5 py-3 sm:py-4 text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words">
                   No published examinations match this student&apos;s
                   college/course/branch/year/semester scope.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-left text-sm">
+                <div className="-mx-3 sm:mx-0 overflow-x-auto">
+                  <table className="w-full min-w-[640px] text-left text-xs sm:text-sm">
                     <thead>
-                      <tr className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
-                        <th className="px-4 py-3">Examination</th>
-                        <th className="px-4 py-3">Application window</th>
-                        <th className="px-4 py-3">Applied</th>
-                        <th className="px-4 py-3">Action</th>
+                      <tr className="bg-slate-50 text-[0.625rem] sm:text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <th className="px-3 sm:px-4 py-2.5 sm:py-3">Examination</th>
+                        <th className="px-3 sm:px-4 py-2.5 sm:py-3">Application window</th>
+                        <th className="px-3 sm:px-4 py-2.5 sm:py-3">Applied</th>
+                        <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -534,36 +534,38 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                           key={exam.id}
                           className="border-t border-[var(--border)]"
                         >
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-slate-900">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3">
+                            <p className="font-medium text-slate-900 break-words">
                               {exam.name}
                             </p>
-                            <p className="text-xs text-[var(--muted)]">
+                            <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                               Y{exam.yearOfStudy} / S{exam.semester} ·{' '}
                               {exam.subjectCount} subject
                               {exam.subjectCount !== 1 ? 's' : ''}
                             </p>
                           </td>
-                          <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words tabular-nums">
                             {exam.applicationStartDate ?? '—'} →{' '}
                             {exam.applicationEndDate ?? '—'}
                           </td>
-                          <td className="px-4 py-3 text-xs">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[0.6875rem] sm:text-xs">
                             {exam.applications.length === 0 ? (
                               <span className="text-[var(--muted)]">—</span>
                             ) : (
-                              exam.applications.map((a) => (
-                                <span
-                                  key={a.id}
-                                  className="mr-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 capitalize"
-                                >
-                                  {a.examType.replace(/_/g, ' ')} (
-                                  {a.feeStatus ?? '—'})
-                                </span>
-                              ))
+                              <div className="flex flex-wrap gap-1">
+                                {exam.applications.map((a) => (
+                                  <span
+                                    key={a.id}
+                                    className="inline-block rounded-full bg-slate-100 px-2 py-0.5 capitalize"
+                                  >
+                                    {a.examType.replace(/_/g, ' ')} (
+                                    {a.feeStatus ?? '—'})
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right">
                             {exam.openTypes.length > 0 ? (
                               <Button
                                 type="button"
@@ -573,7 +575,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                                 Apply
                               </Button>
                             ) : (
-                              <span className="text-xs font-semibold text-[var(--success)]">
+                              <span className="text-[0.6875rem] sm:text-xs font-semibold text-[var(--success)] break-words">
                                 Fully applied
                               </span>
                             )}
@@ -589,22 +591,22 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
           {/* Fee dues */}
           <div className="rounded-2xl border border-[var(--border)] bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-              <div>
-                <h3 className="font-semibold text-slate-900">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2.5 sm:gap-3 border-b border-[var(--border)] px-3 sm:px-5 py-3 sm:py-4">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-slate-900 break-words">
                   Fee dues breakdown
                 </h3>
-                <p className="text-xs text-[var(--muted)]">
+                <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                   Examination fees for this student
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <select
                   value={statusFilter}
                   onChange={(e) =>
                     setStatusFilter(e.target.value as 'active' | 'all')
                   }
-                  className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs"
+                  className="w-full sm:w-auto rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-[0.6875rem] sm:text-xs"
                 >
                   <option value="active">Active fees</option>
                   <option value="all">All fees</option>
@@ -618,7 +620,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                         : parseInt(e.target.value, 10),
                     )
                   }
-                  className="rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-xs"
+                  className="w-full sm:w-auto rounded-lg border border-[var(--border)] bg-white px-2.5 py-1.5 text-[0.6875rem] sm:text-xs"
                 >
                   <option value="all">All years</option>
                   {years.map((y) => (
@@ -629,16 +631,16 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                 </select>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
+            <div className="-mx-3 sm:mx-0 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-xs sm:text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
-                    <th className="px-4 py-3">Select</th>
-                    <th className="px-4 py-3">Fee / examination</th>
-                    <th className="px-4 py-3">Total</th>
-                    <th className="px-4 py-3">Late</th>
-                    <th className="px-4 py-3">Balance</th>
-                    <th className="px-4 py-3">Status</th>
+                  <tr className="bg-slate-50 text-[0.625rem] sm:text-xs uppercase tracking-wide text-[var(--muted)]">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3">Select</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3">Fee / examination</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">Total</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">Late</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">Balance</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -646,7 +648,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     <tr>
                       <td
                         colSpan={6}
-                        className="px-4 py-10 text-center text-sm text-[var(--muted)]"
+                        className="px-3 sm:px-4 py-6 sm:py-10 text-center text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words"
                       >
                         No fees found for this selection.
                       </td>
@@ -660,7 +662,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                           key={r.id}
                           className="border-t border-[var(--border)]"
                         >
-                          <td className="px-4 py-3">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3">
                             <input
                               type="checkbox"
                               disabled={r.status !== 'pending'}
@@ -668,11 +670,11 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                               onChange={() => toggleRecord(r.id)}
                             />
                           </td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-slate-900">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3">
+                            <p className="font-medium text-slate-900 break-words">
                               {r.exam?.name ?? `Exam #${r.examId}`}
                             </p>
-                            <p className="text-xs text-[var(--muted)]">
+                            <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                               Y{r.exam?.yearOfStudy ?? '—'} / S
                               {r.exam?.semester ?? '—'} ·{' '}
                               {r.feeBreakdown
@@ -680,16 +682,16 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                                 .join(', ') || 'Exam fee'}
                             </p>
                           </td>
-                          <td className="px-4 py-3 tabular-nums">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">
                             {money(r.baseFee)}
                           </td>
-                          <td className="px-4 py-3 tabular-nums">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">
                             {money(r.lateFee)}
                           </td>
-                          <td className="px-4 py-3 font-semibold tabular-nums">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-semibold tabular-nums">
                             {money(balance)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3">
                             <Badge
                               variant={
                                 r.status === 'paid' ? 'success' : 'warning'
@@ -709,21 +711,21 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
           {/* Transactions */}
           <div className="rounded-2xl border border-[var(--border)] bg-white shadow-sm">
-            <div className="border-b border-[var(--border)] px-5 py-4">
-              <h3 className="font-semibold text-slate-900">
+            <div className="border-b border-[var(--border)] px-3 sm:px-5 py-3 sm:py-4">
+              <h3 className="font-semibold text-slate-900 break-words">
                 Transaction history
               </h3>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
+            <div className="-mx-3 sm:mx-0 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Receipt</th>
-                    <th className="px-4 py-3">Mode</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Action</th>
+                  <tr className="bg-slate-50 text-[0.625rem] sm:text-xs uppercase tracking-wide text-[var(--muted)]">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">Date</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3">Description</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3">Receipt</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3">Mode</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 tabular-nums">Amount</th>
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -731,7 +733,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     <tr>
                       <td
                         colSpan={6}
-                        className="px-4 py-10 text-center text-sm text-[var(--muted)]"
+                        className="px-3 sm:px-4 py-6 sm:py-10 text-center text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words"
                       >
                         No matching transactions found.
                       </td>
@@ -742,26 +744,26 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                         key={p.id}
                         className="border-t border-[var(--border)]"
                       >
-                        <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-[0.6875rem] sm:text-xs text-[var(--muted)] tabular-nums break-words">
                           {new Date(p.paidAt).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 break-words">
                           {paymentLineLabel(p)}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs">
-                          <div>{p.receiptNumber}</div>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-mono text-[0.6875rem] sm:text-xs">
+                          <div className="break-all">{p.receiptNumber}</div>
                           {p.transactionReference ? (
-                            <div className="mt-0.5 text-[10px] text-[var(--muted)]">
+                            <div className="mt-0.5 text-[10px] text-[var(--muted)] break-words">
                               Order {p.transactionReference}
                             </div>
                           ) : null}
                         </td>
-                        <td className="px-4 py-3 capitalize">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 capitalize break-words">
                           <span className="block">
                             {p.paymentMode} / {p.paymentMethod}
                           </span>
                           <span
-                            className={`text-xs font-semibold ${
+                            className={`text-[0.6875rem] sm:text-xs font-semibold ${
                               p.status === 'success'
                                 ? 'text-[var(--success)]'
                                 : p.status === 'voided' || p.status === 'failed'
@@ -772,27 +774,27 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                             {p.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-semibold tabular-nums">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-semibold tabular-nums">
                           {money(p.amountPaid)}
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right">
+                          <div className="flex flex-wrap justify-end items-center gap-2">
                             {p.status === 'success' ? (
                               <Link
                                 href={`/dashboard/fees/receipt/${p.id}`}
-                                className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                                className="text-[0.6875rem] sm:text-xs font-semibold text-[var(--primary)] hover:underline"
                               >
                                 Receipt
                               </Link>
                             ) : p.status === 'awaiting_verification' ? (
                               <Link
                                 href="/dashboard/fees/self-online"
-                                className="text-xs font-semibold text-amber-700 hover:underline"
+                                className="text-[0.6875rem] sm:text-xs font-semibold text-amber-700 hover:underline"
                               >
                                 Reconcile
                               </Link>
                             ) : (
-                              <span className="text-xs text-[var(--muted)]">
+                              <span className="text-[0.6875rem] sm:text-xs text-[var(--muted)]">
                                 —
                               </span>
                             )}
@@ -808,15 +810,15 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         </div>
 
         {/* Collect sidebar */}
-        <aside className="h-fit rounded-2xl border border-[var(--border)] bg-white p-5 shadow-sm xl:sticky xl:top-4">
-          <h3 className="text-center text-xs font-bold uppercase tracking-widest text-[var(--primary)]">
+        <aside className="h-fit rounded-2xl border border-[var(--border)] bg-white p-3.5 sm:p-5 shadow-sm xl:sticky xl:top-4">
+          <h3 className="text-center text-[0.6875rem] sm:text-xs font-bold uppercase tracking-widest text-[var(--primary)]">
             Collect fee
           </h3>
 
-          <form onSubmit={(e) => void confirmPayment(e)} className="mt-5 space-y-4">
-            <div className="rounded-xl border border-[var(--border)] bg-slate-50 p-3 text-sm">
+          <form onSubmit={(e) => void confirmPayment(e)} className="mt-3 sm:mt-5 space-y-3 sm:space-y-4">
+            <div className="rounded-xl border border-[var(--border)] bg-slate-50 p-3 text-[0.6875rem] sm:text-sm">
               {selectedPending.length === 0 ? (
-                <p className="text-[var(--muted)]">
+                <p className="text-[var(--muted)] break-words">
                   Select fee rows on the left
                 </p>
               ) : (
@@ -826,7 +828,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                       key={r.id}
                       className="flex items-start justify-between gap-2"
                     >
-                      <span className="text-xs text-slate-700">
+                      <span className="text-[0.6875rem] sm:text-xs text-slate-700 break-words">
                         {r.exam?.name ?? `Exam #${r.examId}`}
                       </span>
                       <span className="shrink-0 font-semibold tabular-nums">
@@ -838,17 +840,17 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-[var(--border)] pt-3">
-              <span className="text-sm font-medium text-slate-600">
+            <div className="flex items-center justify-between border-t border-[var(--border)] pt-2.5 sm:pt-3 gap-2">
+              <span className="text-[0.6875rem] sm:text-sm font-medium text-slate-600 break-words">
                 Total amount
               </span>
-              <span className="text-xl font-bold tabular-nums text-slate-900">
+              <span className="text-lg sm:text-xl font-bold tabular-nums text-slate-900 shrink-0">
                 {money(collectTotal)}
               </span>
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              <p className="mb-1.5 sm:mb-2 text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                 Payment method
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -876,7 +878,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                       disabled={disabled}
                       title={title}
                       onClick={() => setPaymentMethod(value)}
-                      className={`rounded-lg px-2 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                      className={`rounded-lg px-2 py-2 text-[0.6875rem] sm:text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 break-words ${
                         paymentMethod === value
                           ? 'bg-[var(--primary)] text-white'
                           : 'border border-[var(--border)] bg-white text-slate-600'
@@ -888,7 +890,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                 })}
               </div>
               {paymentMethod === 'razorpay' && selectedPending.length === 1 && (
-                <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+                <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[0.6875rem] sm:text-xs text-amber-900 break-words">
                   UPI total{' '}
                   {money(
                     calcUpiConvenienceFee(
@@ -901,13 +903,13 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                 </p>
               )}
               {paymentMethod === 'self_online' && (
-                <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
+                <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[0.6875rem] sm:text-xs text-slate-700 break-words">
                   Exact fee amount via college UPI QR. Temporary acknowledgement
                   first; official receipt after statement verification.
                 </p>
               )}
               {!razorpayReady && (
-                <p className="mt-2 text-xs text-amber-700">
+                <p className="mt-2 text-[0.6875rem] sm:text-xs text-amber-700 break-words">
                   Razorpay offline — enable keys in{' '}
                   <Link
                     href="/dashboard/settings"
@@ -919,7 +921,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                 </p>
               )}
               {!selfOnlineReady && (
-                <p className="mt-2 text-xs text-amber-700">
+                <p className="mt-2 text-[0.6875rem] sm:text-xs text-amber-700 break-words">
                   Self Online offline — add Merchant UPI ID in{' '}
                   <Link
                     href="/dashboard/settings"
@@ -935,16 +937,16 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             {paymentMethod !== 'razorpay' &&
               paymentMethod !== 'self_online' && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
+              <label className="mb-1 block text-[0.6875rem] sm:text-xs font-medium text-slate-700">
                 Collected by
               </label>
               <input
                 value={collectedBy}
                 readOnly
                 tabIndex={-1}
-                className="w-full cursor-default rounded-lg border border-[var(--border)] bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none"
+                className="w-full cursor-default rounded-lg border border-[var(--border)] bg-slate-50 px-3 py-2 text-[0.6875rem] sm:text-sm text-slate-700 outline-none break-words"
               />
-              <p className="mt-1 text-[11px] text-[var(--muted)]">
+              <p className="mt-1 text-[11px] text-[var(--muted)] break-words">
                 Locked to your signed-in account
               </p>
             </div>

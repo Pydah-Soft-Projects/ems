@@ -34,12 +34,13 @@ export function StudentShell({
   return (
     <div className="min-h-screen bg-[var(--background)] pb-24 lg:pb-0">
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-white/85 backdrop-blur-xl print:hidden">
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link href="/student" className="flex items-center gap-3">
-            <BrandLogo size="md" />
+        <div className="flex w-full items-center justify-between gap-2 px-3 py-2.5 sm:px-6 sm:py-3">
+          <Link href="/student" className="flex items-center gap-2.5 sm:gap-3">
+            <BrandLogo size="sm" className="sm:hidden" />
+            <BrandLogo size="md" className="hidden sm:block" />
             <div className="min-w-0 leading-tight">
-              <p className="text-xs font-bold text-slate-900">Student Portal</p>
-              <p className="truncate text-xs text-[var(--muted)]">
+              <p className="text-[0.6875rem] sm:text-xs font-bold text-slate-900">Student Portal</p>
+              <p className="truncate text-[0.6875rem] sm:text-xs text-[var(--muted)]">
                 {user.fullName}
               </p>
             </div>
@@ -84,13 +85,17 @@ export function StudentShell({
         </div>
       </header>
 
-      <main className="w-full px-4 py-5 sm:px-6 sm:py-6">{children}</main>
+      <main className="w-full px-3 py-3 sm:px-6 sm:py-5 xl:px-8 2xl:px-10">
+        <div className="mx-auto w-full max-w-[1400px] 2xl:max-w-[1680px]">
+          {children}
+        </div>
+      </main>
 
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-white/95 px-2 py-2 backdrop-blur-xl lg:hidden print:hidden"
         aria-label="Student mobile"
       >
-        <ul className="mx-auto grid w-full max-w-none grid-cols-6 gap-1 px-2">
+        <ul className="mx-auto grid w-full max-w-none grid-cols-3 gap-1 px-2 sm:grid-cols-4 md:grid-cols-6">
           {studentNavigation.map((item) => {
             const active = isStudentNavActive(pathname, item);
             return (

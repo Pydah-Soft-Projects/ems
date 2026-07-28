@@ -47,17 +47,17 @@ export function RegulationTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-left text-sm">
+    <div className="-mx-3 sm:mx-0 overflow-x-auto">
+      <table className="w-full min-w-[720px] text-left text-xs sm:text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] bg-slate-50/80">
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Code</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Name</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Effective date</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Scope</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Status</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Created</th>
-            <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Code</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Name</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Effective date</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Scope</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Status</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Created</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-right font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
               Actions
             </th>
           </tr>
@@ -65,31 +65,31 @@ export function RegulationTable({
         <tbody className="divide-y divide-[var(--border)]">
           {regulations.map((reg) => (
             <tr key={reg.id} className="transition hover:bg-slate-50/50">
-              <td className="px-5 py-4 font-semibold text-slate-900">{reg.code}</td>
-              <td className="px-5 py-4">
-                <p className="font-medium text-slate-800">{reg.name}</p>
+              <td className="px-3 sm:px-5 py-3 sm:py-4 font-semibold text-slate-900 break-words">{reg.code}</td>
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
+                <p className="font-medium text-slate-800 break-words">{reg.name}</p>
                 {reg.description && (
-                  <p className="mt-0.5 line-clamp-1 text-xs text-[var(--muted)]">
+                  <p className="mt-0.5 line-clamp-1 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                     {reg.description}
                   </p>
                 )}
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600">
                 {reg.effectiveDate ? formatDate(reg.effectiveDate) : '—'}
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 break-words">
                 {reg.scopes?.length
                   ? `${new Set(reg.scopes.map((s) => s.collegeId)).size} colleges · ${reg.scopes.length} batches`
                   : '—'}
               </td>
-              <td className="px-5 py-4">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
                 <StatusBadge status={reg.status} />
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                 {formatDate(reg.createdAt)}
               </td>
-              <td className="px-5 py-4">
-                <div className="flex justify-end gap-2">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Button
                     variant="ghost"
                     className="!px-3 !py-1.5 text-xs"

@@ -135,7 +135,7 @@ export default function RemunerationPage() {
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Bills shown" value={String(summary.count)} />
         <KpiTile
           label="Total amount"
@@ -159,23 +159,27 @@ export default function RemunerationPage() {
           }
         />
         <CardBody className="space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <StatusFilter
+                items={statusTabs}
+                value={statusTab}
+                onChange={setStatusTab}
+              />
+              <div className="w-full sm:w-64">
+                <SoftSearchField
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name, bill no, exam…"
+                />
+              </div>
+            </div>
             <StatusFilter
-              items={statusTabs}
-              value={statusTab}
-              onChange={setStatusTab}
-            />
-            <SoftSearchField
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, bill no, exam…"
+              items={typeTabs}
+              value={typeTab}
+              onChange={setTypeTab}
             />
           </div>
-          <StatusFilter
-            items={typeTabs}
-            value={typeTab}
-            onChange={setTypeTab}
-          />
 
           {loading ? (
             <LoadingBlock label="Loading bills…" />

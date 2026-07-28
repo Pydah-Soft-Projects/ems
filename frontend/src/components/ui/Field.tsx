@@ -14,13 +14,13 @@ function FieldShell({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-slate-700">
+    <div className="w-full">
+      <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-slate-700 break-words">
         {label}
       </label>
       {children}
-      {hint && !error ? <p className="mt-1.5 text-xs text-[var(--muted)]">{hint}</p> : null}
-      {error ? <p className="mt-1.5 text-sm text-red-600">{error}</p> : null}
+      {hint && !error ? <p className="mt-1.5 text-xs leading-relaxed text-[var(--muted)] break-words">{hint}</p> : null}
+      {error ? <p className="mt-1.5 text-xs leading-relaxed text-red-600 break-words">{error}</p> : null}
     </div>
   );
 }

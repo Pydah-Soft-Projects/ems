@@ -104,13 +104,13 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title={`Welcome back${user?.fullName ? `, ${user.fullName.split(' ')[0]}` : ''}`}
         description="Your examination workspace at a glance — approvals, collections, and readiness."
       />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 grid-cols-1 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Pending approvals"
           value={stats.pendingApprovals}
@@ -145,7 +145,7 @@ export default function DashboardPage() {
         />
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 grid-cols-1 sm:gap-5 xl:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader
             title="Workload mix"
@@ -170,14 +170,14 @@ export default function DashboardPage() {
               total={workloadTotal}
               tone="warning"
             />
-            <div className="rounded-[var(--radius)] bg-[var(--surface-subtle)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+            <div className="rounded-[var(--radius)] bg-[var(--surface-subtle)] p-3 sm:p-4">
+              <p className="text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
                 Publish progress
               </p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">
+              <p className="mt-1 text-xl sm:text-2xl font-bold text-slate-900 tabular-nums">
                 {loading ? '—' : `${donePct}%`}
               </p>
-              <p className="text-sm text-[var(--muted)]">
+              <p className="text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words">
                 {stats.published} of {stats.exams} exams published
               </p>
             </div>
@@ -194,7 +194,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 sm:gap-5 lg:grid-cols-2">
         <ActionList
           title="Pending approvals"
           description="Review and approve submissions"
@@ -208,15 +208,17 @@ export default function DashboardPage() {
             <Link
               key={exam.id}
               href={`/dashboard/exams/${exam.id}`}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--surface-subtle)] px-4 py-3 transition hover:bg-[var(--primary-soft)]"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 rounded-2xl bg-[var(--surface-subtle)] px-3 sm:px-4 py-3 transition hover:bg-[var(--primary-soft)]"
             >
-              <div>
-                <p className="font-semibold text-slate-900">{exam.name}</p>
-                <p className="text-xs text-[var(--muted)]">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 break-words">{exam.name}</p>
+                <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                   {exam.course} · Y{exam.yearOfStudy}/S{exam.semester}
                 </p>
               </div>
-              <StatusBadge status={exam.status} />
+              <div className="sm:shrink-0 self-start sm:self-center">
+                <StatusBadge status={exam.status} />
+              </div>
             </Link>
           ))}
         </ActionList>
@@ -234,17 +236,19 @@ export default function DashboardPage() {
             <Link
               key={r.id}
               href={`/dashboard/fees/collect/${encodeURIComponent(r.studentRollNumber)}`}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--surface-subtle)] px-4 py-3 transition hover:bg-[var(--accent-soft)]"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 rounded-2xl bg-[var(--surface-subtle)] px-3 sm:px-4 py-3 transition hover:bg-[var(--accent-soft)]"
             >
-              <div>
-                <p className="font-semibold text-slate-900">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 break-words">
                   {r.studentRollNumber}
                 </p>
-                <p className="text-xs text-[var(--muted)]">
+                <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                   {r.exam?.name ?? `Exam #${r.examId}`}
                 </p>
               </div>
-              <Money amount={r.totalAmount} />
+              <div className="sm:shrink-0 self-start sm:self-center">
+                <Money amount={r.totalAmount} />
+              </div>
             </Link>
           ))}
         </ActionList>
@@ -260,17 +264,19 @@ export default function DashboardPage() {
             <Link
               key={exam.id}
               href={`/dashboard/exams/${exam.id}?tab=hall-tickets`}
-              className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--surface-subtle)] px-4 py-3 transition hover:bg-[var(--success-soft)]"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 rounded-2xl bg-[var(--surface-subtle)] px-3 sm:px-4 py-3 transition hover:bg-[var(--success-soft)]"
             >
-              <div>
-                <p className="font-semibold text-slate-900">{exam.name}</p>
-                <p className="text-xs text-[var(--muted)]">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 break-words">{exam.name}</p>
+                <p className="mt-0.5 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                   {exam.hallTicketsReleasedAt
                     ? 'Hall tickets released'
                     : 'Hall tickets not released'}
                 </p>
               </div>
-              <StatusBadge status={exam.status} />
+              <div className="sm:shrink-0 self-start sm:self-center">
+                <StatusBadge status={exam.status} />
+              </div>
             </Link>
           ))}
         </ActionList>
@@ -278,19 +284,19 @@ export default function DashboardPage() {
         <Card>
           <CardHeader title="Portal modules" description="Jump to a workspace" />
           <CardBody>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2">
               {quickLinks.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="group flex items-start gap-4 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]"
+                  className="group flex items-start gap-3 sm:gap-4 rounded-2xl border border-[var(--border)] bg-white p-3 sm:p-4 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]"
                 >
-                  <div className="rounded-2xl bg-[var(--primary-soft)] p-2.5 text-[var(--primary)] transition group-hover:bg-[var(--primary)] group-hover:text-white">
+                  <div className="shrink-0 rounded-xl sm:rounded-2xl bg-[var(--primary-soft)] p-2 sm:p-2.5 text-[var(--primary)] transition group-hover:bg-[var(--primary)] group-hover:text-white">
                     <NavIcon name={item.icon} />
                   </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.label}</p>
-                    <p className="mt-0.5 text-sm text-[var(--muted)]">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 break-words">{item.label}</p>
+                    <p className="mt-0.5 text-[0.6875rem] sm:text-sm text-[var(--muted)] break-words">
                       {item.description}
                     </p>
                   </div>
@@ -323,8 +329,8 @@ function ProgressRow({
   }[tone];
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between text-sm">
-        <span className="font-medium text-slate-700">{label}</span>
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1.5 text-[0.6875rem] sm:text-sm">
+        <span className="font-medium text-slate-700 break-words">{label}</span>
         <span className="tabular-nums text-[var(--muted)]">{value}</span>
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
@@ -347,9 +353,9 @@ function MiniStat({
   loading?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl bg-[var(--surface-subtle)] px-4 py-3">
-      <span className="text-sm font-medium text-[var(--muted)]">{label}</span>
-      <span className="text-xl font-bold text-slate-900">
+    <div className="flex items-center justify-between rounded-2xl bg-[var(--surface-subtle)] px-3 sm:px-4 py-3 gap-2">
+      <span className="text-[0.6875rem] sm:text-sm font-medium text-[var(--muted)] break-words">{label}</span>
+      <span className="text-lg sm:text-xl font-bold text-slate-900 tabular-nums shrink-0">
         {loading ? '—' : value}
       </span>
     </div>

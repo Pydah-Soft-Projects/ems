@@ -82,14 +82,14 @@ export function MappingTable({
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-end gap-2 border-b border-[var(--border)] px-5 py-3">
-        <span className="text-xs text-[var(--muted)]">View</span>
+    <div className="-mx-3 sm:mx-0">
+      <div className="flex items-center justify-end gap-2 border-b border-[var(--border)] px-3 sm:px-5 py-2.5 sm:py-3">
+        <span className="text-[0.6875rem] sm:text-xs text-[var(--muted)]">View</span>
         <div className="inline-flex rounded-md border border-[var(--border)] p-0.5">
           <button
             type="button"
             onClick={() => setView('grouped')}
-            className={`rounded px-2.5 py-1 text-xs font-medium ${
+            className={`rounded px-2 sm:px-2.5 py-1 text-[0.6875rem] sm:text-xs font-medium ${
               view === 'grouped'
                 ? 'bg-[var(--primary)] text-white'
                 : 'text-slate-600'
@@ -100,7 +100,7 @@ export function MappingTable({
           <button
             type="button"
             onClick={() => setView('flat')}
-            className={`rounded px-2.5 py-1 text-xs font-medium ${
+            className={`rounded px-2 sm:px-2.5 py-1 text-[0.6875rem] sm:text-xs font-medium ${
               view === 'flat'
                 ? 'bg-[var(--primary)] text-white'
                 : 'text-slate-600'
@@ -113,25 +113,25 @@ export function MappingTable({
 
       {view === 'grouped' ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-left text-sm">
+          <table className="w-full min-w-[1000px] text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] bg-slate-50/80">
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Regulation
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Academic scope
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Year / Sem
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Sections
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Subjects
                 </th>
-                <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-right font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
@@ -141,36 +141,36 @@ export function MappingTable({
                 const m = group.sample;
                 return (
                   <tr key={group.key} className="transition hover:bg-slate-50/50">
-                    <td className="px-5 py-4 font-medium text-slate-800">
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 font-medium text-slate-800">
                       {regulationLabel(regulations, m.regulationId)}
                     </td>
-                    <td className="px-5 py-4 text-slate-600">
-                      <p className="font-medium text-slate-800">
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600">
+                      <p className="font-medium text-slate-800 break-words">
                         {m.collegeName}
                       </p>
-                      <p className="text-xs text-[var(--muted)]">
+                      <p className="text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                         {m.courseName} → {m.branchName} → {m.batch}
                       </p>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                       Y{m.yearOfStudy} / S{m.semester}
                     </td>
-                    <td className="px-5 py-4 text-slate-600">
+                    <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 break-words">
                       {sectionLabel(m)}
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 sm:px-5 py-3 sm:py-4">
                       <p className="font-medium text-slate-800">
                         {group.entries.length} subject
                         {group.entries.length !== 1 ? 's' : ''}
                       </p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-[var(--muted)]">
+                      <p className="mt-0.5 line-clamp-2 text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                         {group.entries
                           .map((e) => e.subject?.code ?? `#${e.subjectId}`)
                           .join(', ')}
                       </p>
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
+                    <td className="px-3 sm:px-5 py-3 sm:py-4">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <Button
                           variant="ghost"
                           className="!px-3 !py-1.5 text-xs"
@@ -195,33 +195,33 @@ export function MappingTable({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="w-full min-w-[1100px] text-left text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] bg-slate-50/80">
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Regulation
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Subject
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   College
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Programme
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Branch
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Batch
                 </th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">Year</th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">Sem</th>
-                <th className="px-5 py-3.5 font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Year</th>
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Sem</th>
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Sections
                 </th>
-                <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+                <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-right font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
                   Actions
                 </th>
               </tr>
@@ -232,38 +232,38 @@ export function MappingTable({
                   key={mapping.id}
                   className="transition hover:bg-slate-50/50"
                 >
-                  <td className="px-5 py-4 font-medium text-slate-800">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 font-medium text-slate-800">
                     {regulationLabel(regulations, mapping.regulationId)}
                   </td>
-                  <td className="px-5 py-4">
-                    <p className="font-semibold text-slate-900">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4">
+                    <p className="font-semibold text-slate-900 break-words">
                       {mapping.subject?.code ?? '—'}
                     </p>
-                    <p className="text-xs text-[var(--muted)]">
+                    <p className="text-[0.6875rem] sm:text-xs text-[var(--muted)] break-words">
                       {mapping.subject?.name ?? ''}
                     </p>
                   </td>
-                  <td className="px-5 py-4 text-slate-600">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 break-words">
                     {mapping.collegeName}
                   </td>
-                  <td className="px-5 py-4 text-slate-600">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 break-words">
                     {mapping.courseName}
                   </td>
-                  <td className="px-5 py-4 text-slate-600">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 break-words">
                     {mapping.branchName}
                   </td>
-                  <td className="px-5 py-4 text-slate-600">{mapping.batch}</td>
-                  <td className="px-5 py-4 text-slate-600">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">{mapping.batch}</td>
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                     {mapping.yearOfStudy}
                   </td>
-                  <td className="px-5 py-4 text-slate-600">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                     {mapping.semester}
                   </td>
-                  <td className="px-5 py-4 text-slate-600">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 break-words">
                     {sectionLabel(mapping)}
                   </td>
-                  <td className="px-5 py-4">
-                    <div className="flex justify-end gap-2">
+                  <td className="px-3 sm:px-5 py-3 sm:py-4">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         variant="ghost"
                         className="!px-3 !py-1.5 text-xs"

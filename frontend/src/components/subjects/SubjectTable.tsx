@@ -51,18 +51,18 @@ export function SubjectTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[800px] text-left text-sm">
+    <div className="-mx-3 sm:mx-0 overflow-x-auto">
+      <table className="w-full min-w-[800px] text-left text-xs sm:text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] bg-slate-50/80">
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Code</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Name</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Regulation</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Type</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Credits</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Marks</th>
-            <th className="px-5 py-3.5 font-semibold text-slate-600">Status</th>
-            <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Code</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Name</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Regulation</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Type</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Credits</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Marks</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">Status</th>
+            <th className="px-3 sm:px-5 py-2.5 sm:py-3.5 text-right font-semibold text-slate-600 text-[0.6875rem] sm:text-xs uppercase tracking-wide">
               Actions
             </th>
           </tr>
@@ -70,25 +70,25 @@ export function SubjectTable({
         <tbody className="divide-y divide-[var(--border)]">
           {subjects.map((subject) => (
             <tr key={subject.id} className="transition hover:bg-slate-50/50">
-              <td className="px-5 py-4 font-semibold text-slate-900">{subject.code}</td>
-              <td className="px-5 py-4 font-medium text-slate-800">{subject.name}</td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 font-semibold text-slate-900 break-words">{subject.code}</td>
+              <td className="px-3 sm:px-5 py-3 sm:py-4 font-medium text-slate-800 break-words">{subject.name}</td>
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600">
                 {regulationLabel(regulations, subject.regulationId)}
               </td>
-              <td className="px-5 py-4">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
                 <Badge variant="default">{subject.type}</Badge>
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                 {formatCredits(subject.credits)}
               </td>
-              <td className="px-5 py-4 text-slate-600">
+              <td className="px-3 sm:px-5 py-3 sm:py-4 text-slate-600 tabular-nums">
                 {subject.internalMarks}/{subject.externalMarks} ({subject.totalMarks})
               </td>
-              <td className="px-5 py-4">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
                 <StatusBadge status={subject.status} />
               </td>
-              <td className="px-5 py-4">
-                <div className="flex justify-end gap-2">
+              <td className="px-3 sm:px-5 py-3 sm:py-4">
+                <div className="flex flex-wrap justify-end gap-2">
                   <Button
                     variant="ghost"
                     className="!px-3 !py-1.5 text-xs"

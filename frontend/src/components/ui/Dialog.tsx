@@ -83,13 +83,13 @@ export function Dialog({
         tabIndex={-1}
         className={`relative z-10 w-full ${widths[size]} max-h-[90vh] overflow-y-auto rounded-[var(--radius-xl)] border border-[var(--border)] bg-white shadow-[var(--shadow-lg)] outline-none`}
       >
-        <div className="flex items-start justify-between gap-4 px-6 pb-2 pt-6">
-          <div>
-            <h2 id={titleId} className="text-lg font-semibold tracking-tight text-slate-900">
+        <div className="flex items-start justify-between gap-3 px-4 sm:px-6 pb-2 pt-4 sm:pt-6">
+          <div className="min-w-0">
+            <h2 id={titleId} className="text-base sm:text-lg font-semibold tracking-tight text-slate-900 break-words">
               {title}
             </h2>
             {description ? (
-              <p id={descId} className="mt-1 text-sm text-[var(--muted)]">
+              <p id={descId} className="mt-1 text-xs sm:text-sm text-[var(--muted)] break-words">
                 {description}
               </p>
             ) : null}
@@ -98,9 +98,9 @@ export function Dialog({
             ×
           </Button>
         </div>
-        {children ? <div className="px-6 py-4">{children}</div> : null}
+        {children ? <div className="px-4 sm:px-6 py-3 sm:py-4">{children}</div> : null}
         {footer ? (
-          <div className="flex flex-wrap justify-end gap-2 px-6 pb-6 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
             {footer}
           </div>
         ) : null}

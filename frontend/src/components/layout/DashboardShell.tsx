@@ -83,30 +83,32 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       ) : null}
 
       <div className="flex min-h-screen flex-1 flex-col lg:pl-[260px]">
-        <main className="flex-1 px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--sidebar-text)] shadow-[var(--shadow-sm)] lg:hidden"
-            aria-label="Open menu"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden
+        <main className="flex-1 px-3 py-3 sm:px-5 sm:py-5 lg:px-6 lg:py-6 xl:px-8 2xl:px-10">
+          <div className="mx-auto w-full max-w-[1400px] 2xl:max-w-[1680px]">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--sidebar-text)] shadow-[var(--shadow-sm)] sm:mb-4 lg:hidden"
+              aria-label="Open menu"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-              />
-            </svg>
-          </button>
-          <div className="w-full">
-            {allowed ? children : <AccessDenied />}
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+                aria-hidden
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+                />
+              </svg>
+            </button>
+            <div className="w-full">
+              {allowed ? children : <AccessDenied />}
+            </div>
           </div>
         </main>
       </div>

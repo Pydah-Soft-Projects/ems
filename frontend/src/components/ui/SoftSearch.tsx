@@ -55,7 +55,7 @@ export function StatusFilter<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(item.id)}
-            className={`rounded-full px-3 py-1.5 text-[0.6875rem] font-semibold transition ${
+            className={`rounded-full px-2.5 sm:px-3 py-1.5 text-[0.625rem] sm:text-[0.6875rem] font-semibold transition ${
               active
                 ? 'bg-[var(--primary)] text-white shadow-[var(--shadow-sm)]'
                 : 'text-[var(--muted)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]'
@@ -98,15 +98,15 @@ export function KpiTile({
 
   return (
     <div
-      className={`rounded-[var(--radius-lg)] border p-4 shadow-[var(--shadow-sm)] ${tones[tone]}`}
+      className={`rounded-[var(--radius-lg)] border p-3 sm:p-4 shadow-[var(--shadow-sm)] ${tones[tone]}`}
     >
-      <p className={`text-[0.6875rem] font-semibold uppercase tracking-wider ${labels[tone]}`}>
+      <p className={`text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-wider ${labels[tone]}`}>
         {label}
       </p>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <p className="text-xl font-bold tracking-tight text-slate-900">{value}</p>
+      <div className="mt-1.5 sm:mt-2 flex flex-col sm:flex-row sm:items-end justify-between gap-1 sm:gap-3">
+        <p className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 break-words">{value}</p>
         {hint ? (
-          <p className="text-xs font-medium text-[var(--muted)]">{hint}</p>
+          <p className="text-[0.6875rem] sm:text-xs font-medium text-[var(--muted)] break-words">{hint}</p>
         ) : null}
       </div>
     </div>

@@ -38,12 +38,12 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-white shadow-sm">
-      <table className="min-w-full text-left text-sm">
-        <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+    <div className="-mx-3 sm:mx-0 overflow-x-auto rounded-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] border border-[var(--border)] bg-white shadow-[var(--shadow-sm)]">
+      <table className="min-w-full text-left text-xs sm:text-sm border-collapse">
+        <thead className="bg-[var(--surface-subtle)] text-[0.6875rem] sm:text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
           <tr>
             {columns.map((col) => (
-              <th key={col.key} className={`px-4 py-3 ${col.className || ''}`}>
+              <th key={col.key} className={`px-3 sm:px-4 py-2 sm:py-2.5 whitespace-nowrap ${col.className || ''}`}>
                 {col.header}
               </th>
             ))}
@@ -51,9 +51,9 @@ export function DataTable<T>({
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="hover:bg-slate-50/80">
+            <tr key={rowKey(row)} className="transition hover:bg-slate-50/80">
               {columns.map((col) => (
-                <td key={col.key} className={`px-4 py-3 text-slate-700 ${col.className || ''}`}>
+                <td key={col.key} className={`px-3 sm:px-4 py-2 sm:py-2.5 align-middle text-slate-700 whitespace-nowrap break-words ${col.className || ''}`}>
                   {col.render(row)}
                 </td>
               ))}

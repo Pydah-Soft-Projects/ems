@@ -26,7 +26,7 @@ export function Tabs({
     >
       {items.map((item) => {
         const active = item.id === activeId;
-        const className = `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+        const className = `inline-flex items-center gap-1.5 rounded-full px-2.5 sm:px-3.5 py-1.5 text-[0.6875rem] sm:text-xs font-semibold transition ${
           active
             ? 'bg-[var(--primary)] text-white shadow-[var(--shadow-sm)]'
             : 'text-[var(--muted)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]'
