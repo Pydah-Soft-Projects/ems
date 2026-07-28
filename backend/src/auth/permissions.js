@@ -67,6 +67,10 @@ const PRIVILEGE_GROUPS = [
         key: 'fees:reconcile',
         label: 'Upload merchant statements & verify Self Online payments',
       },
+      {
+        key: 'fees:due_override',
+        label: 'Override overdue fee dues for exam apply / hall tickets',
+      },
     ],
   },
   {

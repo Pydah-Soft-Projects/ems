@@ -11,6 +11,9 @@ import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
   const router = useRouter();
   const application = exam.applications?.[0] ?? null;
+  const duesBlocked = Boolean(exam.dueClearance?.blocked);
+  const canApply =
+    exam.canApply !== false && !duesBlocked && !application;
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]">
@@ -34,6 +37,12 @@ export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
               You have already applied as{' '}
               {application.examType.replace(/_/g, ' ')}. Another type requires
               a separate examination.
+            </p>
+          ) : null}
+          {duesBlocked && !application ? (
+            <p className="mt-2 text-xs font-medium text-[var(--danger)]">
+              {exam.dueClearance?.message ||
+                `Outstanding dues ${money(exam.dueClearance?.totalDue ?? 0)}. Clear dues before applying.`}
             </p>
           ) : null}
         </div>
@@ -64,12 +73,18 @@ export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
             )}
           </div>
         ) : (
-          <Button
-            type="button"
-            onClick={() => router.push(`/student/exams/${exam.id}/apply`)}
-          >
-            Apply
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            {duesBlocked ? (
+              <Badge variant="danger">Dues pending</Badge>
+            ) : null}
+            <Button
+              type="button"
+              variant={canApply ? 'primary' : 'secondary'}
+              onClick={() => router.push(`/student/exams/${exam.id}/apply`)}
+            >
+              {canApply ? 'Apply' : 'View details'}
+            </Button>
+          </div>
         )}
       </div>
     </div>

@@ -155,6 +155,44 @@ export interface PublishExamInput {
   students?: { rollNumber: string; name: string; selectedSubjectIds?: number[] }[];
 }
 
+export interface DueClearanceTerm {
+  termNumber: number;
+  academicYear?: string;
+  studentYear?: number | null;
+  semester?: number | null;
+  demand?: number;
+  declarationConcession?: number;
+  paid?: number;
+  applicationConcession?: number;
+  balance?: number;
+  due: number;
+  dueDate?: string | null;
+  overdue?: boolean;
+}
+
+export interface DueClearanceHead {
+  feeHeadId: string;
+  feeHeadCode: string | null;
+  feeHeadName: string;
+  due: number;
+  terms: DueClearanceTerm[];
+}
+
+export interface DueClearance {
+  blocked: boolean;
+  canApply: boolean;
+  asOfDate: string;
+  totalDue: number;
+  currency: string;
+  byHead: DueClearanceHead[];
+  byTerm: { termNumber: number; due: number }[];
+  message: string;
+  verification?: { matched: boolean; notes: string[] };
+  skipped?: boolean;
+  reason?: string;
+  overridden?: boolean;
+}
+
 export interface EligibleExamStudent {
   id: number;
   rollNumber: string;
@@ -168,6 +206,7 @@ export interface EligibleExamStudent {
   batch: string | null;
   currentYear: number;
   currentSemester: number;
+  dueClearance?: DueClearance;
 }
 
 export interface EligibleStudentsResponse {
@@ -189,6 +228,14 @@ export interface EligibleStudentsResponse {
   };
   students: EligibleExamStudent[];
   total: number;
+  dueSummary?: {
+    asOfDate: string;
+    eligible: number;
+    clearCount: number;
+    blockedCount: number;
+    skippedCount: number;
+    totalOverdueAmount: number;
+  };
 }
 
 export interface StudentExamListItem {
@@ -210,6 +257,8 @@ export interface StudentExamListItem {
   subjectCount: number;
   alreadyApplied: boolean;
   openTypes: ExamType[];
+  canApply?: boolean;
+  dueClearance?: DueClearance;
   applications: {
     id: number;
     examType: ExamType;
@@ -257,6 +306,8 @@ export interface StudentExamDetail {
   };
   openTypes: ExamType[];
   alreadyApplied: boolean;
+  canApply?: boolean;
+  dueClearance?: DueClearance;
   applications: {
     id: number;
     examType: ExamType;
@@ -280,6 +331,8 @@ export interface CreateExamApplicationInput {
   selectedSubjectIds?: number[];
   declarationAccepted: boolean;
   consentAccepted: boolean;
+  /** Staff only — requires fees:due_override or Super Admin */
+  overrideDues?: boolean;
 }
 
 export interface ExamAnalytics {

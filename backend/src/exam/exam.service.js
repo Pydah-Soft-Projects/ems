@@ -5,6 +5,7 @@ const Razorpay = require('razorpay');
 const { AppError } = require('../common/errors');
 const { config } = require('../config');
 const { operationLogger } = require('../common/logger');
+const { hasPrivilege } = require('../auth/permissions');
 const {
     ExamStatus,
     ExamType,
@@ -627,7 +628,16 @@ class ExamService {
         catch (err) {
             log.error({ err, examId: id }, 'Failed to create SDMS exam events');
         }
-        return publishedExam;
+        // Due clearance snapshot for eligible students (does not block publish).
+        let dueSummary = null;
+        try {
+            const eligible = await this.listEligibleStudents(id);
+            dueSummary = eligible.dueSummary ?? null;
+        }
+        catch (err) {
+            log.error({ err, examId: id }, 'Failed to compute due clearance on publish');
+        }
+        return Object.assign(publishedExam, { dueSummary });
     }
     async releaseHallTickets(id) {
         const exam = await this.findOne(id);
@@ -661,6 +671,85 @@ class ExamService {
         catch {
         }
         throw AppError.badRequest('Exam has no college set. Edit the examination and select a college before publishing.');
+    }
+    canOverrideDues(actor) {
+        if (!actor) return false;
+        if (actor.isSuperAdmin) return true;
+        return hasPrivilege(actor.privileges, 'fees:due_override');
+    }
+    async getDueClearanceForStudent(student) {
+        if (!this.feeManagement?.getStudentDueClearance) {
+            return {
+                blocked: false,
+                canApply: true,
+                asOfDate: new Date().toISOString().slice(0, 10),
+                totalDue: 0,
+                currency: 'INR',
+                byHead: [],
+                byTerm: [],
+                message: 'Due check unavailable.',
+                verification: { matched: true, notes: [] },
+                skipped: true,
+                reason: 'fee_management_service_missing',
+            };
+        }
+        try {
+            return await this.feeManagement.getStudentDueClearance(student);
+        }
+        catch (err) {
+            log.error({ err, studentId: student?.id }, 'Fee due clearance check failed');
+            return {
+                blocked: false,
+                canApply: true,
+                asOfDate: new Date().toISOString().slice(0, 10),
+                totalDue: 0,
+                currency: 'INR',
+                byHead: [],
+                byTerm: [],
+                message: 'Due check failed; treating as clear.',
+                verification: { matched: true, notes: [] },
+                skipped: true,
+                reason: 'due_check_failed',
+            };
+        }
+    }
+    async assertNoOverdueDues(student, { overrideDues = false, actor = null } = {}) {
+        const dueClearance = await this.getDueClearanceForStudent(student);
+        if (!dueClearance.blocked) {
+            return dueClearance;
+        }
+        if (overrideDues && this.canOverrideDues(actor)) {
+            return { ...dueClearance, overridden: true, canApply: true };
+        }
+        throw AppError.badRequest(dueClearance.message || 'Clear all overdue fee dues before continuing.');
+    }
+    summarizeDueClearance(studentsWithDue) {
+        let blockedCount = 0;
+        let clearCount = 0;
+        let skippedCount = 0;
+        let totalOverdue = 0;
+        for (const row of studentsWithDue) {
+            const d = row.dueClearance;
+            if (!d || d.skipped) {
+                skippedCount += 1;
+                continue;
+            }
+            if (d.blocked) {
+                blockedCount += 1;
+                totalOverdue += Number(d.totalDue) || 0;
+            }
+            else {
+                clearCount += 1;
+            }
+        }
+        return {
+            asOfDate: new Date().toISOString().slice(0, 10),
+            eligible: studentsWithDue.length,
+            clearCount,
+            blockedCount,
+            skippedCount,
+            totalOverdueAmount: Math.round(totalOverdue * 100) / 100,
+        };
     }
     async listEligibleStudents(examId) {
         const exam = await this.findOne(examId);
@@ -782,6 +871,24 @@ class ExamService {
             }
         }
         const students = Array.from(byRoll.values()).sort((a, b) => a.rollNumber.localeCompare(b.rollNumber));
+        const withDue = [];
+        for (const s of students) {
+            const dueClearance = await this.getDueClearanceForStudent(s);
+            withDue.push({
+                ...s,
+                dueClearance: {
+                    blocked: Boolean(dueClearance.blocked),
+                    canApply: Boolean(dueClearance.canApply),
+                    totalDue: Number(dueClearance.totalDue) || 0,
+                    asOfDate: dueClearance.asOfDate,
+                    message: dueClearance.message,
+                    skipped: Boolean(dueClearance.skipped),
+                    byHead: dueClearance.byHead ?? [],
+                    byTerm: dueClearance.byTerm ?? [],
+                },
+            });
+        }
+        const dueSummary = this.summarizeDueClearance(withDue);
         return {
             exam: {
                 id: exam.id,
@@ -799,8 +906,9 @@ class ExamService {
                     semester: s.semester,
                 })),
             },
-            students,
-            total: students.length,
+            students: withDue,
+            total: withDue.length,
+            dueSummary,
         };
     }
     /**
@@ -1024,6 +1132,7 @@ class ExamService {
                 appsByExam.set(app.examId, list);
             }
         }
+        const dueClearance = await this.getDueClearanceForStudent(student);
         return inScope.map((exam) => {
             const apps = appsByExam.get(exam.id) ?? [];
             const allowedTypes = this.eligibleTypesForStudent(exam, student);
@@ -1053,6 +1162,8 @@ class ExamService {
                     feeRecordId: a.feeRecordId,
                     feeStatus: a.feeRecord?.status ?? null,
                 })),
+                dueClearance,
+                canApply: Boolean(dueClearance.canApply) && openTypes.length > 0,
             };
         });
     }
@@ -1090,6 +1201,7 @@ class ExamService {
             name: es.subject?.name ?? '',
             supplyStatus: supplyStatuses.get(es.subjectId) ?? null,
         }));
+        const dueClearance = await this.getDueClearanceForStudent(student);
         return {
             exam: {
                 id: exam.id,
@@ -1112,6 +1224,8 @@ class ExamService {
             },
             openTypes,
             alreadyApplied: openTypes.length === 0,
+            dueClearance,
+            canApply: Boolean(dueClearance.canApply) && openTypes.length > 0,
             applications: applications.map((a) => ({
                 id: a.id,
                 examType: a.examType,
@@ -1132,7 +1246,7 @@ class ExamService {
                 : null,
         };
     }
-    async createStudentApplication(examId, studentId, dto) {
+    async createStudentApplication(examId, studentId, dto, options = {}) {
         if (!dto.declarationAccepted || !dto.consentAccepted) {
             throw AppError.badRequest('Declaration and consent are required');
         }
@@ -1146,6 +1260,10 @@ class ExamService {
             throw AppError.forbidden('You are not in the scope of this examination');
         }
         this.assertApplicationWindow(exam);
+        await this.assertNoOverdueDues(student, {
+            overrideDues: Boolean(dto.overrideDues || options.overrideDues),
+            actor: options.actor || null,
+        });
         const examType = this.resolveEnrollmentType(eligibleTypes, dto.examType);
         const roll = this.resolveRoll(student);
         const existing = await this.applicationRepo
@@ -1347,6 +1465,7 @@ class ExamService {
     }
     async listHallTicketsForStudent(studentId) {
         const student = await this.loadStudentForEnrollment(studentId);
+        await this.assertNoOverdueDues(student);
         const roll = this.resolveRoll(student);
         const apps = await this.applicationRepo
             .createQueryBuilder('a')
@@ -1364,6 +1483,7 @@ class ExamService {
     }
     async getHallTicketForStudent(applicationId, studentId) {
         const student = await this.loadStudentForEnrollment(studentId);
+        await this.assertNoOverdueDues(student);
         const roll = this.resolveRoll(student);
         const application = await this.applicationRepo
             .createQueryBuilder('a')

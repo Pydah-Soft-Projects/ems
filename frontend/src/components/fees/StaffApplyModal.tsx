@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { StudentExamDetail, ExamType } from '@/types/exam';
 import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
+import { can } from '@/lib/permissions';
+import { getStoredUser } from '@/lib/auth';
 
 interface StaffApplyModalProps {
   open: boolean;
@@ -37,6 +39,9 @@ export function StaffApplyModal({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [declaration, setDeclaration] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [overrideDues, setOverrideDues] = useState(false);
+  const staffUser = getStoredUser();
+  const canOverrideDues = can(staffUser, 'fees:due_override');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +145,13 @@ export function StaffApplyModal({
       );
       return;
     }
+    if (detail?.dueClearance?.blocked && !(canOverrideDues && overrideDues)) {
+      setError(
+        detail.dueClearance.message ||
+          'Student has overdue fee dues. Clear dues or use override privilege.',
+      );
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
@@ -148,6 +160,7 @@ export function StaffApplyModal({
         selectedSubjectIds: [...selected],
         declarationAccepted: true,
         consentAccepted: true,
+        overrideDues: canOverrideDues && overrideDues,
       });
       onApplied();
     } catch (err) {
@@ -200,6 +213,43 @@ export function StaffApplyModal({
           </p>
         ) : !detail ? null : (
           <div className="space-y-4">
+            {detail.dueClearance?.blocked ? (
+              <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <h3 className="text-sm font-semibold text-amber-950">
+                  Overdue fee dues — {money(detail.dueClearance.totalDue)}
+                </h3>
+                <p className="mt-1 text-sm text-amber-900">
+                  {detail.dueClearance.message}
+                </p>
+                {detail.dueClearance.byHead?.length ? (
+                  <ul className="mt-2 space-y-1 text-xs text-amber-900">
+                    {detail.dueClearance.byHead.map((h) => (
+                      <li key={h.feeHeadId}>
+                        {h.feeHeadName}: {money(h.due)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {canOverrideDues ? (
+                  <label className="mt-3 flex items-start gap-2 text-sm text-amber-950">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={overrideDues}
+                      onChange={(e) => setOverrideDues(e.target.checked)}
+                    />
+                    <span>
+                      Override dues and allow this application (requires
+                      fees:due_override)
+                    </span>
+                  </label>
+                ) : (
+                  <p className="mt-2 text-xs text-amber-800">
+                    Application is blocked until dues are cleared.
+                  </p>
+                )}
+              </section>
+            ) : null}
             <section className="rounded-xl border border-[var(--border)] p-4">
               <h3 className="mb-2 text-sm font-semibold text-slate-900">
                 Applying as
@@ -374,10 +424,16 @@ export function StaffApplyModal({
                 disabled={
                   submitting ||
                   !(detail.openTypes?.length ?? 0) ||
-                  !enrollType
+                  !enrollType ||
+                  (Boolean(detail.dueClearance?.blocked) &&
+                    !(canOverrideDues && overrideDues))
                 }
               >
-                {submitting ? 'Submitting…' : 'Submit application'}
+                {submitting
+                  ? 'Submitting…'
+                  : detail.dueClearance?.blocked && !(canOverrideDues && overrideDues)
+                    ? 'Clear dues to apply'
+                    : 'Submit application'}
               </Button>
             </div>
           </div>

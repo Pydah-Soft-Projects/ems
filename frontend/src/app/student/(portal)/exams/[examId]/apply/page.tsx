@@ -164,6 +164,13 @@ export default function StudentExamApplyPage({
   }
 
   async function submitApplication() {
+    if (detail?.dueClearance?.blocked || detail?.canApply === false) {
+      setError(
+        detail.dueClearance?.message ||
+          'Clear all overdue fee dues before applying for the examination.',
+      );
+      return;
+    }
     if (!enrollType) {
       setError('Select Regular or Supply (enrollment type).');
       return;
@@ -312,6 +319,69 @@ export default function StudentExamApplyPage({
           Choose Regular or Supply, select subjects, consent, then pay.
         </p>
       </div>
+
+      {detail.dueClearance?.blocked ? (
+        <section className="rounded-[var(--radius-lg)] border border-amber-200 bg-amber-50 p-5 shadow-[var(--shadow-sm)]">
+          <h2 className="text-base font-semibold text-amber-950">
+            Outstanding fee dues
+          </h2>
+          <p className="mt-1 text-sm text-amber-900">
+            {detail.dueClearance.message}
+          </p>
+          <p className="mt-3 text-sm font-semibold text-amber-950">
+            Total overdue: {money(detail.dueClearance.totalDue)}
+          </p>
+          {detail.dueClearance.byTerm?.length ? (
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                Term-wise due
+              </p>
+              <ul className="mt-1 space-y-1 text-sm text-amber-900">
+                {detail.dueClearance.byTerm.map((t) => (
+                  <li key={t.termNumber}>
+                    Term {t.termNumber}: {money(t.due)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {detail.dueClearance.byHead?.length ? (
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                Head-wise due
+              </p>
+              <ul className="mt-1 space-y-2 text-sm text-amber-900">
+                {detail.dueClearance.byHead.map((h) => (
+                  <li key={h.feeHeadId}>
+                    <span className="font-medium">
+                      {h.feeHeadName}
+                      {h.feeHeadCode ? ` (${h.feeHeadCode})` : ''}:{' '}
+                      {money(h.due)}
+                    </span>
+                    {h.terms?.filter((t) => t.overdue && t.due > 0).length ? (
+                      <ul className="ml-3 mt-1 space-y-0.5 text-xs text-amber-800">
+                        {h.terms
+                          .filter((t) => t.overdue && t.due > 0)
+                          .map((t) => (
+                            <li key={`${h.feeHeadId}-${t.termNumber}-${t.dueDate}`}>
+                              Term {t.termNumber}
+                              {t.dueDate ? ` · due ${t.dueDate}` : ''} ·{' '}
+                              {money(t.due)}
+                            </li>
+                          ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p className="mt-3 text-xs text-amber-800">
+            You can review examination details below. Clear all overdue dues
+            before submitting an application.
+          </p>
+        </section>
+      ) : null}
 
       <ol className="grid grid-cols-2 gap-2">
         <li
@@ -539,10 +609,16 @@ export default function StudentExamApplyPage({
               disabled={
                 submitting ||
                 !(detail.openTypes?.length) ||
-                !enrollType
+                !enrollType ||
+                Boolean(detail.dueClearance?.blocked) ||
+                detail.canApply === false
               }
             >
-              {submitting ? 'Submitting…' : 'Submit & continue to pay'}
+              {submitting
+                ? 'Submitting…'
+                : detail.dueClearance?.blocked
+                  ? 'Clear dues to apply'
+                  : 'Submit & continue to pay'}
             </Button>
           </div>
         </div>

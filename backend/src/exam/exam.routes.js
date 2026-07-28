@@ -332,6 +332,15 @@ function createFeesRoutes(services) {
             selectedSubjectIds: req.body?.selectedSubjectIds,
             declarationAccepted: req.body?.declarationAccepted === true,
             consentAccepted: req.body?.consentAccepted === true,
+            overrideDues: req.body?.overrideDues === true,
+          },
+          {
+            overrideDues: req.body?.overrideDues === true,
+            actor: {
+              isSuperAdmin: Boolean(req.user?.isSuperAdmin),
+              privileges: req.user?.privileges ?? [],
+              username: req.user?.username,
+            },
           },
         ),
       );

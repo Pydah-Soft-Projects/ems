@@ -6,6 +6,13 @@ const {
   isFeeManagementConnected,
 } = require('./connection');
 const { registerFeeManagementModels } = require('./models');
+const {
+  computeDueClearance,
+  emptyClearance,
+  studentKeys,
+  toDateOnly,
+  idStr,
+} = require('./due-clearance');
 
 const EXAM_FEE_HEAD = {
   name: 'Exam Fee',
@@ -600,6 +607,189 @@ class FeeManagementService {
       feeHeadId: String(feeHead._id),
       feeHeadCode: feeHead.code,
     };
+  }
+
+  /**
+   * Overdue fee due clearance for exam apply / hall ticket gates.
+   * Uses StudentFee demands + APPROVED concessions + active Transactions.
+   */
+  async getStudentDueClearance(student, options = {}) {
+    const asOfDate =
+      toDateOnly(options.asOfDate) || new Date().toISOString().slice(0, 10);
+
+    if (!this.isEnabled()) {
+      return emptyClearance({
+        asOfDate,
+        skipped: true,
+        reason: 'fee_management_not_connected',
+        message: 'Fee Management is not connected; due check skipped.',
+      });
+    }
+
+    const keys = studentKeys(student);
+    if (keys.length === 0) {
+      return emptyClearance({
+        asOfDate,
+        skipped: true,
+        reason: 'student_identity_missing',
+        message: 'Student has no admission number / PIN for due check.',
+      });
+    }
+
+    const escapeRe = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const identityClause = (field) => ({
+      $or: keys.flatMap((k) => [
+        { [field]: k },
+        { [field]: new RegExp(`^${escapeRe(k)}$`, 'i') },
+      ]),
+    });
+
+    const {
+      StudentFee,
+      Transaction,
+      OverallConcessionRequest,
+      ConcessionRequest,
+      FeeHead,
+      FeeStructure,
+    } = this.getModels();
+
+    const [studentFees, transactions, overallConcessions, applicationConcessions] =
+      await Promise.all([
+        StudentFee.find({
+          ...identityClause('studentId'),
+          isActive: { $ne: false },
+        }).lean(),
+        Transaction.find({
+          ...identityClause('studentId'),
+          status: { $ne: 'cancelled' },
+        }).lean(),
+        OverallConcessionRequest.find({
+          status: 'APPROVED',
+          $or: [
+            ...identityClause('admissionNumber').$or,
+            ...identityClause('pinNo').$or,
+          ],
+        }).lean(),
+        ConcessionRequest.find({
+          status: 'APPROVED',
+          $or: [
+            ...identityClause('studentId').$or,
+            ...identityClause('studentPin').$or,
+          ],
+        }).lean(),
+      ]);
+
+    const headIds = new Set();
+    const structureIds = new Set();
+    for (const fee of studentFees) {
+      if (fee.feeHead) headIds.add(idStr(fee.feeHead));
+      if (fee.structureId) structureIds.add(idStr(fee.structureId));
+    }
+    for (const txn of transactions) {
+      if (txn.feeHead) headIds.add(idStr(txn.feeHead));
+    }
+    for (const req of applicationConcessions) {
+      if (req.feeHead) headIds.add(idStr(req.feeHead));
+    }
+    for (const req of overallConcessions) {
+      for (const entry of req.concessions || []) {
+        if (entry.feeHeadId) headIds.add(idStr(entry.feeHeadId));
+      }
+    }
+
+    const [heads, structures] = await Promise.all([
+      headIds.size
+        ? FeeHead.find({ _id: { $in: Array.from(headIds) } }).lean()
+        : [],
+      structureIds.size
+        ? FeeStructure.find({ _id: { $in: Array.from(structureIds) } }).lean()
+        : [],
+    ]);
+
+    const feeHeadsById = new Map(heads.map((h) => [idStr(h._id), h]));
+    const structuresById = new Map(
+      structures.map((s) => [idStr(s._id), s]),
+    );
+
+    const semesterStartByYearSem = await this.resolveSemesterStarts(
+      student,
+      studentFees,
+    );
+
+    return computeDueClearance({
+      studentFees,
+      transactions,
+      overallConcessions,
+      applicationConcessions,
+      feeHeadsById,
+      structuresById,
+      asOfDate,
+      semesterStartByYearSem,
+    });
+  }
+
+  /**
+   * Best-effort SDMS semester start dates for offset-based due dates.
+   * Keyed as `${studentYear}|${semester}`.
+   */
+  async resolveSemesterStarts(student, studentFees) {
+    const map = new Map();
+    if (!this.sdms?.listSemesters) return map;
+
+    const pairs = new Set();
+    for (const fee of studentFees || []) {
+      const y = fee.studentYear != null ? Number(fee.studentYear) : null;
+      const s = fee.semester != null ? Number(fee.semester) : null;
+      if (y != null && s != null) pairs.add(`${y}|${s}`);
+    }
+    if (pairs.size === 0) return map;
+
+    try {
+      const rows = await this.sdms.listSemesters({
+        batch: student?.batch || undefined,
+      });
+      for (const row of rows || []) {
+        const y = Number(row.yearOfStudy);
+        const s = Number(row.semesterNumber ?? row.semester);
+        if (!Number.isFinite(y) || !Number.isFinite(s)) continue;
+        const key = `${y}|${s}`;
+        if (!pairs.has(key)) continue;
+        const start = toDateOnly(row.startDate);
+        if (start) map.set(key, start);
+      }
+    } catch {
+      // Calendar lookup is optional; due dates fall back to as-of.
+    }
+    return map;
+  }
+
+  /**
+   * Batch due clearance for eligible-student lists / publish summaries.
+   */
+  async getStudentsDueClearanceMap(students, options = {}) {
+    const result = new Map();
+    if (!Array.isArray(students) || students.length === 0) return result;
+
+    // Sequential is safer for Mongo load; lists are typically hundreds, not thousands.
+    for (const student of students) {
+      const key =
+        String(student.id ?? student.rollNumber ?? student.admissionNumber ?? '')
+          .trim()
+          .toLowerCase() || String(result.size);
+      try {
+        result.set(key, await this.getStudentDueClearance(student, options));
+      } catch {
+        result.set(
+          key,
+          emptyClearance({
+            skipped: true,
+            reason: 'due_check_failed',
+            message: 'Due check failed; treating as clear.',
+          }),
+        );
+      }
+    }
+    return result;
   }
 }
 
