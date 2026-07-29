@@ -1,26 +1,28 @@
 /**
  * PM2 process file for EMS (backend + frontend).
  *
- * On Amazon Linux EC2 (repo at /home/ec2-user/ems):
+ * Paths are relative to this file location, so it works whether the repo is at:
+ *   /home/ec2-user/ems
+ *   /home/ec2-user/ems/ems
+ *   /var/www/ems
  *
- *   cd /home/ec2-user/ems
+ * Usage:
+ *   cd /path/to/ems   # folder that contains this file
  *   pm2 start ecosystem.config.js
+ *   pm2 reload ecosystem.config.js
  *   pm2 save
  *   pm2 startup
- *
- * Useful commands:
- *   pm2 reload ecosystem.config.js
- *   pm2 restart ecosystem.config.js
- *   pm2 stop ecosystem.config.js
- *   pm2 status
- *   pm2 logs
  */
+
+const path = require('path');
+
+const root = __dirname;
 
 module.exports = {
   apps: [
     {
       name: 'ems-backend',
-      cwd: '/home/ec2-user/ems/backend',
+      cwd: path.join(root, 'backend'),
       script: 'src/index.js',
       instances: 1,
       exec_mode: 'fork',
@@ -34,7 +36,7 @@ module.exports = {
     },
     {
       name: 'ems-frontend',
-      cwd: '/home/ec2-user/ems/frontend',
+      cwd: path.join(root, 'frontend'),
       script: 'node',
       args: 'node_modules/next/dist/bin/next start -p 3000',
       instances: 1,
