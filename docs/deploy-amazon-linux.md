@@ -222,29 +222,40 @@ npm run build
 
 ## 7) Start apps with PM2
 
-```bash
-cd /var/www/ems/backend
-pm2 start src/index.js --name ems-backend
-
-cd /var/www/ems/frontend
-pm2 start npm --name ems-frontend -- start
-```
-
-Save and enable startup on reboot:
+From the repo root (`/home/ec2-user/ems` or `/var/www/ems`):
 
 ```bash
+cd /home/ec2-user/ems
+
+# first time
+pm2 start ecosystem.config.js
+
+# after code updates
+pm2 reload ecosystem.config.js
+
 pm2 save
 pm2 startup
-# run the command PM2 prints (sudo env PATH=...)
+# run the sudo command PM2 prints
+
 pm2 status
 ```
+
+`ecosystem.config.js` starts both:
+
+| App | Port | Script |
+|-----|------|--------|
+| `ems-backend` | 4000 | `backend/src/index.js` |
+| `ems-frontend` | 3000 | Next.js `next start -p 3000` |
+
+If your clone path is different (e.g. `/var/www/ems`), edit the `cwd` values in `ecosystem.config.js` first.
 
 Useful checks:
 
 ```bash
 pm2 logs ems-backend --lines 50
 pm2 logs ems-frontend --lines 50
-curl -s http://127.0.0.1:4000/api/health || curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4000/api/
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4000/api/
+curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/
 ```
 
 ---
