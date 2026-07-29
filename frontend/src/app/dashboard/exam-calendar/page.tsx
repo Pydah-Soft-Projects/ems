@@ -130,19 +130,19 @@ export default function ExamCalendarPage() {
         action={
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <Button
-              tone="secondary"
+              variant="secondary"
               onClick={() => setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
             >
               Prev
             </Button>
             <Button
-              tone="secondary"
+              variant="secondary"
               onClick={() => setCursor(() => new Date())}
             >
               Today
             </Button>
             <Button
-              tone="secondary"
+              variant="secondary"
               onClick={() => setCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
             >
               Next

@@ -780,25 +780,9 @@ export const api = {
     if (params?.statementId) q.set('statementId', String(params.statementId));
     if (params?.matchStatus) q.set('matchStatus', params.matchStatus);
     const suffix = q.toString() ? `?${q}` : '';
-    return request<
-      {
-        id: number;
-        statementId: number;
-        fileName?: string;
-        sourceKind?: string;
-        utr: string | null;
-        merchantReference: string | null;
-        transactionReference: string | null;
-        amount: number;
-        txnDate: string | null;
-        payerName: string | null;
-        payerUpi: string | null;
-        matchStatus: string;
-        matchedPaymentId: number | null;
-        matchConfidence: string | null;
-        matchReason: string | null;
-      }[]
-    >(`/fees/self-online/statement-txns${suffix}`);
+    return request<import('@/types/self-online').SelfOnlineStatementTxn[]>(
+      `/fees/self-online/statement-txns${suffix}`,
+    );
   },
 
   async uploadSelfOnlineStatement(file: File, notes?: string) {
