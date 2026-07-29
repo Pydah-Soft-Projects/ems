@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
@@ -59,6 +59,8 @@ export default function UserManagementPage() {
   const [superOnly, setSuperOnly] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
   const [searchingHrms, setSearchingHrms] = useState(false);
+  const hrmsDebounceTimerRef = useRef<number | null>(null);
+  const hrmsLatestTokenRef = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -239,22 +241,62 @@ export default function UserManagementPage() {
     }
   }
 
-  async function searchHrms() {
-    setSearchingHrms(true);
-    setError('');
-    try {
-      const res = await api.searchHrmsUsers({
-        q: hrmsQuery,
-        limit: 30,
-        superAdminsOnly: superOnly,
-      });
-      setHrmsResults(res.items);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'HRMS search failed');
-    } finally {
-      setSearchingHrms(false);
-    }
-  }
+  const searchHrmsNow = useCallback(
+    async (q: string) => {
+      const query = String(q ?? '').trim();
+
+      // If we were waiting on debounce, cancel it because the user requested
+      // an immediate search.
+      if (hrmsDebounceTimerRef.current != null) {
+        clearTimeout(hrmsDebounceTimerRef.current);
+        hrmsDebounceTimerRef.current = null;
+      }
+
+      const token = ++hrmsLatestTokenRef.current;
+      setSearchingHrms(true);
+      setError('');
+
+      try {
+        const res = await api.searchHrmsUsers({
+          q: query,
+          limit: 30,
+          superAdminsOnly: superOnly,
+        });
+        // Latest-request-wins: ignore out-of-order responses.
+        if (token === hrmsLatestTokenRef.current) {
+          setHrmsResults(res.items);
+        }
+      } catch (err) {
+        if (token === hrmsLatestTokenRef.current) {
+          setError(
+            err instanceof ApiError ? err.message : 'HRMS search failed',
+          );
+        }
+      } finally {
+        if (token === hrmsLatestTokenRef.current) {
+          setSearchingHrms(false);
+        }
+      }
+    },
+    [superOnly],
+  );
+
+  useEffect(() => {
+    if (!userModal) return;
+
+    // Debounce HRMS search input so we don't hammer the API.
+    hrmsDebounceTimerRef.current = window.setTimeout(() => {
+      hrmsDebounceTimerRef.current = null;
+      void searchHrmsNow(hrmsQuery);
+    }, 400);
+
+    return () => {
+      if (hrmsDebounceTimerRef.current != null) {
+        clearTimeout(hrmsDebounceTimerRef.current);
+        hrmsDebounceTimerRef.current = null;
+      }
+    };
+  }, [userModal, hrmsQuery, searchHrmsNow]);
 
   function openNewUser(opts?: { superOnly?: boolean }) {
     setUserModal(true);
@@ -890,13 +932,13 @@ export default function UserManagementPage() {
                     value={hrmsQuery}
                     onChange={(e) => setHrmsQuery(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') void searchHrms();
+                      if (e.key === 'Enter') void searchHrmsNow(hrmsQuery);
                     }}
                     autoFocus
                   />
                   <Button
                     type="button"
-                    onClick={() => void searchHrms()}
+                    onClick={() => void searchHrmsNow(hrmsQuery)}
                     disabled={searchingHrms}
                   >
                     {searchingHrms ? 'Searching…' : 'Search'}
@@ -906,7 +948,9 @@ export default function UserManagementPage() {
                 <ul className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-slate-50/50 p-2">
                   {hrmsResults.length === 0 ? (
                     <li className="px-2 py-6 text-center text-sm text-[var(--muted)]">
-                      Enter an employee number to search HRMS.
+                      {searchingHrms
+                        ? 'Searching…'
+                        : 'Try employee #, name, or email.'}
                     </li>
                   ) : (
                     hrmsResults.map((u) => {

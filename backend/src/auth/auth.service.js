@@ -44,10 +44,12 @@ class AuthService {
   }
 
   buildStaffPayload(access) {
+    const username = access.email || access.employeeNumber || access.hrmsUserId;
     return {
       sub: access.hrmsUserId,
-      username: access.email,
-      email: access.email,
+      username,
+      email: access.email || null,
+      employeeNumber: access.employeeNumber || null,
       fullName: access.fullName,
       role: access.isSuperAdmin ? 'super_admin' : 'staff',
       emsRoleId: access.roleId,
@@ -69,10 +71,12 @@ class AuthService {
     if (!hrmsUser || !this.isUserActive(hrmsUser)) {
       return null;
     }
-    const email = this.normalizeEmail(hrmsUser.email);
+    const email = this.normalizeEmail(hrmsUser.email) || null;
     const hrmsUserId = hrmsUser._id.toString();
+    const employeeNumber =
+      String(hrmsUser.emp_no ?? hrmsUser.employeeId ?? '').trim() || null;
     const fullName =
-      hrmsUser.name || hrmsUser.employee_name || email || 'Staff';
+      hrmsUser.name || hrmsUser.employee_name || email || employeeNumber || 'Staff';
 
     if (this.isBootstrapEmail(email)) {
       if (this.users) {
@@ -82,6 +86,7 @@ class AuthService {
         hrmsUserId,
         hrmsSource,
         email,
+        employeeNumber,
         fullName,
         roleId: null,
         roleName: SYSTEM_SUPER_ADMIN_ROLE_NAME,
@@ -114,7 +119,8 @@ class AuthService {
     return {
       hrmsUserId,
       hrmsSource,
-      email: emsUser.email || email,
+      email: emsUser.email || email || null,
+      employeeNumber: emsUser.employeeNumber || employeeNumber,
       fullName: emsUser.fullName || fullName,
       roleId: role.id,
       roleName: role.name,
@@ -215,8 +221,9 @@ class AuthService {
       accessToken,
       user: {
         id: access.emsUserId ? String(access.emsUserId) : access.hrmsUserId,
-        username: access.email,
-        email: access.email,
+        username: access.email || access.employeeNumber || access.hrmsUserId,
+        email: access.email || null,
+        employeeNumber: access.employeeNumber || null,
         fullName: access.fullName,
         role: payload.role,
         emsRoleId: access.roleId,

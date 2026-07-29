@@ -116,7 +116,8 @@ function createApp(services) {
           ? String(req.user.emsUserId)
           : req.user.hrmsUserId,
         username: req.user.username,
-        email: req.user.email ?? req.user.username,
+        email: req.user.email || req.user.username,
+        employeeNumber: req.user.employeeNumber ?? null,
         fullName: req.user.fullName,
         role: req.user.role,
         emsRoleId: req.user.emsRoleId ?? null,

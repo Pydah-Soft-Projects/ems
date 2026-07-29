@@ -515,9 +515,18 @@ class UsersService {
     if (!hrms || !this.isHrmsUserActive(hrms)) {
       throw AppError.badRequest('HRMS employee/user not found or inactive');
     }
-    const email = this.normalizeEmail(hrms.email);
-    if (!email) throw AppError.badRequest('HRMS user has no email');
-    if (this.isBootstrapEmail(email)) {
+    const email = this.normalizeEmail(hrms.email) || null;
+    const empNo =
+      String(
+        (hrmsSource === 'employee' ? hrms.emp_no : hrms.employeeId) ?? '',
+      ).trim() || null;
+
+    if (!email && !empNo) {
+      throw AppError.badRequest(
+        'HRMS record has neither an email nor an employee number',
+      );
+    }
+    if (email && this.isBootstrapEmail(email)) {
       throw AppError.badRequest(
         `${BOOTSTRAP_SUPER_ADMIN_EMAIL} already has unrestricted EMS access and cannot be provisioned`,
       );
@@ -527,9 +536,11 @@ class UsersService {
     if (existingByHrms) {
       throw AppError.badRequest('This HRMS user is already provisioned in EMS');
     }
-    const existingByEmail = await this.findUserByEmail(email);
-    if (existingByEmail) {
-      throw AppError.badRequest('An EMS user with this email already exists');
+    if (email) {
+      const existingByEmail = await this.findUserByEmail(email);
+      if (existingByEmail) {
+        throw AppError.badRequest('An EMS user with this email already exists');
+      }
     }
 
     const role = await this.assertRoleAssignable(roleId, actor, {
@@ -559,13 +570,12 @@ class UsersService {
       this.userRepo.create({
         hrmsUserId,
         hrmsSource,
-        employeeNumber:
-          String(
-            (hrmsSource === 'employee' ? hrms.emp_no : hrms.employeeId) ?? '',
-          ).trim() || null,
+        employeeNumber: empNo,
         email,
         fullName:
-          (hrmsSource === 'employee' ? hrms.employee_name : hrms.name) || email,
+          (hrmsSource === 'employee' ? hrms.employee_name : hrms.name) ||
+          email ||
+          empNo,
         roleId: role.id,
         privileges: role.isSystemSuperAdmin ? [...ALL_PRIVILEGE_KEYS] : privileges,
         isActive: dto.isActive !== false,
@@ -778,10 +788,50 @@ class UsersService {
     const orgNames = await this.resolveOrgNames([
       ...employeeById.values(),
     ]);
+
+    // Compute whether linked HRMS `users` identities are already provisioned
+    // as EMS users. This lets us decide whether the duplicate `employee`
+    // identity should be hidden (UI disables `alreadyProvisioned` entries).
+    const candidateHrmsIds = [
+      ...users.map((u) => (u?._id ? String(u._id) : null)),
+      ...employees.map((e) => (e?._id ? String(e._id) : null)),
+    ].filter(Boolean);
+    const candidateHrmsEmails = [
+      ...users.map((u) => this.normalizeEmail(u?.email)),
+      ...employees.map((e) => this.normalizeEmail(e?.email)),
+    ].filter(Boolean);
+
+    const preExisting =
+      candidateHrmsIds.length > 0 || candidateHrmsEmails.length > 0
+        ? await this.userRepo
+            .createQueryBuilder('u')
+            .where(
+              [
+                candidateHrmsIds.length > 0 ? 'u.hrmsUserId IN (:...ids)' : null,
+                candidateHrmsEmails.length > 0
+                  ? 'LOWER(u.email) IN (:...emails)'
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' OR '),
+              { ids: candidateHrmsIds, emails: candidateHrmsEmails },
+            )
+            .getMany()
+        : [];
+
+    const preProvisionedIds = new Set(
+      preExisting.map(
+        (entry) => `${entry.hrmsSource || 'user'}:${entry.hrmsUserId}`,
+      ),
+    );
+    const preProvisionedEmails = new Set(
+      preExisting.map((entry) => this.normalizeEmail(entry.email)),
+    );
+
     const merged = [];
 
-    // Prefer a users-collection identity where both records represent the same
-    // person, because that is the canonical HRMS login account.
+    // Prefer the HRMS `users`-collection identity when it is selectable; otherwise,
+    // keep the `employees`-collection identity visible as a fallback.
     for (const user of users) {
       const linkedEmployee =
         employeeById.get(String(user.employeeRef ?? '')) ||
@@ -789,7 +839,22 @@ class UsersService {
         employeeByEmail.get(this.normalizeEmail(user.email)) ||
         null;
       if (linkedEmployee) {
-        representedEmployees.add(linkedEmployee._id.toString());
+        const userEmail = this.normalizeEmail(
+          user.email || linkedEmployee?.email,
+        );
+        const userAlreadyProvisioned =
+          preProvisionedIds.has(`user:${String(user._id)}`) ||
+          preProvisionedEmails.has(userEmail);
+
+        const linkedUserSelectable =
+          this.isHrmsUserActive(user) &&
+          // Bootstrap super admin accounts are not selectable in the UI.
+          !this.isBootstrapEmail(userEmail) &&
+          // Also treat “alreadyProvisioned” as unselectable.
+          !userAlreadyProvisioned;
+        if (linkedUserSelectable) {
+          representedEmployees.add(linkedEmployee._id.toString());
+        }
       }
       merged.push(
         this.sanitizeHrmsUser(user, 'user', linkedEmployee, orgNames),
@@ -803,7 +868,10 @@ class UsersService {
     const seen = new Set();
     let items = merged.filter((item) => {
       if (!item) return false;
-      const key = item.email || `${item.source}:${item.id}`;
+      // Dedupe by identity (source + id). Email can be shared between `user`
+      // and `employee` identities for the same person, but we still want both
+      // to be able to appear in the picker.
+      const key = `${item.source}:${item.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;

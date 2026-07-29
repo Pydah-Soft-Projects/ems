@@ -50,7 +50,7 @@ const EmsUser = new EntitySchema({
     /** Source HRMS collection: users or employees. */
     hrmsSource: { type: 'varchar', length: 20, default: 'user' },
     employeeNumber: { type: 'varchar', length: 60, nullable: true },
-    email: { type: 'varchar', length: 180 },
+    email: { type: 'varchar', length: 180, nullable: true },
     fullName: { type: 'varchar', length: 180, nullable: true },
     roleId: { type: 'int' },
     /**
