@@ -62,6 +62,15 @@ export default function UserManagementPage() {
   const hrmsDebounceTimerRef = useRef<number | null>(null);
   const hrmsLatestTokenRef = useRef(0);
 
+  // Edit user privileges (does not change HRMS/profile details)
+  const [editUserModal, setEditUserModal] = useState(false);
+  const [editTargetUser, setEditTargetUser] = useState<EmsUser | null>(null);
+  const [editRoleId, setEditRoleId] = useState<number | ''>('');
+  const [editPrivs, setEditPrivs] = useState<Set<string>>(new Set());
+  const [editPrivSearch, setEditPrivSearch] = useState('');
+  const [editSavingUser, setEditSavingUser] = useState(false);
+  const [editError, setEditError] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -135,6 +144,23 @@ export default function UserManagementPage() {
       }))
       .filter((group) => group.privileges.length > 0);
   }, [catalog, userPrivSearch]);
+
+  const filteredEditPrivilegeGroups = useMemo(() => {
+    const groups = catalog?.groups ?? [];
+    const q = editPrivSearch.trim().toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map((group) => ({
+        ...group,
+        privileges: group.privileges.filter(
+          (p) =>
+            p.label.toLowerCase().includes(q) ||
+            p.key.toLowerCase().includes(q) ||
+            group.label.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((group) => group.privileges.length > 0);
+  }, [catalog, editPrivSearch]);
 
   function openNewRole() {
     setRoleModal('new');
@@ -339,6 +365,94 @@ export default function UserManagementPage() {
       setError(err instanceof ApiError ? err.message : 'Failed to create user');
     } finally {
       setSavingUser(false);
+    }
+  }
+
+  function openEditUser(user: EmsUser) {
+    if (user.role?.isSystemSuperAdmin) {
+      toast.push('System Super Admin role cannot be edited', 'danger');
+      return;
+    }
+    setEditTargetUser(user);
+    setEditRoleId(user.roleId ?? '');
+    setEditPrivs(new Set(user.privileges ?? []));
+    setEditPrivSearch('');
+    setEditError('');
+    setEditSavingUser(false);
+    setEditUserModal(true);
+  }
+
+  function toggleEditPrivilege(key: string, checked: boolean) {
+    setEditPrivs((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
+
+  function setEditGroupPrivileges(keys: string[], checked: boolean) {
+    setEditPrivs((prev) => {
+      const next = new Set(prev);
+      for (const key of keys) {
+        if (checked) next.add(key);
+        else next.delete(key);
+      }
+      return next;
+    });
+  }
+
+  function applyEditRoleTemplate(roleId: number | '') {
+    setEditRoleId(roleId);
+    if (!roleId) {
+      setEditPrivs(new Set());
+      return;
+    }
+    const role = roles.find((r) => r.id === roleId);
+    if (!role || role.isSystemSuperAdmin) {
+      setEditPrivs(new Set(role?.privileges ?? []));
+      return;
+    }
+    setEditPrivs(new Set(role.privileges));
+  }
+
+  async function saveEditedUser() {
+    if (!editTargetUser) return;
+    if (!editRoleId) {
+      setEditError('Select an EMS role');
+      return;
+    }
+    if (!Number(editRoleId)) {
+      setEditError('Invalid role selection');
+      return;
+    }
+    const role = roles.find((r) => r.id === Number(editRoleId));
+    if (!role) {
+      setEditError('Role not found');
+      return;
+    }
+    if (!role.isSystemSuperAdmin && editPrivs.size === 0) {
+      setEditError('Select at least one privilege.');
+      return;
+    }
+
+    setEditSavingUser(true);
+    setEditError('');
+    try {
+      await api.updateEmsUser(editTargetUser.id, {
+        roleId: Number(editRoleId),
+        privileges: [...editPrivs],
+      });
+      toast.push('User updated');
+      setEditUserModal(false);
+      setEditTargetUser(null);
+      await load();
+    } catch (err) {
+      setEditError(
+        err instanceof ApiError ? err.message : 'Failed to update user',
+      );
+    } finally {
+      setEditSavingUser(false);
     }
   }
 
@@ -604,14 +718,26 @@ export default function UserManagementPage() {
                       </td>
                       <td className="px-4 py-3">
                         {canWriteUsers ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => void toggleUserActive(user)}
-                          >
-                            {user.isActive ? 'Deactivate' : 'Activate'}
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            {user.role?.isSystemSuperAdmin ? null : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => openEditUser(user)}
+                              >
+                                Edit
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void toggleUserActive(user)}
+                            >
+                              {user.isActive ? 'Deactivate' : 'Activate'}
+                            </Button>
+                          </div>
                         ) : (
                           '—'
                         )}
@@ -865,6 +991,246 @@ export default function UserManagementPage() {
                     : roleModal === 'new'
                       ? 'Create role'
                       : 'Save changes'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Edit user privileges modal */}
+      {editUserModal && editTargetUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-[var(--border)] px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Edit user privileges
+                </h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {editTargetUser.fullName || editTargetUser.email} · update
+                  only role + privileges (no HRMS/profile changes)
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setEditUserModal(false)}
+                className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  className="h-5 w-5"
+                >
+                  <path d="M5 5l10 10M15 5L5 15" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-2">
+              <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-b border-[var(--border)] p-5 lg:border-b-0 lg:border-r">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    Selected user
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    Read-only profile context
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] bg-white p-4">
+                  <dl className="grid gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] font-medium text-[var(--muted)]">
+                        Name
+                      </dt>
+                      <dd className="text-sm font-semibold text-slate-900">
+                        {editTargetUser.fullName || '—'}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-[11px] font-medium text-[var(--muted)]">
+                        Email / employee number
+                      </dt>
+                      <dd className="text-sm font-medium text-slate-800 break-all">
+                        {editTargetUser.email}
+                        {editTargetUser.employeeNumber
+                          ? ` · #${editTargetUser.employeeNumber}`
+                          : ''}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-medium text-[var(--muted)]">
+                        Current role
+                      </dt>
+                      <dd className="text-sm font-medium text-slate-800">
+                        {editTargetUser.role?.name ?? '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-medium text-[var(--muted)]">
+                        Status
+                      </dt>
+                      <dd className="text-sm font-medium text-slate-800">
+                        {editTargetUser.isActive ? 'Active' : 'Inactive'}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="rounded-xl border border-[var(--border)] bg-white p-4">
+                  <label className="block text-sm">
+                    <span className="font-medium text-slate-700">
+                      EMS role
+                    </span>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-[var(--border)] px-3 py-2 outline-none transition focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                      value={editRoleId}
+                      onChange={(e) =>
+                        applyEditRoleTemplate(
+                          e.target.value
+                            ? parseInt(e.target.value, 10)
+                            : '',
+                        )
+                      }
+                    >
+                      <option value="">Select role…</option>
+                      {assignableRoles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="mt-2 text-xs text-[var(--muted)]">
+                    Role selection pre-fills privileges from that role
+                    template; you can still tick/untick below.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex min-h-0 flex-col gap-3 overflow-y-auto bg-slate-50/40 p-5">
+                {editError ? <Alert tone="danger">{editError}</Alert> : null}
+
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    User privileges
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    These privileges are what runtime access uses.
+                  </p>
+                </div>
+
+                <input
+                  className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20"
+                  placeholder="Search privileges…"
+                  value={editPrivSearch}
+                  onChange={(e) => setEditPrivSearch(e.target.value)}
+                />
+
+                <div className="space-y-1.5">
+                  {filteredEditPrivilegeGroups.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-[var(--border)] bg-white px-4 py-8 text-center text-sm text-[var(--muted)]">
+                      No privileges match your search.
+                    </p>
+                  ) : (
+                    filteredEditPrivilegeGroups.map((group) => {
+                      const keys = group.privileges.map((p) => p.key);
+                      const selectedCount = keys.filter((k) =>
+                        editPrivs.has(k),
+                      ).length;
+                      const allSelected =
+                        keys.length > 0 && selectedCount === keys.length;
+                      return (
+                        <div
+                          key={group.id}
+                          className={`overflow-hidden rounded-xl border ${
+                            selectedCount > 0
+                              ? 'border-[var(--primary)]/40 bg-[var(--primary)]/[0.03]'
+                              : 'border-[var(--border)] bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between px-3 py-2">
+                            <p className="text-sm font-semibold text-slate-800">
+                              {group.label}
+                            </p>
+                            <button
+                              type="button"
+                              className="text-xs font-semibold text-[var(--primary)] hover:underline"
+                              onClick={() => setEditGroupPrivileges(keys, !allSelected)}
+                            >
+                              {allSelected ? 'Clear all' : 'Select all'}
+                            </button>
+                          </div>
+                          <div className="grid gap-1 border-t border-[var(--border)]/70 px-3 py-3 sm:grid-cols-2">
+                            {group.privileges.map((p) => {
+                              const checked = editPrivs.has(p.key);
+                              return (
+                                <label
+                                  key={p.key}
+                                  className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-sm transition ${
+                                    checked
+                                      ? 'border-[var(--primary)]/50 bg-[var(--primary)]/[0.06]'
+                                      : 'border-transparent hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+                                    checked={checked}
+                                    onChange={(e) =>
+                                      toggleEditPrivilege(p.key, e.target.checked)
+                                    }
+                                  />
+                                  <span>
+                                    <span className="font-medium text-slate-800">
+                                      {p.label}
+                                    </span>
+                                    <span className="block font-mono text-[10px] text-[var(--muted)]">
+                                      {p.key}
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] bg-slate-50 px-6 py-4">
+              <p className="text-xs text-[var(--muted)]">
+                {editRoleId ? (
+                  <>
+                    {editPrivs.size} privilege{editPrivs.size === 1 ? '' : 's'}
+                    selected
+                  </>
+                ) : (
+                  'Select a role to continue.'
+                )}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setEditUserModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void saveEditedUser()}
+                  disabled={editSavingUser}
+                >
+                  {editSavingUser ? 'Saving…' : 'Save changes'}
                 </Button>
               </div>
             </div>
