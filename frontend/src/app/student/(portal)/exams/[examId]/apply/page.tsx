@@ -112,22 +112,23 @@ export default function StudentExamApplyPage({
   );
 
   const liveTotal = useMemo(() => {
-    if (!detail) return 0;
-    const ids = [...selected];
-    if (ids.length === 0) return 0;
-    const sum = subjects
-      .filter((s) => ids.includes(s.subjectId))
-      .reduce((acc, s) => acc + Number(s.fee), 0);
-    const allSelected =
-      ids.length === subjects.length &&
-      subjects.every((s) => ids.includes(s.subjectId));
-    const pkg = detail.exam.packageFee != null ? Number(detail.exam.packageFee) : null;
-    // Package fee is the flat bundle price when all papers are selected.
-    if (allSelected && pkg != null && !Number.isNaN(pkg)) {
-      return pkg;
+    if (!detail || !enrollType) return 0;
+    const tiers = detail.exam.supplyFeeByCount ?? null;
+    const pkg =
+      detail.exam.packageFee != null ? Number(detail.exam.packageFee) : null;
+    if (enrollType === 'regular') {
+      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
     }
-    return sum;
-  }, [detail, selected, subjects]);
+    const n = selected.size;
+    if (n < 1) return 0;
+    // All papers selected → package fee (tiers are only 1…N−1).
+    if (n === subjects.length && subjects.every((s) => selected.has(s.subjectId))) {
+      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
+    }
+    if (!Array.isArray(tiers) || tiers.length < n) return 0;
+    const amount = Number(tiers[n - 1]);
+    return Number.isNaN(amount) ? 0 : amount;
+  }, [detail, enrollType, selected, subjects]);
 
   const split = useMemo(
     () =>
@@ -138,6 +139,7 @@ export default function StudentExamApplyPage({
   );
 
   function toggleSubject(id: number) {
+    if (enrollType === 'regular') return;
     if (!selectableSubjects.some((s) => s.subjectId === id)) return;
     setSelected((prev) => {
       const next = new Set(prev);
@@ -148,6 +150,7 @@ export default function StudentExamApplyPage({
   }
 
   function toggleAll(on: boolean) {
+    if (enrollType === 'regular') return;
     if (on) setSelected(new Set(selectableSubjects.map((s) => s.subjectId)));
     else setSelected(new Set());
   }
@@ -503,6 +506,7 @@ export default function StudentExamApplyPage({
               <h2 className="text-base font-semibold text-slate-900">
                 Subjects
               </h2>
+              {enrollType !== 'regular' ? (
               <div className="flex gap-2 text-xs">
                 <button
                   type="button"
@@ -519,28 +523,38 @@ export default function StudentExamApplyPage({
                   Clear
                 </button>
               </div>
+              ) : null}
             </div>
             <p className="mb-3 text-xs text-[var(--muted)]">
-              {enrollType === 'supply'
-                ? 'Only subjects whose latest result is failed can be selected. Passed subjects are disabled.'
-                : 'All selected by default. Deselect any you are not applying for.'}
-              {exam.packageFee != null &&
-              selectableSubjects.length === subjects.length
-                ? ` Package fee applies when all subjects are selected (₹${exam.packageFee}).`
+              {enrollType === 'regular'
+                ? 'Regular enrollment includes all papers. Fee is the package amount for your branch.'
+                : enrollType === 'supply'
+                  ? 'Only subjects whose latest result is failed can be selected. Fee is by count (1…N−1); selecting all papers uses the package fee.'
+                  : 'Select the papers you are applying for. Fee is by count (1…N−1); selecting all papers uses the package fee.'}
+              {enrollType === 'regular' && exam.packageFee != null
+                ? ` Package fee: ₹${exam.packageFee}.`
+                : ''}
+              {enrollType !== 'regular' &&
+              Array.isArray(exam.supplyFeeByCount) &&
+              exam.supplyFeeByCount.length > 0
+                ? ` Schedule: ${exam.supplyFeeByCount
+                    .map((a, i) => `${i + 1}=₹${a}`)
+                    .join(', ')}.`
                 : ''}
             </p>
             <ul className="space-y-2">
               {subjects.map((s) => {
                 const supplyDisabled =
                   enrollType === 'supply' && !s.supplyStatus?.eligible;
+                const regularLocked = enrollType === 'regular';
                 return (
                 <li key={s.subjectId}>
-                  <label className={`flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm ${supplyDisabled ? 'cursor-not-allowed bg-slate-50 opacity-70' : ''}`}>
+                  <label className={`flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm ${supplyDisabled || regularLocked ? 'cursor-not-allowed bg-slate-50 opacity-70' : ''}`}>
                     <span className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={selected.has(s.subjectId)}
-                        disabled={supplyDisabled}
+                        disabled={supplyDisabled || regularLocked}
                         onChange={() => toggleSubject(s.subjectId)}
                       />
                       <span>
@@ -569,9 +583,6 @@ export default function StudentExamApplyPage({
                         )}
                       </span>
                     </span>
-                    <span className="tabular-nums text-[var(--muted)]">
-                      {money(s.fee)}
-                    </span>
                   </label>
                 </li>
                 );
@@ -579,6 +590,9 @@ export default function StudentExamApplyPage({
             </ul>
             <p className="mt-4 text-right text-sm font-semibold text-slate-900">
               Estimated fee: {money(liveTotal)}
+              {enrollType !== 'regular' && selected.size > 0
+                ? ` (${selected.size} subject${selected.size === 1 ? '' : 's'})`
+                : ''}
             </p>
           </section>
 

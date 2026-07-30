@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+npm-debug.log*
+.env
+.env.*
+!.env.example
+!.env.local.example
+*.md
+.git
+.gitignore
+Dockerfile
+.dockerignore
+AGENTS.md
+CLAUDE.md
+tsconfig.tsbuildinfo

@@ -247,6 +247,7 @@ class ExamService {
             }
             return {
                 ...s,
+                fee: Number.isFinite(Number(s.fee)) && Number(s.fee) >= 0 ? Number(s.fee) : 0,
                 examDate,
                 branch,
                 section,
@@ -312,6 +313,118 @@ class ExamService {
                 return Number(branchWide.amount);
         }
         return exam.packageFee != null ? Number(exam.packageFee) : null;
+    }
+    /** Supply / improvement / special_supply use count-tier fees + subject pick. */
+    isCountBasedExamType(examType) {
+        return (examType === ExamType.SUPPLY ||
+            examType === ExamType.IMPROVEMENT ||
+            examType === ExamType.SPECIAL_SUPPLY);
+    }
+    /**
+     * Normalizes default supply fee tiers: [feeFor1, feeFor2, ...].
+     * When requiredLength is set, the array must match that length.
+     */
+    normalizeSupplyFeeByCount(raw, { required = false, requiredLength } = {}) {
+        if (raw == null || raw === '') {
+            if (required) {
+                throw AppError.badRequest('Supply fee schedule (by subject count) is required');
+            }
+            return null;
+        }
+        if (!Array.isArray(raw)) {
+            throw AppError.badRequest('supplyFeeByCount must be an array');
+        }
+        if (raw.length === 0) {
+            if (required) {
+                throw AppError.badRequest('Supply fee schedule must include at least one tier');
+            }
+            return null;
+        }
+        if (requiredLength != null && raw.length !== requiredLength) {
+            throw AppError.badRequest(`Supply fee schedule must have exactly ${requiredLength} tier(s) (1…${requiredLength} subjects)`);
+        }
+        const fees = raw.map((value, index) => {
+            const amount = Number(value);
+            if (Number.isNaN(amount) || amount < 0) {
+                throw AppError.badRequest(`Supply fee for ${index + 1} subject(s) must be a non-negative number`);
+            }
+            return amount;
+        });
+        return fees;
+    }
+    /**
+     * Normalizes per-branch supply fee overrides:
+     * [{ branch, feesByCount: number[] }].
+     */
+    normalizeSupplyFeesByBranch(raw, branches, { defaultLength } = {}) {
+        if (raw == null || raw === '')
+            return null;
+        if (!Array.isArray(raw)) {
+            throw AppError.badRequest('supplyFeesByBranch must be an array');
+        }
+        const branchSet = new Set(branches.map((b) => b.trim().toLowerCase()));
+        const seen = new Set();
+        const rows = [];
+        for (const entry of raw) {
+            const branch = (entry?.branch ?? '').trim();
+            if (!branch) {
+                throw AppError.badRequest('Each supply fee branch override needs a branch');
+            }
+            if (!branchSet.has(branch.toLowerCase())) {
+                throw AppError.badRequest(`Supply fee branch "${branch}" is not in the exam scope`);
+            }
+            const key = branch.toLowerCase();
+            if (seen.has(key)) {
+                throw AppError.badRequest(`Duplicate supply fee schedule for branch ${branch}`);
+            }
+            seen.add(key);
+            const feesByCount = this.normalizeSupplyFeeByCount(entry.feesByCount, {
+                required: true,
+                requiredLength: defaultLength,
+            });
+            rows.push({ branch, feesByCount });
+        }
+        return rows.length ? rows : null;
+    }
+    /**
+     * Supply fee tiers for a student's branch: branch override → exam default.
+     */
+    supplyFeeForScope(exam, branch) {
+        const overrides = Array.isArray(exam.supplyFeesByBranch)
+            ? exam.supplyFeesByBranch
+            : [];
+        const b = (branch ?? '').trim().toLowerCase();
+        if (b) {
+            const match = overrides.find((f) => (f.branch ?? '').trim().toLowerCase() === b);
+            if (match && Array.isArray(match.feesByCount) && match.feesByCount.length > 0) {
+                return match.feesByCount.map((n) => Number(n));
+            }
+        }
+        if (Array.isArray(exam.supplyFeeByCount) && exam.supplyFeeByCount.length > 0) {
+            return exam.supplyFeeByCount.map((n) => Number(n));
+        }
+        return null;
+    }
+    maxSubjectCountAcrossBranches(examSubjects, branches) {
+        let max = 0;
+        for (const branch of branches) {
+            const ids = new Set(this.examSubjectsForBranch({ examSubjects }, branch, null).map((es) => es.subjectId));
+            if (ids.size > max)
+                max = ids.size;
+        }
+        if (max === 0 && Array.isArray(examSubjects)) {
+            max = new Set(examSubjects.map((es) => es.subjectId)).size;
+        }
+        return max;
+    }
+    /** Supply tiers cover 1 … (N − 1) papers; N = max papers on the exam. */
+    supplyTierCountFromMaxPapers(maxPapers) {
+        const n = Number(maxPapers) || 0;
+        if (n <= 0)
+            return 0;
+        if (n === 1)
+            return 1;
+        return n - 1;
     }
     assertSubjectDatesInWindow(subjects, examinationStartDate, examinationEndDate) {
         for (const s of subjects) {
@@ -415,6 +528,32 @@ class ExamService {
         this.validateDates(dto);
         const subjectFees = this.normalizeSubjectFees(dto.subjects);
         this.assertSubjectDatesInWindow(subjectFees, dto.examinationStartDate, dto.examinationEndDate);
+        const allowsRegular = allowedTypes.includes(ExamType.REGULAR);
+        const allowsSupply = allowedTypes.some((t) => this.isCountBasedExamType(t));
+        const packageFees = this.normalizePackageFees(dto.packageFees, uniqueBranches);
+        const packageFee = dto.packageFee != null && dto.packageFee !== ''
+            ? Number(dto.packageFee)
+            : null;
+        if (allowsRegular) {
+            const hasDefault = packageFee != null && !Number.isNaN(packageFee) && packageFee >= 0;
+            const hasScoped = Array.isArray(packageFees) && packageFees.length > 0;
+            if (!hasDefault && !hasScoped) {
+                throw AppError.badRequest('Package fee is required when Regular enrollment is allowed');
+            }
+        }
+        const maxSupplyTiers = this.supplyTierCountFromMaxPapers(this.maxSubjectCountAcrossBranches(subjectFees.map((s) => ({
+            ...s,
+            subjectId: s.subjectId,
+        })), uniqueBranches));
+        const supplyFeeByCount = this.normalizeSupplyFeeByCount(dto.supplyFeeByCount, {
+            required: allowsSupply,
+            requiredLength: allowsSupply ? Math.max(maxSupplyTiers, 1) : undefined,
+        });
+        const supplyFeesByBranch = allowsSupply
+            ? this.normalizeSupplyFeesByBranch(dto.supplyFeesByBranch, uniqueBranches, {
+                defaultLength: supplyFeeByCount?.length,
+            })
+            : null;
         const primaryBranch = scopeRows[0].branch;
         const branchSummary = uniqueBranches.length === 1
             ? uniqueBranches[0]
@@ -430,8 +569,10 @@ class ExamService {
             batch: dto.batch,
             yearOfStudy: dto.yearOfStudy,
             semester: dto.semester,
-            packageFee: dto.packageFee,
-            packageFees: this.normalizePackageFees(dto.packageFees, uniqueBranches),
+            packageFee,
+            packageFees,
+            supplyFeeByCount,
+            supplyFeesByBranch,
             examinationStartDate: dto.examinationStartDate,
             examinationEndDate: dto.examinationEndDate,
             applicationStartDate: dto.applicationStartDate,
@@ -544,6 +685,50 @@ class ExamService {
             exam.allowedTypes = allowed;
             exam.type = allowed[0];
         }
+        const nextAllowed = this.getAllowedTypes(exam);
+        const scopeBranches = exam.scopes?.length
+            ? [...new Set(exam.scopes.map((s) => s.branch))]
+            : [exam.branch];
+        const nextPackageFees = dto.packageFees !== undefined
+            ? this.normalizePackageFees(dto.packageFees, scopeBranches)
+            : exam.packageFees;
+        const nextPackageFee = dto.packageFee !== undefined
+            ? (dto.packageFee != null && dto.packageFee !== ''
+                ? Number(dto.packageFee)
+                : null)
+            : exam.packageFee;
+        if (nextAllowed.includes(ExamType.REGULAR)) {
+            const hasDefault = nextPackageFee != null &&
+                !Number.isNaN(Number(nextPackageFee)) &&
+                Number(nextPackageFee) >= 0;
+            const hasScoped = Array.isArray(nextPackageFees) && nextPackageFees.length > 0;
+            if (!hasDefault && !hasScoped) {
+                throw AppError.badRequest('Package fee is required when Regular enrollment is allowed');
+            }
+        }
+        let nextSupplyFeeByCount = exam.supplyFeeByCount;
+        let nextSupplyFeesByBranch = exam.supplyFeesByBranch;
+        const allowsSupply = nextAllowed.some((t) => this.isCountBasedExamType(t));
+        if (dto.supplyFeeByCount !== undefined ||
+            dto.supplyFeesByBranch !== undefined ||
+            allowsSupply) {
+            const maxSupplyTiers = this.supplyTierCountFromMaxPapers(this.maxSubjectCountAcrossBranches(exam.examSubjects, scopeBranches));
+            nextSupplyFeeByCount = this.normalizeSupplyFeeByCount(dto.supplyFeeByCount !== undefined
+                ? dto.supplyFeeByCount
+                : exam.supplyFeeByCount, {
+                required: allowsSupply,
+                requiredLength: allowsSupply ? Math.max(maxSupplyTiers, 1) : undefined,
+            });
+            nextSupplyFeesByBranch = this.normalizeSupplyFeesByBranch(dto.supplyFeesByBranch !== undefined
+                ? dto.supplyFeesByBranch
+                : exam.supplyFeesByBranch, scopeBranches, {
+                defaultLength: nextSupplyFeeByCount?.length,
+            });
+        }
+        if (!allowsSupply) {
+            nextSupplyFeeByCount = null;
+            nextSupplyFeesByBranch = null;
+        }
         Object.assign(exam, {
             name: dto.name ?? exam.name,
             type: exam.type,
@@ -554,12 +739,10 @@ class ExamService {
             batch: dto.batch ?? exam.batch,
             yearOfStudy: dto.yearOfStudy ?? exam.yearOfStudy,
             semester: dto.semester ?? exam.semester,
-            packageFee: dto.packageFee ?? exam.packageFee,
-            packageFees: dto.packageFees !== undefined
-                ? this.normalizePackageFees(dto.packageFees, exam.scopes?.length
-                    ? [...new Set(exam.scopes.map((s) => s.branch))]
-                    : [exam.branch])
-                : exam.packageFees,
+            packageFee: nextPackageFee,
+            packageFees: nextPackageFees,
+            supplyFeeByCount: nextSupplyFeeByCount,
+            supplyFeesByBranch: nextSupplyFeesByBranch,
             examinationStartDate: dto.examinationStartDate ?? exam.examinationStartDate,
             examinationEndDate: dto.examinationEndDate ?? exam.examinationEndDate,
             applicationStartDate: dto.applicationStartDate ?? exam.applicationStartDate,
@@ -1181,6 +1364,7 @@ class ExamService {
                 examinationStartDate: exam.examinationStartDate,
                 examinationEndDate: exam.examinationEndDate,
                 packageFee: this.packageFeeForScope(exam, student.branch, student.section),
+                supplyFeeByCount: this.supplyFeeForScope(exam, student.branch),
                 subjectCount: this.examSubjectsForBranch(exam, student.branch, student.section).length,
                 alreadyApplied: openTypes.length === 0,
                 openTypes,
@@ -1243,6 +1427,7 @@ class ExamService {
                 yearOfStudy: exam.yearOfStudy,
                 semester: exam.semester,
                 packageFee: this.packageFeeForScope(exam, student.branch, student.section),
+                supplyFeeByCount: this.supplyFeeForScope(exam, student.branch),
                 applicationStartDate: exam.applicationStartDate,
                 applicationEndDate: exam.applicationEndDate,
                 examinationStartDate: exam.examinationStartDate,
@@ -1314,29 +1499,44 @@ class ExamService {
         // (and section, when papers are section-specific).
         const branchSubjects = this.examSubjectsForBranch(exam, student.branch, student.section);
         let allowedSubjects = branchSubjects;
-        if (examType === ExamType.SUPPLY) {
+        if (this.isCountBasedExamType(examType)) {
             const supplyStatuses = await this.supplyResultStatus(exam, roll, branchSubjects);
-            allowedSubjects = branchSubjects.filter((es) => supplyStatuses.get(es.subjectId)?.eligible);
-            if (allowedSubjects.length === 0) {
-                throw AppError.badRequest('You have no failed subjects eligible for Supply in this semester');
+            // Supply: only failed papers. Improvement/special_supply: keep all scope papers
+            // until those flows define their own filters (same selection UI as supply).
+            if (examType === ExamType.SUPPLY) {
+                allowedSubjects = branchSubjects.filter((es) => supplyStatuses.get(es.subjectId)?.eligible);
+                if (allowedSubjects.length === 0) {
+                    throw AppError.badRequest('You have no failed subjects eligible for Supply in this semester');
+                }
             }
         }
         const allIds = [...new Set(allowedSubjects.map((es) => es.subjectId))];
-        const requestedIds = dto.selectedSubjectIds ?? [];
-        const invalidIds = requestedIds.filter((id) => !allIds.includes(id));
-        if (invalidIds.length > 0) {
-            throw AppError.badRequest(examType === ExamType.SUPPLY
-                ? 'Supply applications may include only subjects whose latest result is not passed'
-                : `Subject ${invalidIds[0]} is not part of this exam`);
-        }
-        let selectedSubjectIds = [...new Set(requestedIds)];
-        if (selectedSubjectIds.length === 0) {
+        let selectedSubjectIds;
+        if (examType === ExamType.REGULAR) {
+            // Regular: no subject selection — enroll for every paper in scope.
             selectedSubjectIds = [...allIds];
+        }
+        else {
+            const requestedIds = dto.selectedSubjectIds ?? [];
+            const invalidIds = requestedIds.filter((id) => !allIds.includes(id));
+            if (invalidIds.length > 0) {
+                throw AppError.badRequest(examType === ExamType.SUPPLY
+                    ? 'Supply applications may include only subjects whose latest result is not passed'
+                    : `Subject ${invalidIds[0]} is not part of this exam`);
+            }
+            selectedSubjectIds = [...new Set(requestedIds)];
+            if (selectedSubjectIds.length === 0) {
+                selectedSubjectIds = [...allIds];
+            }
         }
         if (selectedSubjectIds.length === 0) {
             throw AppError.badRequest('No subjects available for this examination');
         }
-        const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds, branchSubjects, this.packageFeeForScope(exam, student.branch, student.section));
+        const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds, branchSubjects, {
+            examType,
+            packageFee: this.packageFeeForScope(exam, student.branch, student.section),
+            supplyFeesByCount: this.supplyFeeForScope(exam, student.branch),
+        });
         // Save the fee and application atomically. The database uniqueness
         // constraint prevents concurrent Regular/Supply submissions for one
         // student on the same examination.
@@ -1559,8 +1759,16 @@ class ExamService {
                 return branchFeeCache.get(key);
             const subjects = this.examSubjectsForBranch(exam, branch, section);
             const ids = [...new Set(subjects.map((es) => es.subjectId))];
+            const allowed = this.getAllowedTypes(exam);
+            const estimateType = allowed.includes(ExamType.REGULAR)
+                ? ExamType.REGULAR
+                : allowed.find((t) => this.isCountBasedExamType(t)) ?? allowed[0];
             const fee = ids.length
-                ? this.calculateFee(exam, ids, subjects, this.packageFeeForScope(exam, branch, section)).baseFee
+                ? this.calculateFee(exam, ids, subjects, {
+                    examType: estimateType,
+                    packageFee: this.packageFeeForScope(exam, branch, section),
+                    supplyFeesByCount: this.supplyFeeForScope(exam, branch),
+                }).baseFee
                 : 0;
             branchFeeCache.set(key, fee);
             return fee;
@@ -1633,7 +1841,7 @@ class ExamService {
             byScope: Array.from(buckets.values()).sort((a, b) => `${a.course}${a.branch}`.localeCompare(`${b.course}${b.branch}`)),
         };
     }
-    calculateFee(exam, selectedSubjectIds, scopeSubjects, packageFeeOverride) {
+    calculateFee(exam, selectedSubjectIds, scopeSubjects, optionsOrPackage) {
         const pool = scopeSubjects ?? exam.examSubjects;
         const allExamSubjectIds = [...new Set(pool.map((es) => es.subjectId))];
         for (const sid of selectedSubjectIds) {
@@ -1641,37 +1849,87 @@ class ExamService {
                 throw AppError.badRequest(`Subject ${sid} is not part of this exam`);
             }
         }
-        const seen = new Set();
-        const breakdown = pool
-            .filter((es) => {
-            if (!selectedSubjectIds.includes(es.subjectId) || seen.has(es.subjectId)) {
-                return false;
-            }
-            seen.add(es.subjectId);
-            return true;
-        })
-            .map((es) => ({
-            subjectId: es.subjectId,
-            subjectCode: es.subject?.code ?? String(es.subjectId),
-            fee: Number(es.fee),
-        }));
-        const subjectWiseTotal = breakdown.reduce((sum, b) => sum + b.fee, 0);
-        // Package fee applies when the student takes every paper in their scope
-        // (their branch's papers, not the union across all branches).
-        const allSelected = selectedSubjectIds.length === allExamSubjectIds.length &&
-            allExamSubjectIds.every((sid) => selectedSubjectIds.includes(sid));
-        let baseFee = subjectWiseTotal;
-        const packageFee = packageFeeOverride !== undefined
-            ? packageFeeOverride
+        const uniqueSelected = [...new Set(selectedSubjectIds)];
+        // Support legacy 4th arg: packageFeeOverride number|null
+        const options = typeof optionsOrPackage === 'number' || optionsOrPackage === null
+            ? { packageFee: optionsOrPackage }
+            : optionsOrPackage && typeof optionsOrPackage === 'object'
+                ? optionsOrPackage
+                : {};
+        const examType = options.examType ??
+            (Array.isArray(exam.allowedTypes) && exam.allowedTypes[0]) ??
+            exam.type ??
+            ExamType.REGULAR;
+        const packageFee = options.packageFee !== undefined
+            ? options.packageFee
             : exam.packageFee != null
                 ? Number(exam.packageFee)
                 : null;
-        // Package fee is the flat bundle price when every paper is selected —
-        // it replaces the subject-wise total (whether lower or higher).
-        if (allSelected && packageFee != null && !Number.isNaN(packageFee)) {
-            baseFee = packageFee;
+        const supplyFeesByCount = options.supplyFeesByCount !== undefined
+            ? options.supplyFeesByCount
+            : Array.isArray(exam.supplyFeeByCount)
+                ? exam.supplyFeeByCount.map((n) => Number(n))
+                : null;
+        if (this.isCountBasedExamType(examType)) {
+            const n = uniqueSelected.length;
+            if (n < 1) {
+                throw AppError.badRequest('Select at least one subject');
+            }
+            const allSelected = n === allExamSubjectIds.length &&
+                allExamSubjectIds.every((sid) => uniqueSelected.includes(sid));
+            // Selecting every paper in scope uses the package fee (tiers are 1…N−1 only).
+            if (allSelected) {
+                if (packageFee == null || Number.isNaN(Number(packageFee))) {
+                    throw AppError.badRequest('Package fee is required when all subjects are selected');
+                }
+                const baseFee = Number(packageFee);
+                return {
+                    breakdown: [
+                        {
+                            subjectId: 0,
+                            subjectCode: 'Package fee (all subjects)',
+                            fee: baseFee,
+                        },
+                    ],
+                    baseFee,
+                };
+            }
+            if (!Array.isArray(supplyFeesByCount) || supplyFeesByCount.length === 0) {
+                throw AppError.badRequest('Supply fee schedule is not configured for this examination');
+            }
+            if (n > supplyFeesByCount.length) {
+                throw AppError.badRequest(`Fee is not configured for ${n} subject(s) (schedule covers 1–${supplyFeesByCount.length}; all subjects use package fee)`);
+            }
+            const baseFee = Number(supplyFeesByCount[n - 1]);
+            if (Number.isNaN(baseFee) || baseFee < 0) {
+                throw AppError.badRequest(`Invalid supply fee for ${n} subject(s)`);
+            }
+            return {
+                breakdown: [
+                    {
+                        subjectId: 0,
+                        subjectCode: `${n} subject${n === 1 ? '' : 's'}`,
+                        fee: baseFee,
+                    },
+                ],
+                baseFee,
+            };
         }
-        return { breakdown, baseFee };
+        // Regular (and any non-count type): flat package fee.
+        if (packageFee == null || Number.isNaN(Number(packageFee))) {
+            throw AppError.badRequest('Package fee is required for Regular enrollment');
+        }
+        const baseFee = Number(packageFee);
+        return {
+            breakdown: [
+                {
+                    subjectId: 0,
+                    subjectCode: 'Regular package',
+                    fee: baseFee,
+                },
+            ],
+            baseFee,
+        };
     }
     async generateFees(examId, students) {
         const exam = await this.findOne(examId);
@@ -1688,10 +1946,15 @@ class ExamService {
             }
             const selectedSubjectIds = student.selectedSubjectIds ??
                 exam.examSubjects.map((es) => es.subjectId);
-            const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds);
+            const examType = this.getAllowedTypes(exam)[0] ?? exam.type;
+            const { breakdown, baseFee } = this.calculateFee(exam, selectedSubjectIds, exam.examSubjects, {
+                examType,
+                packageFee: this.packageFeeForScope(exam, null, null),
+                supplyFeesByCount: this.supplyFeeForScope(exam, null),
+            });
             const record = this.feeRecordRepo.create({
                 examId,
-                examType: this.getAllowedTypes(exam)[0] ?? exam.type,
+                examType,
                 studentRollNumber: student.rollNumber,
                 studentName: student.name,
                 selectedSubjectIds,

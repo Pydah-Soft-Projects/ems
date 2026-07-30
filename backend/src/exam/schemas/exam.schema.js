@@ -27,6 +27,16 @@ const Exam = new EntitySchema({
     packageFee: { type: 'decimal', precision: 10, scale: 2, nullable: true },
     /** Branch/section-wise package fees: [{ branch, section|null, amount }] */
     packageFees: { type: 'simple-json', nullable: true },
+    /**
+     * Default supply fee by subject count: [feeFor1, feeFor2, ...].
+     * Index 0 = 1 subject selected.
+     */
+    supplyFeeByCount: { type: 'simple-json', nullable: true },
+    /**
+     * Per-branch supply fee overrides:
+     * [{ branch, feesByCount: number[] }]
+     */
+    supplyFeesByBranch: { type: 'simple-json', nullable: true },
     instructions: { type: 'text', nullable: true },
     rejectionRemarks: { type: 'text', nullable: true },
     approvedBy: { type: 'varchar', length: 100, nullable: true },

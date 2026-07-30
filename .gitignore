@@ -11,8 +11,10 @@ out/
 # env
 .env
 .env.local
+.env.docker
 *.env
 !.env.example
+!.env.docker.example
 
 # logs
 *.log

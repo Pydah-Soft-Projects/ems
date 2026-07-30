@@ -223,7 +223,7 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
-                Default package fee
+                Regular package fee
               </p>
               <p className="mt-1 text-sm font-medium text-slate-900">
                 {exam.packageFee != null ? `₹${exam.packageFee}` : 'Not set'}
@@ -253,7 +253,7 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
           {(exam.packageFees?.length ?? 0) > 0 ? (
             <div className="mt-4">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
-                Branch / section package fees
+                Branch / section package fees (Regular)
               </p>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {exam.packageFees!.map((pf, idx) => {
@@ -279,6 +279,60 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
                   );
                 })}
               </div>
+            </div>
+          ) : null}
+          {(exam.supplyFeeByCount?.length ?? 0) > 0 ? (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                Default supply fees by subject count
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {exam.supplyFeeByCount!.map((amount, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-[var(--border)] bg-slate-50/60 px-3 py-2.5"
+                  >
+                    <p className="text-xs font-medium text-slate-800">
+                      {idx + 1} subject{idx === 0 ? '' : 's'}
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-[var(--success)]">
+                      ₹{amount}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {(exam.supplyFeesByBranch?.length ?? 0) > 0 ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                Branch supply fee overrides
+              </p>
+              {exam.supplyFeesByBranch!.map((entry, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl border border-[var(--border)] bg-white p-3"
+                >
+                  <p className="mb-2 text-xs font-semibold text-slate-800">
+                    {entry.branch}
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {(entry.feesByCount ?? []).map((amount, i) => (
+                      <div
+                        key={i}
+                        className="rounded-lg border border-[var(--border)] bg-slate-50/60 px-2.5 py-2"
+                      >
+                        <p className="text-[11px] text-[var(--muted)]">
+                          {i + 1} subject{i === 0 ? '' : 's'}
+                        </p>
+                        <p className="text-sm font-bold text-[var(--success)]">
+                          ₹{amount}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : null}
         </SectionCard>
@@ -393,23 +447,15 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
     return section ? `${branch} · Section ${section}` : branch;
   };
 
-  const totalFee = subjects.reduce((sum, es) => sum + Number(es.fee || 0), 0);
-
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <MetricCard label="Total papers" value={String(subjects.length)} accent="indigo" />
         <MetricCard
           label="Groups"
           value={String(ordered.length)}
           hint="Branch / section combinations"
           accent="emerald"
-        />
-        <MetricCard
-          label="Subject-wise total"
-          value={money(totalFee)}
-          hint="Sum of all configured paper fees"
-          accent="amber"
         />
       </div>
 
@@ -425,12 +471,9 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
                 {list.length} paper{list.length === 1 ? '' : 's'}
               </p>
             </div>
-            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-              {money(list.reduce((s, es) => s + Number(es.fee || 0), 0))} total
-            </span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-slate-50/80 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">
                   <th className="px-5 py-3">Code</th>
@@ -438,7 +481,6 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
                   <th className="px-5 py-3">Date</th>
                   <th className="px-5 py-3">Session</th>
                   <th className="px-5 py-3">Timing</th>
-                  <th className="px-5 py-3 text-right">Fee</th>
                 </tr>
               </thead>
               <tbody>
@@ -469,11 +511,6 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
                         <SessionBadge session={es.session} />
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-600">{timing}</td>
-                      <td className="px-5 py-3 text-right">
-                        <span className="inline-flex rounded-full bg-[var(--success-soft)] px-2.5 py-1 text-xs font-bold text-[var(--success)]">
-                          {money(Number(es.fee))}
-                        </span>
-                      </td>
                     </tr>
                   );
                 })}

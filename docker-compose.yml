@@ -1,0 +1,45 @@
+# Optional local/Docker stack. Production on EC2 uses PM2 (ecosystem.config.js)
+# + host Nginx (/etc/nginx/conf.d/ems.conf). Prefer: ./scripts/deploy.sh
+#
+# Usage (optional):
+#   cp .env.docker.example .env.docker
+#   docker compose --env-file .env.docker up -d --build
+#
+# Stop PM2 first if you try this on the same host (ports 3000/4000).
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ems-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ems_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost}
+    container_name: ems-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  ems_uploads:

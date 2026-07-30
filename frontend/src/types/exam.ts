@@ -41,6 +41,14 @@ export interface PackageFeeEntry {
   amount: number;
 }
 
+/** Fee for selecting N subjects: index 0 = 1 subject, index 1 = 2 subjects, … */
+export type SupplyFeeByCount = number[];
+
+export interface SupplyFeeBranchEntry {
+  branch: string;
+  feesByCount: SupplyFeeByCount;
+}
+
 export interface LateFeeSlab {
   id?: number;
   fromDate: string;
@@ -84,6 +92,10 @@ export interface Exam {
   packageFee: number | string | null;
   /** Branch/section-wise package fees; section null = whole branch */
   packageFees?: PackageFeeEntry[] | null;
+  /** Default supply fee by subject count (index 0 = 1 subject) */
+  supplyFeeByCount?: SupplyFeeByCount | null;
+  /** Per-branch supply fee schedule overrides */
+  supplyFeesByBranch?: SupplyFeeBranchEntry[] | null;
   instructions: string | null;
   rejectionRemarks: string | null;
   approvedBy: string | null;
@@ -139,6 +151,8 @@ export interface CreateExamInput {
   subjects: ExamSubjectFeeInput[];
   packageFee?: number;
   packageFees?: PackageFeeEntry[];
+  supplyFeeByCount?: SupplyFeeByCount;
+  supplyFeesByBranch?: SupplyFeeBranchEntry[];
   examinationStartDate?: string;
   examinationEndDate?: string;
   applicationStartDate?: string;
@@ -258,6 +272,8 @@ export interface StudentExamListItem {
   examinationStartDate: string | null;
   examinationEndDate: string | null;
   packageFee: number | string | null;
+  /** Resolved supply fee tiers for this student's branch */
+  supplyFeeByCount?: number[] | null;
   subjectCount: number;
   alreadyApplied: boolean;
   openTypes: ExamType[];
@@ -284,6 +300,8 @@ export interface StudentExamDetail {
     yearOfStudy: number;
     semester: number;
     packageFee: number | string | null;
+    /** Resolved supply fee tiers for this student's branch */
+    supplyFeeByCount?: number[] | null;
     applicationStartDate: string | null;
     applicationEndDate: string | null;
     examinationStartDate: string | null;

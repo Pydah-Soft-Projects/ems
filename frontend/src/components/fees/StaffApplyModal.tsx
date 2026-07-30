@@ -93,23 +93,25 @@ export function StaffApplyModal({
   );
 
   const liveTotal = useMemo(() => {
-    if (!detail) return 0;
-    const ids = [...selected];
-    if (ids.length === 0) return 0;
-    const sum = subjects
-      .filter((s) => ids.includes(s.subjectId))
-      .reduce((acc, s) => acc + Number(s.fee), 0);
-    const allSelected = ids.length === subjects.length;
+    if (!detail || !enrollType) return 0;
+    const tiers = detail.exam.supplyFeeByCount ?? null;
     const pkg =
       detail.exam.packageFee != null ? Number(detail.exam.packageFee) : null;
-    // Package fee is the flat bundle price when all papers are selected.
-    if (allSelected && pkg != null && !Number.isNaN(pkg)) {
-      return pkg;
+    if (enrollType === 'regular') {
+      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
     }
-    return sum;
-  }, [detail, selected, subjects]);
+    const n = selected.size;
+    if (n < 1) return 0;
+    if (n === subjects.length && subjects.every((s) => selected.has(s.subjectId))) {
+      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
+    }
+    if (!Array.isArray(tiers) || tiers.length < n) return 0;
+    const amount = Number(tiers[n - 1]);
+    return Number.isNaN(amount) ? 0 : amount;
+  }, [detail, enrollType, selected, subjects]);
 
   function toggleSubject(id: number) {
+    if (enrollType === 'regular') return;
     if (!selectableSubjects.some((s) => s.subjectId === id)) return;
     setSelected((prev) => {
       const next = new Set(prev);
@@ -311,6 +313,7 @@ export function StaffApplyModal({
                 <h3 className="text-sm font-semibold text-slate-900">
                   Subjects
                 </h3>
+                {enrollType !== 'regular' ? (
                 <div className="flex gap-2 text-xs">
                   <button
                     type="button"
@@ -331,32 +334,47 @@ export function StaffApplyModal({
                     Clear
                   </button>
                 </div>
+                ) : null}
               </div>
-              {detail.exam.packageFee != null &&
-                selectableSubjects.length === subjects.length && (
+              {enrollType === 'regular' ? (
                 <p className="mb-2 text-xs text-[var(--muted)]">
-                  Package fee ₹{detail.exam.packageFee} applies when all
-                  subjects are selected.
+                  Regular includes all papers. Package fee
+                  {detail.exam.packageFee != null
+                    ? ` ₹${detail.exam.packageFee}`
+                    : ''}
+                  .
                 </p>
-                )}
-              {enrollType === 'supply' && (
+              ) : (
                 <p className="mb-2 text-xs text-[var(--muted)]">
-                  Only subjects with a latest failed result are selectable.
-                  Passed subjects are disabled.
+                  {enrollType === 'supply'
+                    ? 'Only subjects with a latest failed result are selectable. '
+                    : ''}
+                  Fee by subject count (1…N−1); all subjects uses package fee
+                  {Array.isArray(detail.exam.supplyFeeByCount) &&
+                  detail.exam.supplyFeeByCount.length > 0
+                    ? ` · tiers: ${detail.exam.supplyFeeByCount
+                        .map((a, i) => `${i + 1}=₹${a}`)
+                        .join(', ')}`
+                    : ''}
+                  {detail.exam.packageFee != null
+                    ? ` · package ₹${detail.exam.packageFee}`
+                    : ''}
+                  .
                 </p>
               )}
               <ul className="space-y-2">
                 {subjects.map((s) => {
                   const supplyDisabled =
                     enrollType === 'supply' && !s.supplyStatus?.eligible;
+                  const regularLocked = enrollType === 'regular';
                   return (
                   <li key={s.subjectId}>
-                    <label className={`flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2 text-sm ${supplyDisabled ? 'cursor-not-allowed bg-slate-50 opacity-70' : ''}`}>
+                    <label className={`flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] px-3 py-2 text-sm ${supplyDisabled || regularLocked ? 'cursor-not-allowed bg-slate-50 opacity-70' : ''}`}>
                       <span className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selected.has(s.subjectId)}
-                          disabled={supplyDisabled}
+                          disabled={supplyDisabled || regularLocked}
                           onChange={() => toggleSubject(s.subjectId)}
                         />
                         <span>
@@ -385,9 +403,6 @@ export function StaffApplyModal({
                           )}
                         </span>
                       </span>
-                      <span className="tabular-nums text-[var(--muted)]">
-                        {money(s.fee)}
-                      </span>
                     </label>
                   </li>
                   );
@@ -395,6 +410,9 @@ export function StaffApplyModal({
               </ul>
               <p className="mt-3 text-right text-sm font-semibold text-slate-900">
                 Estimated fee: {money(liveTotal)}
+                {enrollType !== 'regular' && selected.size > 0
+                  ? ` (${selected.size} subject${selected.size === 1 ? '' : 's'})`
+                  : ''}
               </p>
             </section>
 

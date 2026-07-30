@@ -12,6 +12,7 @@ import {
   ExamSubjectFeeInput,
   LateFeeSlabInput,
   PackageFeeEntry,
+  SupplyFeeBranchEntry,
 } from '@/types/exam';
 import { Subject } from '@/types/subject';
 import { SdmsBranch, SdmsBranchYearSemesters, SdmsSection } from '@/types/sdms';
@@ -23,8 +24,6 @@ const selectClass =
 const ALL_EXAM_TYPES: { value: ExamType; label: string }[] = [
   { value: 'regular', label: 'Regular' },
   { value: 'supply', label: 'Supply' },
-  { value: 'improvement', label: 'Improvement' },
-  { value: 'special_supply', label: 'Special supply' },
 ];
 
 const DEFAULT_CREATE_TYPES: ExamType[] = ['regular', 'supply'];
@@ -52,13 +51,17 @@ interface SubjectRowState {
 
 const EMPTY_ROW: SubjectRowState = {
   selected: false,
-  fee: '180',
+  fee: '0',
   examDate: '',
   session: '',
   startTime: '',
   endTime: '',
   duration: '',
 };
+
+function isCountBasedType(t: ExamType) {
+  return t === 'supply';
+}
 
 const compactInputClass =
   'w-full min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--ring)] disabled:bg-slate-50 disabled:text-slate-500';
@@ -219,9 +222,14 @@ export function ExamForm({
   const [packageFeeByScope, setPackageFeeByScope] = useState<
     Record<string, string>
   >({});
-  /** Bulk helpers: type once, apply everywhere, then fine-tune per row */
-  const [bulkSubjectFee, setBulkSubjectFee] = useState('');
+  /** Bulk helper for package fees */
   const [bulkPackageFee, setBulkPackageFee] = useState('');
+  /** Default supply tiers as strings: index 0 = 1 subject */
+  const [supplyFeeByCount, setSupplyFeeByCount] = useState<string[]>([]);
+  /** Per-branch supply tier overrides */
+  const [supplyFeeByBranch, setSupplyFeeByBranch] = useState<
+    Record<string, string[]>
+  >({});
 
   const [applicationStartDate, setApplicationStartDate] = useState('');
   const [applicationEndDate, setApplicationEndDate] = useState('');
@@ -306,15 +314,66 @@ export function ExamForm({
     [mappedByBranch],
   );
 
+  /** Max unique selected papers for any branch */
+  const maxSupplySubjectCount = useMemo(() => {
+    let max = 0;
+    for (const b of selectedBranches) {
+      const ids = new Set<number>();
+      const groups = mappedByBranch[b.name] ?? {};
+      for (const [section, subjects] of Object.entries(groups)) {
+        for (const s of subjects) {
+          const key = rowKey(b.name, section, s.id);
+          if (selectedFees[key]?.selected) ids.add(s.id);
+        }
+      }
+      if (ids.size > max) max = ids.size;
+    }
+    return max;
+  }, [selectedBranches, mappedByBranch, selectedFees]);
+
+  /**
+   * Supply fee tiers are 1 … (N − 1) where N is max papers on the exam.
+   * Selecting all N papers uses the package fee instead.
+   */
+  const supplyTierCount = useMemo(() => {
+    if (maxSupplySubjectCount <= 0) return 0;
+    if (maxSupplySubjectCount === 1) return 1;
+    return maxSupplySubjectCount - 1;
+  }, [maxSupplySubjectCount]);
+
+  const allowsRegular = types.includes('regular');
+  const allowsSupply = types.some(isCountBasedType);
+
+  // Keep default supply tier inputs sized to 1 … (N − 1)
+  useEffect(() => {
+    if (!allowsSupply || supplyTierCount < 1) return;
+    setSupplyFeeByCount((prev) => {
+      if (prev.length === supplyTierCount) return prev;
+      const next = [...prev];
+      while (next.length < supplyTierCount) next.push('');
+      return next.slice(0, supplyTierCount);
+    });
+    setSupplyFeeByBranch((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const [branch, tiers] of Object.entries(prev)) {
+        const row = [...tiers];
+        while (row.length < supplyTierCount) row.push('');
+        next[branch] = row.slice(0, supplyTierCount);
+      }
+      return next;
+    });
+  }, [allowsSupply, supplyTierCount]);
+
   useEffect(() => {
     if (initial) {
       setName(initial.name);
       setType(initial.type);
-      setTypes(
+      const nextTypes = (
         initial.allowedTypes?.length
           ? [...initial.allowedTypes]
-          : [initial.type],
-      );
+          : [initial.type]
+      ).filter((t): t is ExamType => t === 'regular' || t === 'supply');
+      setTypes(nextTypes.length > 0 ? nextTypes : DEFAULT_CREATE_TYPES);
       setRegulationId(String(initial.regulationId));
       setCollegeName(initial.college ?? '');
       setCourseName(initial.course);
@@ -364,6 +423,17 @@ export function ExamForm({
         pkgFees[pkgKey(pf.branch, pf.section ?? '')] = String(pf.amount);
       }
       setPackageFeeByScope(pkgFees);
+      const defaultSupply = (initial.supplyFeeByCount ?? []).map((n) =>
+        String(n),
+      );
+      setSupplyFeeByCount(defaultSupply);
+      const branchSupply: Record<string, string[]> = {};
+      for (const entry of initial.supplyFeesByBranch ?? []) {
+        branchSupply[entry.branch] = (entry.feesByCount ?? []).map((n) =>
+          String(n),
+        );
+      }
+      setSupplyFeeByBranch(branchSupply);
       setSelectedBranchIds([]);
       setBranchSections({});
       setStep(1);
@@ -398,8 +468,9 @@ export function ExamForm({
       setSelectedFees({});
       setPackageFee('');
       setPackageFeeByScope({});
-      setBulkSubjectFee('');
       setBulkPackageFee('');
+      setSupplyFeeByCount([]);
+      setSupplyFeeByBranch({});
       setApplicationStartDate('');
       setApplicationEndDate('');
       setExaminationStartDate('');
@@ -679,7 +750,7 @@ export function ExamForm({
         ([key, v]) => v.selected && visibleRowKeys.has(key),
       );
       if (selected.length === 0) {
-        setError('Select at least one mapped subject and set fees.');
+        setError('Select at least one mapped subject and set exam dates.');
         return false;
       }
       for (const b of selectedBranches) {
@@ -701,13 +772,6 @@ export function ExamForm({
         const label = section
           ? `${branch} · Section ${section}`
           : branch || 'common';
-        const fee = parseFloat(v.fee);
-        if (isNaN(fee) || fee < 0) {
-          setError(
-            `Subject fees must be valid non-negative numbers (${label} group).`,
-          );
-          return false;
-        }
         if (!v.examDate) {
           setError(`Set an exam date for every selected subject (${label} group).`);
           return false;
@@ -728,6 +792,21 @@ export function ExamForm({
           }
         }
       }
+      if (allowsRegular) {
+        const hasDefault =
+          packageFee.trim() !== '' &&
+          !isNaN(parseFloat(packageFee)) &&
+          parseFloat(packageFee) >= 0;
+        const hasScoped = Object.values(packageFeeByScope).some(
+          (raw) => raw.trim() !== '',
+        );
+        if (!hasDefault && !hasScoped) {
+          setError(
+            'Set a package fee for Regular enrollment (default or per branch).',
+          );
+          return false;
+        }
+      }
       for (const [key, raw] of Object.entries(packageFeeByScope)) {
         if (!raw.trim()) continue;
         const amount = parseFloat(raw);
@@ -737,6 +816,45 @@ export function ExamForm({
             `Package fee for ${branch}${section ? ` Section ${section}` : ''} must be a valid non-negative number.`,
           );
           return false;
+        }
+      }
+      if (allowsSupply) {
+        if (supplyTierCount < 1) {
+          setError('Select subjects before configuring supply fees.');
+          return false;
+        }
+        if (supplyFeeByCount.length !== supplyTierCount) {
+          setError(
+            `Supply fee schedule must cover 1 through ${supplyTierCount} subject(s).`,
+          );
+          return false;
+        }
+        for (let i = 0; i < supplyFeeByCount.length; i += 1) {
+          const amount = parseFloat(supplyFeeByCount[i]);
+          if (isNaN(amount) || amount < 0 || !supplyFeeByCount[i].trim()) {
+            setError(
+              `Enter a valid supply fee for ${i + 1} subject${i === 0 ? '' : 's'}.`,
+            );
+            return false;
+          }
+        }
+        for (const [branch, tiers] of Object.entries(supplyFeeByBranch)) {
+          if (!tiers.some((t) => t.trim() !== '')) continue;
+          if (tiers.length !== supplyTierCount) {
+            setError(
+              `Supply fee schedule for ${branch} must cover 1 through ${supplyTierCount} subject(s).`,
+            );
+            return false;
+          }
+          for (let i = 0; i < tiers.length; i += 1) {
+            const amount = parseFloat(tiers[i]);
+            if (isNaN(amount) || amount < 0 || !tiers[i].trim()) {
+              setError(
+                `Enter a valid supply fee for ${branch} · ${i + 1} subject${i === 0 ? '' : 's'}.`,
+              );
+              return false;
+            }
+          }
         }
       }
     }
@@ -837,7 +955,7 @@ export function ExamForm({
           subjectId,
           branch: branchName || undefined,
           section: section || undefined,
-          fee: parseFloat(v.fee),
+          fee: 0,
           examDate: v.examDate,
           session: v.session || undefined,
           startTime: v.startTime || undefined,
@@ -866,6 +984,19 @@ export function ExamForm({
         };
       });
 
+    const supplyFeesPayload: number[] | undefined = allowsSupply
+      ? supplyFeeByCount.map((raw) => parseFloat(raw))
+      : undefined;
+    const supplyFeesByBranchPayload: SupplyFeeBranchEntry[] | undefined =
+      allowsSupply
+        ? Object.entries(supplyFeeByBranch)
+            .filter(([, tiers]) => tiers.some((t) => t.trim() !== ''))
+            .map(([branch, tiers]) => ({
+              branch,
+              feesByCount: tiers.map((raw) => parseFloat(raw)),
+            }))
+        : undefined;
+
     const scopesPayload = selectedBranches.map((b) => ({
       branch: b.name,
       branchId: b.id,
@@ -891,6 +1022,8 @@ export function ExamForm({
           subjects,
           packageFee: pkg,
           packageFees,
+          supplyFeeByCount: supplyFeesPayload,
+          supplyFeesByBranch: supplyFeesByBranchPayload,
           applicationStartDate: applicationStartDate || undefined,
           applicationEndDate: applicationEndDate || undefined,
           examinationStartDate: examinationStartDate || undefined,
@@ -915,6 +1048,8 @@ export function ExamForm({
           subjects,
           packageFee: pkg,
           packageFees,
+          supplyFeeByCount: supplyFeesPayload,
+          supplyFeesByBranch: supplyFeesByBranchPayload,
           applicationStartDate: applicationStartDate || undefined,
           applicationEndDate: applicationEndDate || undefined,
           examinationStartDate: examinationStartDate || undefined,
@@ -938,22 +1073,6 @@ export function ExamForm({
     ([key, v]) => v.selected && visibleRowKeys.has(key),
   ).length;
 
-  function applyFeeToAllSubjects() {
-    const fee = bulkSubjectFee.trim();
-    if (!fee || isNaN(parseFloat(fee)) || parseFloat(fee) < 0) {
-      setError('Enter a valid amount to apply to all subjects.');
-      return;
-    }
-    setError('');
-    setSelectedFees((prev) => {
-      const next = { ...prev };
-      for (const key of visibleRowKeys) {
-        next[key] = { ...(next[key] ?? EMPTY_ROW), fee };
-      }
-      return next;
-    });
-  }
-
   function applyFeeToAllPackages() {
     const fee = bulkPackageFee.trim();
     if (!fee || isNaN(parseFloat(fee)) || parseFloat(fee) < 0) {
@@ -965,6 +1084,27 @@ export function ExamForm({
       const next = { ...prev };
       for (const s of packageScopes) {
         next[pkgKey(s.branch, s.section)] = fee;
+      }
+      return next;
+    });
+  }
+
+  function applySupplyDefaultToAllBranches() {
+    if (
+      supplyFeeByCount.length === 0 ||
+      supplyFeeByCount.some(
+        (t) => !t.trim() || isNaN(parseFloat(t)) || parseFloat(t) < 0,
+      )
+    ) {
+      setError('Enter the default supply fee schedule before applying to branches.');
+      return;
+    }
+    setError('');
+    const copy = [...supplyFeeByCount];
+    setSupplyFeeByBranch(() => {
+      const next: Record<string, string[]> = {};
+      for (const b of selectedBranches) {
+        next[b.name] = [...copy];
       }
       return next;
     });
@@ -1317,39 +1457,11 @@ export function ExamForm({
             </p>
           ) : (
             <>
-            <div className="flex flex-wrap items-end gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/60 px-4 py-3">
-              <div className="w-full sm:w-48">
-                <label className="mb-1 block text-xs font-medium text-slate-700">
-                  Fee for all subjects (₹)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={bulkSubjectFee}
-                  onChange={(e) => setBulkSubjectFee(e.target.value)}
-                  className={compactInputClass}
-                  placeholder="e.g. 180"
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="!px-3 !py-1.5 text-xs"
-                onClick={applyFeeToAllSubjects}
-              >
-                Apply to all subjects
-              </Button>
-              <p className="w-full text-xs text-[var(--muted)]">
-                Fills every subject fee in one click — you can still edit any
-                paper individually.
-              </p>
-            </div>
-
             <p className="text-xs text-[var(--muted)]">
               Papers are grouped by branch and section. Students only see their
-              own branch and section. Select a paper to set fee, date, session,
-              and timings.
+              own branch and section. Select a paper to set date, session, and
+              timings. Fees are configured below (package for Regular, count
+              tiers for Supply).
             </p>
 
             <div className="grid gap-4 xl:grid-cols-2">
@@ -1464,20 +1576,7 @@ export function ExamForm({
                                         </div>
                                       </label>
                                       {row.selected ? (
-                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-                                          <ConfigField label="Fee (₹)">
-                                            <input
-                                              type="number"
-                                              min={0}
-                                              step="1"
-                                              value={row.fee}
-                                              onChange={(e) =>
-                                                update({ fee: e.target.value })
-                                              }
-                                              className={compactInputClass}
-                                              aria-label={`Fee ${subject.code}`}
-                                            />
-                                          </ConfigField>
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
                                           <ConfigField label="Exam date">
                                             <input
                                               type="date"
@@ -1586,14 +1685,21 @@ export function ExamForm({
 
             <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-4">
               <p className="text-sm font-semibold text-slate-900">
-                Package fees
+                Regular package fees
                 <span className="ml-2 text-xs font-normal text-[var(--muted)]">
-                  Applied when a student selects all papers of their branch /
-                  section
+                  Flat fee when a student applies as Regular (all papers; no
+                  subject selection)
                 </span>
               </p>
+              {!allowsRegular ? (
+                <p className="text-xs text-[var(--muted)]">
+                  Regular is not enabled for this exam — package fee not
+                  required.
+                </p>
+              ) : (
+                <>
               <Input
-                label="Default package fee (optional)"
+                label="Default package fee"
                 type="number"
                 min={0}
                 value={packageFee}
@@ -1674,7 +1780,175 @@ export function ExamForm({
                   </div>
                 </>
               )}
+                </>
+              )}
             </div>
+
+            {allowsSupply ? (
+              <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Supply fees by subject count
+                    </p>
+                    <p className="text-xs text-[var(--muted)]">
+                      Enter fee for selecting 1 through{' '}
+                      {supplyTierCount || 'N−1'} subject
+                      {supplyTierCount === 1 ? '' : 's'}. If all{' '}
+                      {maxSupplySubjectCount || 'N'} papers are selected, the
+                      package fee applies.
+                    </p>
+                  </div>
+                  {supplyTierCount > 0 && selectedBranches.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="!px-3 !py-1.5 text-xs"
+                      onClick={applySupplyDefaultToAllBranches}
+                    >
+                      Apply to all branches
+                    </Button>
+                  ) : null}
+                </div>
+                {supplyTierCount < 1 ? (
+                  <p className="text-xs text-[var(--muted)]">
+                    Select papers above to generate supply fee tiers.
+                  </p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--border)]">
+                      <table className="w-full min-w-[320px] text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-[var(--border)] bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                            <th className="px-3 py-2.5">Subjects selected</th>
+                            <th className="px-3 py-2.5">Default fee (₹)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {supplyFeeByCount.map((value, index) => (
+                            <tr
+                              key={`supply-default-${index}`}
+                              className="border-b border-[var(--border)] last:border-0"
+                            >
+                              <td className="px-3 py-2 font-medium text-slate-800">
+                                {index + 1} subject{index === 0 ? '' : 's'}
+                              </td>
+                              <td className="px-3 py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="1"
+                                  value={value}
+                                  onChange={(e) =>
+                                    setSupplyFeeByCount((prev) => {
+                                      const next = [...prev];
+                                      next[index] = e.target.value;
+                                      return next;
+                                    })
+                                  }
+                                  className={compactInputClass}
+                                  placeholder="0"
+                                  aria-label={`Default supply fee for ${index + 1} subjects`}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {selectedBranches.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                          Per-branch overrides (optional)
+                        </p>
+                        <p className="text-xs text-[var(--muted)]">
+                          Leave blank to use the default. Use “Apply to all
+                          branches” to copy the default into every row, then
+                          edit.
+                        </p>
+                        <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--border)]">
+                          <table className="w-full min-w-[480px] text-left text-sm">
+                            <thead>
+                              <tr className="border-b border-[var(--border)] bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                                <th className="sticky left-0 z-10 bg-slate-50 px-3 py-2.5">
+                                  Branch
+                                </th>
+                                {Array.from(
+                                  { length: supplyTierCount },
+                                  (_, i) => (
+                                    <th
+                                      key={`h-${i}`}
+                                      className="whitespace-nowrap px-3 py-2.5 text-right"
+                                    >
+                                      {i + 1} subj.
+                                    </th>
+                                  ),
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedBranches.map((b) => {
+                                const tiers =
+                                  supplyFeeByBranch[b.name] ??
+                                  Array.from(
+                                    { length: supplyTierCount },
+                                    () => '',
+                                  );
+                                return (
+                                  <tr
+                                    key={b.id}
+                                    className="border-b border-[var(--border)] last:border-0"
+                                  >
+                                    <td className="sticky left-0 z-10 bg-white px-3 py-2 font-medium text-slate-800">
+                                      {b.name}
+                                    </td>
+                                    {tiers.map((value, index) => (
+                                      <td
+                                        key={`${b.id}-supply-${index}`}
+                                        className="px-2 py-1.5"
+                                      >
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          step="1"
+                                          value={value}
+                                          onChange={(e) =>
+                                            setSupplyFeeByBranch((prev) => {
+                                              const row = [
+                                                ...(prev[b.name] ??
+                                                  Array.from(
+                                                    {
+                                                      length: supplyTierCount,
+                                                    },
+                                                    () => '',
+                                                  )),
+                                              ];
+                                              row[index] = e.target.value;
+                                              return {
+                                                ...prev,
+                                                [b.name]: row,
+                                              };
+                                            })
+                                          }
+                                          className={`${compactInputClass} text-right`}
+                                          placeholder="—"
+                                          aria-label={`${b.name} supply fee for ${index + 1} subjects`}
+                                        />
+                                      </td>
+                                    ))}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
             </>
           )}
           <p className="text-xs text-[var(--muted)]">
@@ -1922,7 +2196,14 @@ export function ExamForm({
             </div>
             <p className="mt-2">
               Subjects: <strong>{selectedCount}</strong>
-              {packageFee ? ` · Default package fee: ${packageFee}` : ''}
+              {allowsRegular && packageFee
+                ? ` · Regular package: ₹${packageFee}`
+                : ''}
+              {allowsSupply && supplyFeeByCount.some((t) => t.trim())
+                ? ` · Supply tiers: ${supplyFeeByCount
+                    .map((t, i) => `${i + 1}=₹${t || '—'}`)
+                    .join(', ')}`
+                : ''}
               {(() => {
                 const n = packageScopes.filter(
                   (s) => (packageFeeByScope[pkgKey(s.branch, s.section)] ?? '').trim() !== '',
