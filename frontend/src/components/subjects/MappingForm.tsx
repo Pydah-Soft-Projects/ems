@@ -111,9 +111,21 @@ function getScopedBatches(
   return Array.from(batches).sort((a, b) => b.localeCompare(a));
 }
 
+function newRowKey() {
+  // crypto.randomUUID is only available in secure contexts (HTTPS / localhost).
+  // Fall back for LAN HTTP access (e.g. http://192.168.x.x).
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
+    return crypto.randomUUID();
+  }
+  return `row-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function newSubjectRow(): SubjectRow {
   return {
-    key: crypto.randomUUID(),
+    key: newRowKey(),
     subjectId: '',
     branchId: '',
     yearOfStudy: '',
