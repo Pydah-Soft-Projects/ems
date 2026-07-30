@@ -33,10 +33,19 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Fetching latest code"
-git fetch origin "${BRANCH}"
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "ERROR: docker buildx is missing (compose build needs buildx >= 0.17)."
+  echo "Install with:"
+  echo "  sudo mkdir -p /usr/local/lib/docker/cli-plugins"
+  echo "  sudo curl -SL https://github.com/docker/buildx/releases/download/v0.23.0/buildx-v0.23.0.linux-amd64 \\"
+  echo "    -o /usr/local/lib/docker/cli-plugins/docker-buildx"
+  echo "  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx"
+  echo "  docker buildx version"
+  exit 1
+fi
 
-# Private HTTPS repo: username + PAT as password.
+echo "==> Pulling latest code"
+# Private HTTPS repo: username + PAT as password (set GH_PAT to avoid prompts).
 if [[ -n "${GH_PAT:-}" ]]; then
   USERNAME="${GH_USERNAME:-git}"
   git -c "credential.helper=!f() { echo username=${USERNAME}; echo password=${GH_PAT}; }; f" \
