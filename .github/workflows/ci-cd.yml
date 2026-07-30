@@ -1,4 +1,4 @@
-name: CI / CD
+name: CI / CD (Docker)
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [master, main]
   workflow_dispatch:
+
+# Production deploy: SSH → scripts/deploy.sh → docker compose up --build
+# Host Nginx ems.conf stays as reverse proxy. No PM2 in this path.
 
 concurrency:
   group: ems-deploy-${{ github.ref }}

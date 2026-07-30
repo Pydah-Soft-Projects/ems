@@ -1,4 +1,4 @@
-# EMS frontend — Next.js (standalone output)
+# EMS frontend — install + build + run inside Docker (no PM2)
 FROM node:20-alpine AS deps
 
 WORKDIR /app
@@ -14,7 +14,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Baked into the client bundle at build time
+# Baked into the client bundle at build time (from .env.docker)
 ARG NEXT_PUBLIC_API_URL=http://localhost/api
 ARG NEXT_PUBLIC_APP_URL=http://localhost
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL

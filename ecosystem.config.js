@@ -1,17 +1,14 @@
 /**
- * PM2 process file for EMS (backend + frontend).
+ * OPTIONAL fallback — run EMS with PM2 on the host (no Docker).
  *
- * Paths are relative to this file location, so it works whether the repo is at:
- *   /home/ec2-user/ems
- *   /home/ec2-user/ems/ems
- *   /var/www/ems
+ * Production CI/CD uses Docker only (scripts/deploy.sh + docker-compose.yml).
+ * Do not start these apps with PM2 while Docker is bound to ports 3000/4000.
  *
- * Usage:
- *   cd /path/to/ems   # folder that contains this file
+ * Manual host mode only:
+ *   cd /path/to/ems
  *   pm2 start ecosystem.config.js
  *   pm2 reload ecosystem.config.js
  *   pm2 save
- *   pm2 startup
  */
 
 const path = require('path');

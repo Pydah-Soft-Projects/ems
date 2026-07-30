@@ -1,11 +1,13 @@
-# Optional local/Docker stack. Production on EC2 uses PM2 (ecosystem.config.js)
-# + host Nginx (/etc/nginx/conf.d/ems.conf). Prefer: ./scripts/deploy.sh
+# EMS production — Docker only (no PM2 in the deploy path).
+# Host Nginx (/etc/nginx/conf.d/ems.conf) proxies:
+#   /api/* → 127.0.0.1:4000
+#   /*     → 127.0.0.1:3000
 #
-# Usage (optional):
-#   cp .env.docker.example .env.docker
-#   docker compose --env-file .env.docker up -d --build
-#
-# Stop PM2 first if you try this on the same host (ports 3000/4000).
+# On the server once:
+#   1. backend/.env     (secrets)
+#   2. .env.docker      (public URLs — from .env.docker.example)
+#   3. Keep system nginx + ems.conf running
+#   4. ./scripts/deploy.sh
 
 services:
   backend:
@@ -23,6 +25,18 @@ services:
       - "127.0.0.1:4000:4000"
     volumes:
       - ems_uploads:/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   frontend:
     build:
@@ -39,7 +53,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_started
 
 volumes:
   ems_uploads:
