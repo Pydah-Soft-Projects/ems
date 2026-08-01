@@ -170,6 +170,15 @@ function createFeesRoutes(services) {
   const router = Router();
   // Razorpay status/order/verify can be used by students too via student routes;
   // staff fee desk routes require staff + privileges.
+
+  /** Single readiness endpoint for fee desk / student pay UI */
+  router.get(
+    '/payment-methods/status',
+    asyncHandler(async (_req, res) => {
+      res.json(await services.settings.getPaymentMethodsStatus());
+    }),
+  );
+
   router.get(
     '/razorpay/status',
     asyncHandler(async (_req, res) => {
@@ -583,6 +592,78 @@ function createFeesRoutes(services) {
     requirePrivilege('fees:reconcile'),
     asyncHandler(async (_req, res) => {
       res.json(await services.selfOnline.runAutoMatchAll());
+    }),
+  );
+
+  // ── Canara Bank Dynamic QR ─────────────────────────────────
+  router.get(
+    '/canara/status',
+    asyncHandler(async (_req, res) => {
+      res.json(await services.canaraSettings.getStatus());
+    }),
+  );
+
+  router.post(
+    '/canara/oauth/start',
+    requireStaff,
+    requirePrivilege('settings:payments'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.canaraQr.startOauth({
+          state: req.body?.state,
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/canara/order',
+    asyncHandler(async (req, res) => {
+      const feeRecordId = parseInt(String(req.body.feeRecordId), 10);
+      if (!feeRecordId) {
+        res.status(400).json({ message: 'feeRecordId is required' });
+        return;
+      }
+      res.status(201).json(
+        await services.canaraQr.createOrder(feeRecordId, {
+          actor: {
+            role: req.user?.role,
+            pinNo: req.user?.pinNo,
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/canara/:paymentId/status',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.canaraQr.checkStatus(parseId(req.params.paymentId), {
+          actor: {
+            role: req.user?.role,
+            pinNo: req.user?.pinNo,
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
+          simulatePaid: Boolean(req.body?.simulatePaid),
+        }),
+      );
+    }),
+  );
+
+  router.post(
+    '/canara/:paymentId/simulate-callback',
+    requireStaff,
+    requirePrivilege('fees:reconcile'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.canaraQr.simulateCallback(parseId(req.params.paymentId), {
+          force: Boolean(req.body?.force),
+        }),
+      );
     }),
   );
 

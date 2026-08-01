@@ -1,0 +1,59 @@
+export type CanaraStatus = {
+  enabled: boolean;
+  mockMode: boolean;
+  testMode?: boolean;
+  configured: boolean;
+  ready: boolean;
+  oauthReady: boolean;
+  merchantReady?: boolean;
+  missing?: string[];
+  hasClientSecret?: boolean;
+  hasSymmetricKey?: boolean;
+  hasPrivateKey?: boolean;
+  hasPublicCert?: boolean;
+  hasAccessToken?: boolean;
+  clientId: string | null;
+  clientSecretMasked?: string | null;
+  baseUrl: string;
+  scope: string | null;
+  oauthRedirectUri: string;
+  qrCallbackUrl: string;
+  mid: string | null;
+  sid: string | null;
+  terminalId: string | null;
+  upiId: string | null;
+  tokenExpiresAt?: string | null;
+};
+
+export type CanaraOrder = {
+  paymentId: number;
+  feeRecordId: number;
+  extTransactionId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  receiptNumber: string;
+  temporary: boolean;
+  upiId: string | null;
+  qrString: string | null;
+  qrDataUrl: string | null;
+  mockMode: boolean;
+  testMode?: boolean;
+  studentName: string;
+  studentRollNumber: string;
+  examName: string | null;
+  pollIntervalMs: number;
+  instructions: string[];
+};
+
+export type CanaraStatusCheck = {
+  status: string;
+  paid: boolean;
+  settled?: boolean;
+  bankReceived?: boolean;
+  testMode?: boolean;
+  payment: import('@/types/fee').Payment;
+  feeRecord: import('@/types/fee').ExamFeeRecord;
+  mock?: boolean;
+  bankStatus?: string | null;
+};

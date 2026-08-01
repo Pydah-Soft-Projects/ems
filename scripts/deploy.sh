@@ -62,8 +62,15 @@ if command -v pm2 >/dev/null 2>&1; then
   pm2 save >/dev/null 2>&1 || true
 fi
 
+echo "==> Removing old EMS containers (avoid name conflicts)"
+docker compose --env-file .env.docker down --remove-orphans >/dev/null 2>&1 || true
+# Also drop any leftover containers that reuse ems-* names from failed deploys
+docker rm -f ems-backend ems-frontend >/dev/null 2>&1 || true
+docker ps -aq --filter "name=ems-frontend" | xargs -r docker rm -f >/dev/null 2>&1 || true
+docker ps -aq --filter "name=ems-backend" | xargs -r docker rm -f >/dev/null 2>&1 || true
+
 echo "==> Building and starting containers"
-docker compose --env-file .env.docker up -d --build --remove-orphans
+docker compose --env-file .env.docker up -d --build --remove-orphans --force-recreate
 
 echo "==> Pruning unused images"
 docker image prune -f

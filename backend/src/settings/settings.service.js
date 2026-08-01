@@ -10,8 +10,17 @@ function maskSecret(value) {
 }
 
 class SettingsService {
-  constructor(settingsRepo) {
+  /**
+   * @param {import('typeorm').Repository} settingsRepo
+   * @param {import('./canara-settings.service').CanaraSettingsService | null} canaraSettings
+   */
+  constructor(settingsRepo, canaraSettings = null) {
     this.settingsRepo = settingsRepo;
+    this.canaraSettings = canaraSettings;
+  }
+
+  setCanaraSettings(canaraSettings) {
+    this.canaraSettings = canaraSettings;
   }
 
   async getOrCreateRow() {
@@ -55,7 +64,6 @@ class SettingsService {
       Number(row.selfOnlineExpiryHours) ||
       Number(env.expiryHours) ||
       48;
-    // Prefer DB enable. Env enable only when DB has no UPI yet (empty row).
     const enabled = dbUpi
       ? Boolean(row.selfOnlineEnabled)
       : Boolean(row.selfOnlineEnabled) || Boolean(env.enabled);
@@ -155,7 +163,6 @@ class SettingsService {
     }
 
     if (Object.keys(patch).length > 0) {
-      // Partial UPDATE only — never rewrite unrelated columns to null/default.
       await this.settingsRepo.update({ id: row.id }, patch);
     }
     return this.getPaymentSettingsPublic();
@@ -202,12 +209,59 @@ class SettingsService {
     };
   }
 
-  async getRazorpayStatus() {
-    const pub = await this.getPaymentSettingsPublic();
+  getRazorpayStatusFromRow(row) {
+    const envKey = config.razorpay?.keyId?.trim() || '';
+    const envSecret = config.razorpay?.keySecret?.trim() || '';
+    const keyId = row.razorpayKeyId?.trim() || envKey || null;
+    const hasSecret = Boolean(row.razorpayKeySecret?.trim() || envSecret);
+    const enabled = Boolean(row.enabled);
+    const configured = Boolean(keyId && hasSecret);
     return {
-      enabled: pub.enabled,
-      configured: pub.configured,
-      ready: pub.enabled && pub.configured,
+      enabled,
+      configured,
+      ready: enabled && configured,
+    };
+  }
+
+  async getRazorpayStatus() {
+    const row = await this.getOrCreateRow();
+    return this.getRazorpayStatusFromRow(row);
+  }
+
+  /**
+   * Lightweight readiness for fee desk / student pay UI.
+   * Canara comes from separate table via CanaraSettingsService.
+   */
+  async getPaymentMethodsStatus() {
+    const row = await this.getOrCreateRow();
+    const razorpay = this.getRazorpayStatusFromRow(row);
+    const selfOnline = this.selfOnlinePublicFromRow(row);
+    let canara = {
+      enabled: false,
+      mockMode: false,
+      configured: false,
+      ready: false,
+      oauthReady: false,
+      upiId: null,
+      qrCallbackUrl: '',
+    };
+    if (this.canaraSettings) {
+      canara = await this.canaraSettings.getReadyStatus();
+    }
+    return {
+      razorpay: {
+        enabled: razorpay.enabled,
+        configured: razorpay.configured,
+        ready: razorpay.ready,
+      },
+      selfOnline: {
+        enabled: selfOnline.enabled,
+        configured: selfOnline.configured,
+        ready: selfOnline.ready,
+        upiId: selfOnline.upiId,
+        merchantName: selfOnline.merchantName,
+      },
+      canara,
     };
   }
 

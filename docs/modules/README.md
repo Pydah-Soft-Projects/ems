@@ -25,6 +25,7 @@ Reference documentation for the Examination Management System (EMS), derived fro
 | [RBAC](./16-rbac.md) | ✅ | ⏳ | ⏳ | Planned (Super Admin only now) |
 | [SDMS Integration](./17-sdms-integration.md) | ✅ | ✅ | ✅ | Read-only wired |
 | [Exam Due Clearance](./19-exam-due-clearance.md) | ✅ | ✅ | ✅ | Fee Mgmt overdue gate |
+| [Canara Dynamic QR](./20-canara-dynamic-qr.md) | ✅ | ✅ | ✅ | Implemented (mock + live path) |
 
 ## Dependency order
 

@@ -1,0 +1,110 @@
+'use strict';
+
+/**
+ * Ensures `canara_payment_settings` table exists.
+ * Optionally copies legacy columns from payment_gateway_settings if present.
+ */
+async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
+  if (!dataSource?.isInitialized) return { created: false, migrated: false };
+
+  const tables = await dataSource.query(
+    `SELECT TABLE_NAME AS name
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'canara_payment_settings'`,
+  );
+
+  let created = false;
+  if (!tables.length) {
+    await dataSource.query(`
+      CREATE TABLE canara_payment_settings (
+        id INT NOT NULL AUTO_INCREMENT,
+        enabled TINYINT(1) NOT NULL DEFAULT 0,
+        mockMode TINYINT(1) NOT NULL DEFAULT 0,
+        clientId VARCHAR(120) NULL,
+        clientSecret VARCHAR(255) NULL,
+        baseUrl VARCHAR(255) NULL DEFAULT 'https://api.canarauat.bank.in',
+        scope VARCHAR(100) NULL,
+        oauthRedirectUri VARCHAR(500) NULL,
+        mid VARCHAR(20) NULL,
+        sid VARCHAR(20) NULL,
+        terminalId VARCHAR(20) NULL,
+        upiId VARCHAR(150) NULL,
+        symmetricKey TEXT NULL,
+        privateKeyPem TEXT NULL,
+        publicCertPem TEXT NULL,
+        accessToken TEXT NULL,
+        refreshToken TEXT NULL,
+        tokenExpiresAt DATETIME NULL,
+        createdAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+        updatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+        PRIMARY KEY (id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    created = true;
+    if (typeof log.info === 'function') {
+      log.info(
+        { event: 'schema.canara_payment_settings_created' },
+        'Created canara_payment_settings table',
+      );
+    }
+  }
+
+  // One-time migrate from legacy payment_gateway_settings.canara* columns
+  let migrated = false;
+  try {
+    const legacyCols = await dataSource.query(
+      `SELECT COLUMN_NAME AS name
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'payment_gateway_settings'
+         AND COLUMN_NAME = 'canaraEnabled'`,
+    );
+    if (legacyCols.length) {
+      const countRows = await dataSource.query(
+        `SELECT COUNT(*) AS c FROM canara_payment_settings`,
+      );
+      const count = Number(countRows[0]?.c || 0);
+      if (count === 0) {
+        await dataSource.query(`
+          INSERT INTO canara_payment_settings (
+            enabled, mockMode, clientId, clientSecret, baseUrl, scope,
+            oauthRedirectUri, mid, sid, terminalId, upiId,
+            symmetricKey, privateKeyPem, publicCertPem,
+            accessToken, refreshToken, tokenExpiresAt
+          )
+          SELECT
+            COALESCE(canaraEnabled, 0),
+            COALESCE(canaraMockMode, 0),
+            canaraClientId, canaraClientSecret,
+            COALESCE(canaraBaseUrl, 'https://api.canarauat.bank.in'),
+            canaraScope, canaraOauthRedirectUri,
+            canaraMid, canaraSid, canaraTerminalId, canaraUpiId,
+            canaraSymmetricKey, canaraPrivateKeyPem, canaraPublicCertPem,
+            canaraAccessToken, canaraRefreshToken, canaraTokenExpiresAt
+          FROM payment_gateway_settings
+          ORDER BY id ASC
+          LIMIT 1
+        `);
+        migrated = true;
+        if (typeof log.info === 'function') {
+          log.info(
+            { event: 'schema.canara_settings_migrated' },
+            'Migrated Canara settings into canara_payment_settings',
+          );
+        }
+      }
+    }
+  } catch (err) {
+    if (typeof log.warn === 'function') {
+      log.warn(
+        { event: 'schema.canara_migrate_skipped', err: err.message },
+        'Skipped legacy Canara column migration',
+      );
+    }
+  }
+
+  return { created, migrated };
+}
+
+module.exports = { ensureCanaraPaymentSettingsTable };

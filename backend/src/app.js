@@ -62,6 +62,43 @@ function createApp(services) {
     }),
   );
 
+  // Canara Dynamic QR payment callback (bank → EMS). Must stay public (no JWT).
+  app.post(
+    `/${config.apiPrefix}/fees/canara/qr-callback`,
+    express.json({ limit: '1mb' }),
+    asyncHandler(async (req, res) => {
+      const result = await services.canaraQr.handleQrCallback(req.body);
+      // Bank expects HTTP 200 and acknowledgment
+      res.status(200).json({
+        status: '200_OK',
+        ...result,
+      });
+    }),
+  );
+
+  // Canara OAuth redirect (browser → EMS after bank login). Public GET.
+  app.get(
+    `/${config.apiPrefix}/fees/canara/oauth/callback`,
+    asyncHandler(async (req, res) => {
+      const code = String(req.query.code || '');
+      const state = String(req.query.state || '');
+      const result = await services.canaraQr.handleOauthCallback({
+        code,
+        state,
+      });
+      res
+        .status(200)
+        .type('html')
+        .send(
+          `<!doctype html><html><body style="font-family:sans-serif;padding:2rem">
+           <h1>Canara OAuth connected</h1>
+           <p>${result.message}</p>
+           <p>You can close this window and return to EMS Settings.</p>
+           </body></html>`,
+        );
+    }),
+  );
+
   app.use(express.json({ limit: '1mb' }));
 
   api.post(

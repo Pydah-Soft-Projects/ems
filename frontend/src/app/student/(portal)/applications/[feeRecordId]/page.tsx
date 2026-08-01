@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { money } from '@/components/fees/money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
+import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
 import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 
 type Step = 1 | 2;
@@ -42,31 +43,40 @@ export default function StudentApplyPage({
   const [step, setStep] = useState<Step>(1);
   const [consent, setConsent] = useState(false);
   const [declaration, setDeclaration] = useState(false);
-  const [method, setMethod] = useState<PaymentMethod | 'self_online'>('upi');
+  const [method, setMethod] = useState<
+    PaymentMethod | 'self_online' | 'canara_dynamic_qr'
+  >('upi');
   const [razorpayReady, setRazorpayReady] = useState(false);
   const [selfOnlineReady, setSelfOnlineReady] = useState(false);
+  const [canaraReady, setCanaraReady] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [selfPayOpen, setSelfPayOpen] = useState(false);
+  const [canaraPayOpen, setCanaraPayOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [fees, status, selfStatus] = await Promise.all([
+      const [fees, methods] = await Promise.all([
         api.getStudentFees(),
-        api.getRazorpayStatus().catch(() => ({
-          enabled: false,
-          configured: false,
-          ready: false,
-        })),
-        api.getSelfOnlineStatus().catch(() => ({
-          enabled: false,
-          configured: false,
-          ready: false,
-          upiId: null,
-          merchantName: '',
-          paymentNote: '',
-          expiryHours: 48,
+        api.getPaymentMethodsStatus().catch(() => ({
+          razorpay: { enabled: false, configured: false, ready: false },
+          selfOnline: {
+            enabled: false,
+            configured: false,
+            ready: false,
+            upiId: null,
+            merchantName: '',
+          },
+          canara: {
+            enabled: false,
+            mockMode: false,
+            configured: false,
+            ready: false,
+            oauthReady: false,
+            upiId: null,
+            qrCallbackUrl: '',
+          },
         })),
       ]);
       const found = fees.find((f) => f.id === id) ?? null;
@@ -93,9 +103,12 @@ export default function StudentApplyPage({
           setSelfPayOpen(true);
         }
       }
-      setRazorpayReady(status.ready);
-      setSelfOnlineReady(selfStatus.ready);
-      if (!status.ready && selfStatus.ready) {
+      setRazorpayReady(methods.razorpay.ready);
+      setSelfOnlineReady(methods.selfOnline.ready);
+      setCanaraReady(methods.canara.ready);
+      if (!methods.razorpay.ready && methods.canara.ready) {
+        setMethod('canara_dynamic_qr');
+      } else if (!methods.razorpay.ready && methods.selfOnline.ready) {
         setMethod('self_online');
       }
     } catch (err) {
@@ -481,9 +494,15 @@ export default function StudentApplyPage({
               <select
                 value={method}
                 onChange={(e) => {
-                  setMethod(e.target.value as PaymentMethod | 'self_online');
+                  setMethod(
+                    e.target.value as
+                      | PaymentMethod
+                      | 'self_online'
+                      | 'canara_dynamic_qr',
+                  );
                   setPayOpen(false);
                   setSelfPayOpen(false);
+                  setCanaraPayOpen(false);
                 }}
                 className="w-full max-w-xs rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
               >
@@ -495,6 +514,11 @@ export default function StudentApplyPage({
                     <option value="net_banking">Net banking</option>
                   </>
                 ) : null}
+                {canaraReady ? (
+                  <option value="canara_dynamic_qr">
+                    Canara Dynamic QR (realtime)
+                  </option>
+                ) : null}
                 {selfOnlineReady ? (
                   <option value="self_online">Self Online (College UPI)</option>
                 ) : null}
@@ -502,6 +526,12 @@ export default function StudentApplyPage({
               {method === 'upi' && razorpayReady && (
                 <p className="mt-2 text-xs text-amber-800">
                   UPI payments include a 2.2% convenience / bank charge.
+                </p>
+              )}
+              {method === 'canara_dynamic_qr' && (
+                <p className="mt-2 text-xs text-slate-600">
+                  Scan Canara Dynamic QR and pay the exact fee. Confirmation is
+                  automatic when the bank notifies EMS.
                 </p>
               )}
               {method === 'self_online' && (
@@ -512,7 +542,7 @@ export default function StudentApplyPage({
               )}
             </div>
 
-            {!razorpayReady && !selfOnlineReady && (
+            {!razorpayReady && !selfOnlineReady && !canaraReady && (
               <div className="mt-4 rounded-[var(--radius)] bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800">
                 Online payment is temporarily unavailable. Please pay at the fee
                 counter.
@@ -526,6 +556,7 @@ export default function StudentApplyPage({
                 onClick={() => {
                   setPayOpen(false);
                   setSelfPayOpen(false);
+                  setCanaraPayOpen(false);
                   setStep(1);
                 }}
               >
@@ -534,32 +565,48 @@ export default function StudentApplyPage({
               <Button
                 type="button"
                 disabled={
-                  (method === 'self_online'
-                    ? !selfOnlineReady || selfPayOpen
-                    : !razorpayReady || payOpen) ||
-                  (!razorpayReady && !selfOnlineReady)
+                  (method === 'canara_dynamic_qr'
+                    ? !canaraReady || canaraPayOpen
+                    : method === 'self_online'
+                      ? !selfOnlineReady || selfPayOpen
+                      : !razorpayReady || payOpen) ||
+                  (!razorpayReady && !selfOnlineReady && !canaraReady)
                 }
                 onClick={() => {
                   setError('');
-                  if (method === 'self_online') {
+                  if (method === 'canara_dynamic_qr') {
+                    setCanaraPayOpen(true);
+                    setSelfPayOpen(false);
+                    setPayOpen(false);
+                  } else if (method === 'self_online') {
                     setSelfPayOpen(true);
+                    setCanaraPayOpen(false);
                     setPayOpen(false);
                   } else {
                     setPayOpen(true);
                     setSelfPayOpen(false);
+                    setCanaraPayOpen(false);
                   }
                 }}
               >
-                {method === 'self_online'
+                {method === 'canara_dynamic_qr' || method === 'self_online'
                   ? `Pay ${money(record.totalAmount)} via UPI`
                   : `Pay ${money(split?.total ?? record.totalAmount)}`}
               </Button>
             </div>
 
             <RazorpayInlinePay
-              open={payOpen && method !== 'self_online'}
+              open={
+                payOpen &&
+                method !== 'self_online' &&
+                method !== 'canara_dynamic_qr'
+              }
               record={record}
-              paymentMethod={method === 'self_online' ? 'upi' : method}
+              paymentMethod={
+                method === 'self_online' || method === 'canara_dynamic_qr'
+                  ? 'upi'
+                  : method
+              }
               variant="panel"
               prefillName={user?.fullName}
               prefillContact={user?.mobile ?? undefined}
@@ -582,6 +629,19 @@ export default function StudentApplyPage({
               // Don't call load() right now to avoid re-opening the dialog!
               // Wait for user to close the dialog, then load (if needed)
             }}
+            />
+
+            <CanaraDynamicQrPanel
+              open={canaraPayOpen && method === 'canara_dynamic_qr'}
+              record={record}
+              onClose={() => {
+                setCanaraPayOpen(false);
+                void load();
+              }}
+              onPaid={(paymentId) => {
+                setCanaraPayOpen(false);
+                router.push(`/student/receipt/${paymentId}`);
+              }}
             />
           </section>
         </div>

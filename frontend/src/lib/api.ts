@@ -653,6 +653,31 @@ export const api = {
     );
   },
 
+  /** One call for fee desk / student — Razorpay + Self Online + Canara readiness */
+  getPaymentMethodsStatus() {
+    return request<{
+      razorpay: { enabled: boolean; configured: boolean; ready: boolean };
+      selfOnline: {
+        enabled: boolean;
+        configured: boolean;
+        ready: boolean;
+        upiId: string | null;
+        merchantName: string;
+      };
+      canara: {
+        enabled: boolean;
+        mockMode: boolean;
+        testMode?: boolean;
+        configured: boolean;
+        ready: boolean;
+        oauthReady: boolean;
+        upiId: string | null;
+        qrCallbackUrl: string;
+        missing?: string[];
+      };
+    }>('/fees/payment-methods/status');
+  },
+
   createRazorpayOrder(
     feeRecordId: number,
     paymentMethod: PaymentMethod = 'upi',
@@ -715,6 +740,77 @@ export const api = {
       {
         method: 'PUT',
         body: JSON.stringify(data),
+      },
+    );
+  },
+
+  getCanaraStatus() {
+    return request<import('@/types/canara').CanaraStatus>(
+      '/fees/canara/status',
+    );
+  },
+
+  /** Canara-only settings (table: canara_payment_settings) */
+  getCanaraSettings() {
+    return request<import('@/types/canara').CanaraStatus>('/settings/canara');
+  },
+
+  updateCanaraSettings(data: {
+    enabled?: boolean;
+    mockMode?: boolean;
+    testMode?: boolean;
+    clientId?: string;
+    clientSecret?: string;
+    baseUrl?: string;
+    scope?: string;
+    oauthRedirectUri?: string;
+    mid?: string;
+    sid?: string;
+    terminalId?: string;
+    upiId?: string;
+    symmetricKey?: string;
+    privateKeyPem?: string;
+    publicCertPem?: string;
+  }) {
+    return request<import('@/types/canara').CanaraStatus>('/settings/canara', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  startCanaraOauth() {
+    return request<{ url: string; state: string; redirectUri: string }>(
+      '/fees/canara/oauth/start',
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+  },
+
+  createCanaraOrder(feeRecordId: number) {
+    return request<import('@/types/canara').CanaraOrder>(
+      '/fees/canara/order',
+      {
+        method: 'POST',
+        body: JSON.stringify({ feeRecordId }),
+      },
+    );
+  },
+
+  checkCanaraPaymentStatus(paymentId: number, simulatePaid?: boolean) {
+    return request<import('@/types/canara').CanaraStatusCheck>(
+      `/fees/canara/${paymentId}/status`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ simulatePaid: Boolean(simulatePaid) }),
+      },
+    );
+  },
+
+  simulateCanaraCallback(paymentId: number, force?: boolean) {
+    return request<{ ok: boolean; code?: string; paymentId?: number }>(
+      `/fees/canara/${paymentId}/simulate-callback`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ force: Boolean(force) }),
       },
     );
   },

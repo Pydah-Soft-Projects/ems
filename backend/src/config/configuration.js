@@ -62,4 +62,30 @@ module.exports = () => ({
     paymentNote: process.env.SELF_ONLINE_PAYMENT_NOTE || '',
     expiryHours: parseInt(process.env.SELF_ONLINE_EXPIRY_HOURS || '0', 10) || 0,
   },
+  canara: {
+    enabled: (process.env.CANARA_ENABLED || '').toLowerCase() === 'true',
+    mockMode: (process.env.CANARA_MOCK_MODE || '').toLowerCase() === 'true',
+    clientId: process.env.CANARA_CLIENT_ID || '',
+    clientSecret: process.env.CANARA_CLIENT_SECRET || '',
+    baseUrl:
+      process.env.CANARA_BASE_URL || 'https://api.canarauat.bank.in',
+    scope: process.env.CANARA_SCOPE || '',
+    oauthRedirectUri: process.env.CANARA_OAUTH_REDIRECT_URI || '',
+    mid: process.env.CANARA_MID || '',
+    sid: process.env.CANARA_SID || '',
+    terminalId: process.env.CANARA_TERMINAL_ID || '',
+    upiId: process.env.CANARA_UPI_ID || '',
+    symmetricKey: process.env.CANARA_SYMMETRIC_KEY || '',
+    privateKeyPem: process.env.CANARA_PRIVATE_KEY_PEM || '',
+    publicCertPem: process.env.CANARA_PUBLIC_CERT_PEM || '',
+  },
+  publicAppUrl:
+    process.env.PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.CORS_ORIGIN ||
+    'http://localhost:3000',
+  publicApiUrl:
+    process.env.PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    `http://localhost:${parseInt(process.env.PORT || '4000', 10)}`,
 });

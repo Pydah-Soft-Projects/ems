@@ -24,6 +24,25 @@ function createSettingsRoutes(services) {
     }),
   );
 
+  /** Dedicated Canara settings — table: canara_payment_settings (NOT payment_gateway_settings) */
+  router.get(
+    '/canara',
+    requirePrivilege('settings:payments'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.canaraSettings.getCanaraSettingsPublic());
+    }),
+  );
+
+  router.put(
+    '/canara',
+    requirePrivilege('settings:payments'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.canaraSettings.updateSettings(req.body ?? {}),
+      );
+    }),
+  );
+
   return router;
 }
 

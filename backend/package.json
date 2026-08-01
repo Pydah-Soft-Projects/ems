@@ -18,6 +18,7 @@
     "fix:indexes": "node scripts/fix-subject-mapping-indexes.js",
     "migrate:statement-txn-columns": "node scripts/migrate-merchant-statement-txn-columns.js",
     "migrate:add-self-online": "node scripts/migrate-add-self-online-columns.js",
+    "migrate:add-canara": "node scripts/migrate-add-canara-columns.js",
     "migrate:late-fee-slab-dates": "node scripts/migrate-late-fee-slab-dates.js"
   },
   "dependencies": {
@@ -27,6 +28,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "helmet": "^8.0.0",
+    "jose": "^6.2.6",
     "jsonwebtoken": "^9.0.2",
     "kill-port": "^2.0.1",
     "mongoose": "^8.7.0",

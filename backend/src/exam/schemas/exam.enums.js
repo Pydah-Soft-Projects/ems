@@ -24,6 +24,7 @@ const PaymentMode = {
   ONLINE: 'online',
   OFFLINE: 'offline',
   SELF_ONLINE: 'self_online',
+  CANARA_DYNAMIC_QR: 'canara_dynamic_qr',
 };
 
 const PaymentMethod = {

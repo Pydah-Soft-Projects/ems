@@ -18,10 +18,15 @@ import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
+import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
 import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
 import { calcUpiConvenienceFee, paymentLineLabel } from '@/lib/upiConvenienceFee';
 
-type CollectChannel = PaymentMethod | 'razorpay' | 'self_online';
+type CollectChannel =
+  | PaymentMethod
+  | 'razorpay'
+  | 'self_online'
+  | 'canara_dynamic_qr';
 
 interface FeeCollectionDeskProps {
   rollNumber: string;
@@ -50,11 +55,15 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [payError, setPayError] = useState('');
   const [razorpayReady, setRazorpayReady] = useState(false);
   const [selfOnlineReady, setSelfOnlineReady] = useState(false);
+  const [canaraReady, setCanaraReady] = useState(false);
+  const [canaraMissing, setCanaraMissing] = useState<string[]>([]);
+  const [canaraMockMode, setCanaraMockMode] = useState(false);
   const [razorpayRecord, setRazorpayRecord] = useState<ExamFeeRecord | null>(
     null,
   );
   const [selfOnlineRecord, setSelfOnlineRecord] =
     useState<ExamFeeRecord | null>(null);
+  const [canaraRecord, setCanaraRecord] = useState<ExamFeeRecord | null>(null);
   const [eligibleExams, setEligibleExams] = useState<StudentExamListItem[]>([]);
   const [eligibleError, setEligibleError] = useState('');
   const [applyExam, setApplyExam] = useState<StudentExamListItem | null>(null);
@@ -77,25 +86,35 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     setLoading(true);
     setError('');
     try {
-      const [lookup, rzStatus, selfStatus] = await Promise.all([
+      const [lookup, methods] = await Promise.all([
         api.lookupFeeCollection(rollNumber),
-        api.getRazorpayStatus().catch(() => ({
-          enabled: false,
-          configured: false,
-          ready: false,
-        })),
-        api.getSelfOnlineStatus().catch(() => ({
-          enabled: false,
-          configured: false,
-          ready: false,
-          upiId: null,
-          merchantName: '',
-          paymentNote: '',
-          expiryHours: 48,
+        api.getPaymentMethodsStatus().catch(() => ({
+          razorpay: { enabled: false, configured: false, ready: false },
+          selfOnline: {
+            enabled: false,
+            configured: false,
+            ready: false,
+            upiId: null,
+            merchantName: '',
+          },
+          canara: {
+            enabled: false,
+            mockMode: false,
+            configured: false,
+            ready: false,
+            oauthReady: false,
+            upiId: null,
+            qrCallbackUrl: '',
+          },
         })),
       ]);
-      setRazorpayReady(rzStatus.ready);
-      setSelfOnlineReady(selfStatus.ready);
+      setRazorpayReady(methods.razorpay.ready);
+      setSelfOnlineReady(methods.selfOnline.ready);
+      setCanaraReady(methods.canara.ready);
+      setCanaraMockMode(Boolean(methods.canara.mockMode));
+      setCanaraMissing(
+        Array.isArray(methods.canara.missing) ? methods.canara.missing : [],
+      );
       setRecords(lookup.records);
       setStudentName(lookup.studentName ?? '');
       const pending = lookup.records.filter((r) => r.status === 'pending');
@@ -235,6 +254,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       }
       setPayError('');
       setSelfOnlineRecord(null);
+      setCanaraRecord(null);
       setRazorpayRecord(selectedPending[0]);
       return;
     }
@@ -252,7 +272,26 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       }
       setPayError('');
       setRazorpayRecord(null);
+      setCanaraRecord(null);
       setSelfOnlineRecord(selectedPending[0]);
+      return;
+    }
+
+    if (paymentMethod === 'canara_dynamic_qr') {
+      if (!canaraReady) {
+        setPayError(
+          'Canara Dynamic QR is not ready. Configure it under Settings → Canara Bank Dynamic QR.',
+        );
+        return;
+      }
+      if (selectedPending.length !== 1) {
+        setPayError('Select exactly one fee row for Canara Dynamic QR payment.');
+        return;
+      }
+      setPayError('');
+      setRazorpayRecord(null);
+      setSelfOnlineRecord(null);
+      setCanaraRecord(selectedPending[0]);
       return;
     }
 
@@ -349,6 +388,20 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         }}
         onClaimed={async () => {
           // Don't call load() right now to avoid re-opening the dialog!
+        }}
+      />
+
+      <CanaraDynamicQrPanel
+        open={canaraRecord != null}
+        record={canaraRecord}
+        variant="overlay"
+        onClose={() => {
+          setCanaraRecord(null);
+          void load();
+        }}
+        onPaid={(paymentId) => {
+          setCanaraRecord(null);
+          router.push(`/dashboard/fees/receipt/${paymentId}`);
         }}
       />
 
@@ -857,18 +910,22 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     ['cash', 'Cash'],
                     ['bank_transfer', 'Bank'],
                     ['razorpay', 'Razorpay'],
+                    ['canara_dynamic_qr', 'Canara QR'],
                     ['self_online', 'Self Online'],
                   ] as const
                 ).map(([value, label]) => {
                   const disabled =
                     (value === 'razorpay' && !razorpayReady) ||
-                    (value === 'self_online' && !selfOnlineReady);
+                    (value === 'self_online' && !selfOnlineReady) ||
+                    (value === 'canara_dynamic_qr' && !canaraReady);
                   const title =
                     value === 'razorpay' && !razorpayReady
                       ? 'Configure Razorpay in Settings'
                       : value === 'self_online' && !selfOnlineReady
                         ? 'Configure Self Online UPI in Settings'
-                        : undefined;
+                        : value === 'canara_dynamic_qr' && !canaraReady
+                          ? 'Configure Canara Dynamic QR in Settings'
+                          : undefined;
                   return (
                     <button
                       key={value}
@@ -918,9 +975,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   .
                 </p>
               )}
-              {!selfOnlineReady && (
+              {!canaraReady && (
                 <p className="mt-2 text-xs text-amber-700">
-                  Self Online offline — add Merchant UPI ID in{' '}
+                  Canara Dynamic QR offline
+                  {canaraMissing.length
+                    ? ` — missing: ${canaraMissing.join(', ')}`
+                    : ' — complete credentials + OAuth in'}{' '}
                   <Link
                     href="/dashboard/settings"
                     className="font-semibold underline"
@@ -930,10 +990,22 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   .
                 </p>
               )}
+              {canaraReady && canaraMockMode && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Canara ready in <strong>test mode</strong> — bank payments will
+                  not clear fee dues.
+                </p>
+              )}
+              {canaraReady && !canaraMockMode && (
+                <p className="mt-2 text-xs text-slate-600">
+                  Canara ready (live settlement).
+                </p>
+              )}
             </div>
 
             {paymentMethod !== 'razorpay' &&
-              paymentMethod !== 'self_online' && (
+              paymentMethod !== 'self_online' &&
+              paymentMethod !== 'canara_dynamic_qr' && (
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-700">
                 Collected by

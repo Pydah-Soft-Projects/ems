@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ApiError, api } from '@/lib/api';
 import type { PaymentGatewaySettings } from '@/lib/razorpayCheckout';
+import type { CanaraStatus } from '@/types/canara';
 
 function applySettingsToForms(
   data: PaymentGatewaySettings,
@@ -37,11 +38,51 @@ function applySettingsToForms(
   );
 }
 
+function applyCanaraToForm(
+  data: CanaraStatus,
+  setters: {
+    setCanara: (v: CanaraStatus) => void;
+    setCanaraEnabled: (v: boolean) => void;
+    setCanaraMockMode: (v: boolean) => void;
+    setCanaraClientId: (v: string) => void;
+    setCanaraClientSecret: (v: string) => void;
+    setCanaraBaseUrl: (v: string) => void;
+    setCanaraScope: (v: string) => void;
+    setCanaraOauthRedirectUri: (v: string) => void;
+    setCanaraMid: (v: string) => void;
+    setCanaraSid: (v: string) => void;
+    setCanaraTerminalId: (v: string) => void;
+    setCanaraUpiId: (v: string) => void;
+    setCanaraSymmetricKey: (v: string) => void;
+    setCanaraPrivateKeyPem: (v: string) => void;
+    setCanaraPublicCertPem: (v: string) => void;
+  },
+) {
+  setters.setCanara(data);
+  setters.setCanaraEnabled(Boolean(data.enabled));
+  setters.setCanaraMockMode(Boolean(data.mockMode));
+  setters.setCanaraClientId(data.clientId ?? '');
+  setters.setCanaraClientSecret('');
+  setters.setCanaraBaseUrl(data.baseUrl ?? 'https://api.canarauat.bank.in');
+  setters.setCanaraScope(data.scope ?? '');
+  setters.setCanaraOauthRedirectUri(data.oauthRedirectUri ?? '');
+  setters.setCanaraMid(data.mid ?? '');
+  setters.setCanaraSid(data.sid ?? '');
+  setters.setCanaraTerminalId(data.terminalId ?? '');
+  setters.setCanaraUpiId(data.upiId ?? '');
+  setters.setCanaraSymmetricKey('');
+  setters.setCanaraPrivateKeyPem('');
+  setters.setCanaraPublicCertPem('');
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<PaymentGatewaySettings | null>(null);
+  const [canara, setCanara] = useState<CanaraStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingSelf, setSavingSelf] = useState(false);
+  const [savingCanara, setSavingCanara] = useState(false);
+  const [startingOauth, setStartingOauth] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -58,6 +99,23 @@ export default function SettingsPage() {
     useState(true);
   const [savingDueRestrict, setSavingDueRestrict] = useState(false);
 
+  const [canaraEnabled, setCanaraEnabled] = useState(false);
+  const [canaraMockMode, setCanaraMockMode] = useState(false);
+  const [canaraClientId, setCanaraClientId] = useState('');
+  const [canaraClientSecret, setCanaraClientSecret] = useState('');
+  const [canaraBaseUrl, setCanaraBaseUrl] = useState(
+    'https://api.canarauat.bank.in',
+  );
+  const [canaraScope, setCanaraScope] = useState('');
+  const [canaraOauthRedirectUri, setCanaraOauthRedirectUri] = useState('');
+  const [canaraMid, setCanaraMid] = useState('');
+  const [canaraSid, setCanaraSid] = useState('');
+  const [canaraTerminalId, setCanaraTerminalId] = useState('');
+  const [canaraUpiId, setCanaraUpiId] = useState('');
+  const [canaraSymmetricKey, setCanaraSymmetricKey] = useState('');
+  const [canaraPrivateKeyPem, setCanaraPrivateKeyPem] = useState('');
+  const [canaraPublicCertPem, setCanaraPublicCertPem] = useState('');
+
   const formSetters = {
     setSettings,
     setEnabled,
@@ -71,23 +129,50 @@ export default function SettingsPage() {
     setRestrictExamApplyOnFeeDues,
   };
 
+  const canaraSetters = {
+    setCanara,
+    setCanaraEnabled,
+    setCanaraMockMode,
+    setCanaraClientId,
+    setCanaraClientSecret,
+    setCanaraBaseUrl,
+    setCanaraScope,
+    setCanaraOauthRedirectUri,
+    setCanaraMid,
+    setCanaraSid,
+    setCanaraTerminalId,
+    setCanaraUpiId,
+    setCanaraSymmetricKey,
+    setCanaraPrivateKeyPem,
+    setCanaraPublicCertPem,
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    try {
-      const data = await api.getPaymentSettings();
-      applySettingsToForms(data, formSetters);
-    } catch (err) {
-      setSettings(null);
+    // Load independently — Canara must NEVER wipe Razorpay / Self Online forms
+    const paymentsResult = await api.getPaymentSettings().then(
+      (data) => ({ ok: true as const, data }),
+      (err) => ({ ok: false as const, err }),
+    );
+    const canaraResult = await api.getCanaraSettings().then(
+      (data) => ({ ok: true as const, data }),
+      () => ({ ok: false as const, data: null }),
+    );
+
+    if (paymentsResult.ok) {
+      applySettingsToForms(paymentsResult.data, formSetters);
+    } else {
       setError(
-        err instanceof ApiError
-          ? err.message
+        paymentsResult.err instanceof ApiError
+          ? paymentsResult.err.message
           : 'Failed to load payment settings.',
       );
-    } finally {
-      setLoading(false);
     }
-    // formSetters are stable setState fns
+    if (canaraResult.ok && canaraResult.data) {
+      applyCanaraToForm(canaraResult.data, canaraSetters);
+    }
+    setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -140,6 +225,63 @@ export default function SettingsPage() {
       );
     } finally {
       setSavingSelf(false);
+    }
+  }
+
+  async function onSubmitCanara(e: FormEvent) {
+    e.preventDefault();
+    setSavingCanara(true);
+    setError('');
+    setSuccess('');
+    try {
+      // Saves ONLY to canara_payment_settings — never payment_gateway_settings
+      const updated = await api.updateCanaraSettings({
+        enabled: canaraEnabled,
+        mockMode: canaraMockMode,
+        clientId: canaraClientId.trim(),
+        clientSecret: canaraClientSecret.trim() || undefined,
+        baseUrl: canaraBaseUrl.trim(),
+        scope: canaraScope.trim(),
+        oauthRedirectUri: canaraOauthRedirectUri.trim(),
+        mid: canaraMid.trim(),
+        sid: canaraSid.trim(),
+        terminalId: canaraTerminalId.trim(),
+        upiId: canaraUpiId.trim(),
+        symmetricKey: canaraSymmetricKey.trim() || undefined,
+        privateKeyPem: canaraPrivateKeyPem.trim() || undefined,
+        publicCertPem: canaraPublicCertPem.trim() || undefined,
+      });
+      applyCanaraToForm(updated, canaraSetters);
+      setSuccess('Canara settings saved to canara_payment_settings.');
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to save Canara settings.',
+      );
+    } finally {
+      setSavingCanara(false);
+    }
+  }
+
+  async function onStartCanaraOauth() {
+    setStartingOauth(true);
+    setError('');
+    setSuccess('');
+    try {
+      const { url } = await api.startCanaraOauth();
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setSuccess(
+        'Opened Canara login in a new tab. After login, return here and refresh settings.',
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to start Canara OAuth.',
+      );
+    } finally {
+      setStartingOauth(false);
     }
   }
 
@@ -418,6 +560,186 @@ export default function SettingsPage() {
               <Button type="submit" disabled={savingSelf}>
                 {savingSelf ? 'Saving…' : 'Save Self Online settings'}
               </Button>
+            </form>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-base font-semibold text-[var(--foreground)]">
+            Canara Bank Dynamic QR
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Stored in table <code>canara_payment_settings</code> only — not in
+            Razorpay / Self Online payment settings. Register the QR Callback
+            URL with the bank during app setup.
+          </p>
+        </CardHeader>
+        <CardBody>
+          {loading ? (
+            <p className="text-sm text-[var(--muted)]">Loading…</p>
+          ) : (
+            <form
+              className="space-y-4"
+              onSubmit={(e) => void onSubmitCanara(e)}
+            >
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={canaraEnabled}
+                  onChange={(e) => setCanaraEnabled(e.target.checked)}
+                />
+                Enable Canara Dynamic QR
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={canaraMockMode}
+                  onChange={(e) => setCanaraMockMode(e.target.checked)}
+                />
+                Test mode — real Canara QR/callback, but do NOT mark fee dues paid
+              </label>
+
+              <div className="rounded-[var(--radius)] bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <p>
+                  <span className="font-semibold">QR Callback URL</span> (register
+                  with bank):
+                </p>
+                <code className="mt-1 block break-all">
+                  {canara?.qrCallbackUrl || '—'}
+                </code>
+                <p className="mt-2">
+                  <span className="font-semibold">OAuth redirect URI</span>:
+                </p>
+                <code className="mt-1 block break-all">
+                  {canaraOauthRedirectUri || canara?.oauthRedirectUri || '—'}
+                </code>
+              </div>
+
+              <Input
+                label="Client ID"
+                value={canaraClientId}
+                onChange={(e) => setCanaraClientId(e.target.value)}
+              />
+              <Input
+                label="Client Secret"
+                type="password"
+                placeholder={
+                  canara?.hasClientSecret
+                    ? canara.clientSecretMasked || '••••'
+                    : 'Enter client secret'
+                }
+                value={canaraClientSecret}
+                onChange={(e) => setCanaraClientSecret(e.target.value)}
+              />
+              <Input
+                label="API Base URL"
+                value={canaraBaseUrl}
+                onChange={(e) => setCanaraBaseUrl(e.target.value)}
+              />
+              <Input
+                label="OAuth Scope"
+                value={canaraScope}
+                onChange={(e) => setCanaraScope(e.target.value)}
+              />
+              <Input
+                label="OAuth Redirect URI"
+                value={canaraOauthRedirectUri}
+                onChange={(e) => setCanaraOauthRedirectUri(e.target.value)}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label="Merchant ID (mid)"
+                  value={canaraMid}
+                  onChange={(e) => setCanaraMid(e.target.value)}
+                />
+                <Input
+                  label="Sub-merchant ID (sid)"
+                  value={canaraSid}
+                  onChange={(e) => setCanaraSid(e.target.value)}
+                />
+                <Input
+                  label="Terminal ID"
+                  value={canaraTerminalId}
+                  onChange={(e) => setCanaraTerminalId(e.target.value)}
+                />
+                <Input
+                  label="Merchant VPA (upiId)"
+                  value={canaraUpiId}
+                  onChange={(e) => setCanaraUpiId(e.target.value)}
+                />
+              </div>
+              <Input
+                label="Symmetric key (JWE A256KW)"
+                type="password"
+                placeholder={
+                  canara?.hasSymmetricKey ? '•••• saved' : '32-byte key'
+                }
+                value={canaraSymmetricKey}
+                onChange={(e) => setCanaraSymmetricKey(e.target.value)}
+              />
+              <label className="block text-sm">
+                <span className="mb-1 block text-[var(--muted)]">
+                  RSA private key PEM (signing)
+                </span>
+                <textarea
+                  className="min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] px-3 py-2 font-mono text-xs"
+                  placeholder={
+                    canara?.hasPrivateKey
+                      ? '•••• saved — paste to replace'
+                      : '-----BEGIN PRIVATE KEY-----'
+                  }
+                  value={canaraPrivateKeyPem}
+                  onChange={(e) => setCanaraPrivateKeyPem(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-[var(--muted)]">
+                  Public certificate PEM (x-client-Certificate)
+                </span>
+                <textarea
+                  className="min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] px-3 py-2 font-mono text-xs"
+                  placeholder={
+                    canara?.hasPublicCert
+                      ? '•••• saved — paste to replace'
+                      : '-----BEGIN CERTIFICATE-----'
+                  }
+                  value={canaraPublicCertPem}
+                  onChange={(e) => setCanaraPublicCertPem(e.target.value)}
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={savingCanara}>
+                  {savingCanara ? 'Saving…' : 'Save Canara settings'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={startingOauth}
+                  onClick={() => void onStartCanaraOauth()}
+                >
+                  {startingOauth ? 'Opening…' : 'Connect Canara OAuth'}
+                </Button>
+              </div>
+
+              <p className="text-xs text-[var(--muted)]">
+                Status:{' '}
+                {canara?.ready
+                  ? canara.testMode || canara.mockMode
+                    ? 'Ready (test mode — dues will not update)'
+                    : 'Ready (live settlement)'
+                  : canara?.configured
+                    ? canara?.oauthReady
+                      ? 'Configured'
+                      : 'Configured — connect OAuth'
+                    : 'Incomplete'}
+                {canara?.hasAccessToken ? ' · Access token present' : ''}
+                {canara?.missing?.length
+                  ? ` · Missing: ${canara.missing.join(', ')}`
+                  : ''}
+              </p>
             </form>
           )}
         </CardBody>
