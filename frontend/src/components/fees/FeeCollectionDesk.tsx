@@ -105,6 +105,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             oauthReady: false,
             upiId: null,
             qrCallbackUrl: '',
+            missing: [] as string[],
           },
         })),
       ]);

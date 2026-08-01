@@ -76,6 +76,7 @@ export default function StudentApplyPage({
             oauthReady: false,
             upiId: null,
             qrCallbackUrl: '',
+            missing: [] as string[],
           },
         })),
       ]);

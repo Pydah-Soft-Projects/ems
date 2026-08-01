@@ -566,16 +566,10 @@ export default function SettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <h2 className="text-base font-semibold text-[var(--foreground)]">
-            Canara Bank Dynamic QR
-          </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Stored in table <code>canara_payment_settings</code> only — not in
-            Razorpay / Self Online payment settings. Register the QR Callback
-            URL with the bank during app setup.
-          </p>
-        </CardHeader>
+        <CardHeader
+          title="Canara Bank Dynamic QR"
+          description="Stored in table canara_payment_settings only — not in Razorpay / Self Online payment settings. Register the QR Callback URL with the bank during app setup."
+        />
         <CardBody>
           {loading ? (
             <p className="text-sm text-[var(--muted)]">Loading…</p>
