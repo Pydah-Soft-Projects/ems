@@ -155,4 +155,7 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
   return { created, migrated };
 }
 
-module.exports = { ensureCanaraPaymentSettingsTable };
+module.exports = {
+  ensureCanaraPaymentSettingsTable,
+  ensureCanaraOauthAuditTable,
+};
