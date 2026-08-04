@@ -185,6 +185,32 @@ class CanaraSettingsService {
     };
   }
 
+  async getOauthConfig() {
+    const row = await this.getOrCreateRow();
+    const env = config.canara || {};
+    const baseUrl = row.baseUrl?.trim() || env.baseUrl?.trim() || 'https://api.canarauat.bank.in';
+    const oauthRedirectUri = row.oauthRedirectUri?.trim() || env.oauthRedirectUri?.trim() || `${(config.publicApiUrl || '').replace(/\/$/, '')}/api/fees/canara/oauth/callback`;
+    const clientId = row.clientId?.trim() || env.clientId?.trim() || '';
+    const clientSecret = row.clientSecret?.trim() || env.clientSecret?.trim() || '';
+    const scope = row.scope?.trim() || env.scope?.trim() || '';
+
+    if (!clientId || !clientSecret) {
+      throw AppError.badRequest('Canara OAuth client credentials are incomplete. Missing clientId or clientSecret.');
+    }
+
+    return {
+      clientId,
+      clientSecret,
+      baseUrl,
+      oauthRedirectUri,
+      scope,
+      accessToken: row.accessToken?.trim() || '',
+      refreshToken: row.refreshToken?.trim() || '',
+      tokenExpiresAt: row.tokenExpiresAt || null,
+      _rowId: row.id,
+    };
+  }
+
   async updateSettings(dto = {}) {
     const row = await this.getOrCreateRow();
     const patch = {};

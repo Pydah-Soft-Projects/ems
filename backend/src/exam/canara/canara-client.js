@@ -31,11 +31,15 @@ class CanaraApiClient {
     return this.canaraSettings.getConfig({ requireLive: false });
   }
 
+  async getOauthConfig() {
+    return this.canaraSettings.getOauthConfig();
+  }
+
   /**
    * Exchange authorization code for tokens.
    */
   async exchangeAuthorizationCode({ code, redirectUri }) {
-    const cfg = await this.getLiveConfig();
+    const cfg = await this.getOauthConfig();
     const url = `${cfg.baseUrl.replace(/\/$/, '')}/v1/oauth2/token`;
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -125,7 +129,7 @@ class CanaraApiClient {
   }
 
   buildAuthorizeUrl({ state } = {}) {
-    return this.canaraSettings.getConfig({ requireLive: false }).then((cfg) => {
+    return this.canaraSettings.getOauthConfig().then((cfg) => {
       const params = new URLSearchParams({
         client_id: cfg.clientId,
         redirect_uri: cfg.oauthRedirectUri,

@@ -92,7 +92,7 @@ class CanaraQrService {
   } = {}) {
     if (!code) throw AppError.badRequest('Missing authorization code');
 
-    const cfg = await this.canaraSettings.getConfig({ requireLive: false });
+    const cfg = await this.canaraSettings.getOauthConfig();
     const callbackRedirectUri = redirectUri || cfg.oauthRedirectUri;
     const audit = await this.canaraSettings.recordOauthCallbackAudit({
       code,

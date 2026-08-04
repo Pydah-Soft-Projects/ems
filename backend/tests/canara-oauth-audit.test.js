@@ -14,6 +14,13 @@ test('records Canara OAuth callback audit before exchanging the authorization co
       oauthRedirectUri: 'https://example.com/callback',
       scope: 'van',
     }),
+    getOauthConfig: async () => ({
+      clientId: 'client-123',
+      clientSecret: 'secret-123',
+      oauthRedirectUri: 'https://example.com/callback',
+      scope: 'van',
+      baseUrl: 'https://api.canarauat.bank.in',
+    }),
     saveTokens: async () => ({ ok: true }),
     recordOauthCallbackAudit: async (payload) => {
       auditPayload = payload;
@@ -83,6 +90,13 @@ test('allows OAuth callback exchange even when no live token is already stored',
         baseUrl: 'https://api.canarauat.bank.in',
       };
     },
+    getOauthConfig: async () => ({
+      clientId: 'client-123',
+      clientSecret: 'secret-123',
+      oauthRedirectUri: 'https://example.com/callback',
+      scope: 'van',
+      baseUrl: 'https://api.canarauat.bank.in',
+    }),
     recordOauthCallbackAudit: async (payload) => ({ id: 99, payload }),
     finalizeOauthCallbackAudit: async () => ({ ok: true }),
     saveTokens: async () => ({ ok: true }),
