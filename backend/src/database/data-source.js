@@ -37,6 +37,9 @@ const {
 const {
   CanaraPaymentSettings,
 } = require('../settings/canara-payment-settings.entity');
+const {
+  CanaraOauthAudit,
+} = require('../settings/canara-oauth-audit.entity');
 const { Professional } = require('../remuneration/schemas/professional.schema');
 const {
   RemunerationBill,
@@ -65,6 +68,7 @@ const entities = [
   SubjectResult,
   PaymentGatewaySettings,
   CanaraPaymentSettings,
+  CanaraOauthAudit,
   Professional,
   RemunerationBill,
   EmsRole,

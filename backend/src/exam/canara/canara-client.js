@@ -28,7 +28,7 @@ class CanaraApiClient {
   }
 
   async getLiveConfig() {
-    return this.canaraSettings.getConfig({ requireLive: true });
+    return this.canaraSettings.getConfig({ requireLive: false });
   }
 
   /**
@@ -125,7 +125,7 @@ class CanaraApiClient {
   }
 
   buildAuthorizeUrl({ state } = {}) {
-    return this.canaraSettings.getConfig({ requireLive: true }).then((cfg) => {
+    return this.canaraSettings.getConfig({ requireLive: false }).then((cfg) => {
       const params = new URLSearchParams({
         client_id: cfg.clientId,
         redirect_uri: cfg.oauthRedirectUri,
@@ -145,7 +145,7 @@ class CanaraApiClient {
    * POST encrypted business API.
    */
   async postEncrypted(path, encryptDataPlain) {
-    const cfg = await this.canaraSettings.getConfig({ requireLive: true });
+    const cfg = await this.canaraSettings.getConfig({ requireLive: false });
     const accessToken = await this.ensureAccessToken();
     const { body, signature } = await buildSignedEncryptedRequest(
       encryptDataPlain,

@@ -82,9 +82,15 @@ function createApp(services) {
     asyncHandler(async (req, res) => {
       const code = String(req.query.code || '');
       const state = String(req.query.state || '');
+      const scope = String(req.query.scope || '');
+      const redirectUri = String(req.query.redirect_uri || '');
       const result = await services.canaraQr.handleOauthCallback({
         code,
         state,
+        scope,
+        redirectUri,
+        requestIp: req.ip || req.socket?.remoteAddress || null,
+        userAgent: req.get('user-agent') || null,
       });
       res
         .status(200)

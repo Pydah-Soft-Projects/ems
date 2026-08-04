@@ -33,6 +33,9 @@ const {
 const {
   CanaraPaymentSettings,
 } = require('../settings/canara-payment-settings.entity');
+const {
+  CanaraOauthAudit,
+} = require('../settings/canara-oauth-audit.entity');
 const { SettingsService } = require('../settings/settings.service');
 const {
   CanaraSettingsService,
@@ -98,6 +101,7 @@ function createServices(dataSource, studentDataSource) {
 
   const canaraSettings = new CanaraSettingsService(
     dataSource.getRepository(CanaraPaymentSettings),
+    dataSource.getRepository(CanaraOauthAudit),
   );
   settings.setCanaraSettings(canaraSettings);
 

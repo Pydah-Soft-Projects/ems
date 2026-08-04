@@ -153,8 +153,10 @@ async function bootstrap() {
     await ensurePaymentGatewaySelfOnlineColumns(examPortalDataSource, logger);
     const {
       ensureCanaraPaymentSettingsTable,
+      ensureCanaraOauthAuditTable,
     } = require('./settings/ensure-canara-table');
     await ensureCanaraPaymentSettingsTable(examPortalDataSource, logger);
+    await ensureCanaraOauthAuditTable(examPortalDataSource, logger);
     const {
       ensureLateFeeSlabDateColumns,
     } = require('./exam/ensure-late-fee-slab-dates');

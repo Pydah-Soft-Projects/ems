@@ -4,6 +4,54 @@
  * Ensures `canara_payment_settings` table exists.
  * Optionally copies legacy columns from payment_gateway_settings if present.
  */
+async function ensureCanaraOauthAuditTable(dataSource, log = console) {
+  if (!dataSource?.isInitialized) return { created: false };
+
+  const tables = await dataSource.query(
+    `SELECT TABLE_NAME AS name
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'canara_oauth_audit'`,
+  );
+
+  let created = false;
+  if (!tables.length) {
+    await dataSource.query(`
+      CREATE TABLE canara_oauth_audit (
+        id INT NOT NULL AUTO_INCREMENT,
+        provider VARCHAR(50) NOT NULL DEFAULT 'canara',
+        clientId VARCHAR(255) NULL,
+        redirectUri VARCHAR(500) NULL,
+        state VARCHAR(255) NULL,
+        scope VARCHAR(255) NULL,
+        authorizationCode TEXT NULL,
+        callbackReceivedAt DATETIME NULL,
+        stateVerified TINYINT(1) NOT NULL DEFAULT 0,
+        codeExchangeStartedAt DATETIME NULL,
+        codeExchangeCompletedAt DATETIME NULL,
+        tokenResponseStatus VARCHAR(50) NULL,
+        accessTokenHash VARCHAR(255) NULL,
+        refreshTokenHash VARCHAR(255) NULL,
+        tokenExpiresAt DATETIME NULL,
+        requestIp VARCHAR(100) NULL,
+        userAgent TEXT NULL,
+        createdAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+        updatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+        PRIMARY KEY (id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    created = true;
+    if (typeof log.info === 'function') {
+      log.info(
+        { event: 'schema.canara_oauth_audit_created' },
+        'Created canara_oauth_audit table',
+      );
+    }
+  }
+
+  return { created };
+}
+
 async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
   if (!dataSource?.isInitialized) return { created: false, migrated: false };
 

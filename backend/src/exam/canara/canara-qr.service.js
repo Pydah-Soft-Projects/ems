@@ -81,12 +81,40 @@ class CanaraQrService {
     return this.client.buildAuthorizeUrl({ state });
   }
 
-  async handleOauthCallback({ code, state }) {
+  async handleOauthCallback({
+    code,
+    state,
+    scope,
+    redirectUri,
+    requestIp,
+    userAgent,
+    callbackReceivedAt,
+  } = {}) {
     if (!code) throw AppError.badRequest('Missing authorization code');
-    const cfg = await this.canaraSettings.getConfig({ requireLive: true });
+
+    const cfg = await this.canaraSettings.getConfig({ requireLive: false });
+    const callbackRedirectUri = redirectUri || cfg.oauthRedirectUri;
+    const audit = await this.canaraSettings.recordOauthCallbackAudit({
+      code,
+      state,
+      scope,
+      redirectUri: callbackRedirectUri,
+      requestIp,
+      userAgent,
+      callbackReceivedAt: callbackReceivedAt || new Date(),
+    });
+
     const tokens = await this.client.exchangeAuthorizationCode({
       code,
-      redirectUri: cfg.oauthRedirectUri,
+      redirectUri: callbackRedirectUri,
+    });
+    await this.canaraSettings.finalizeOauthCallbackAudit({
+      auditId: audit?.id,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      status: 'success',
+      stateVerified: true,
     });
     await this.canaraSettings.saveTokens({
       accessToken: tokens.accessToken,
@@ -94,13 +122,14 @@ class CanaraQrService {
       expiresAt: tokens.expiresAt,
     });
     log.info(
-      { event: 'canara.oauth.connected', state: state || null },
+      { event: 'canara.oauth.connected', state: state || null, scope: scope || null },
       'Canara OAuth tokens stored',
     );
     return {
       ok: true,
       message: 'Canara OAuth connected successfully',
       tokenExpiresAt: tokens.expiresAt,
+      auditId: audit?.id || null,
     };
   }
 

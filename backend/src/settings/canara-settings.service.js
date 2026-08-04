@@ -13,8 +13,9 @@ function maskSecret(value) {
  * Canara Bank Dynamic QR settings — own table `canara_payment_settings`.
  */
 class CanaraSettingsService {
-  constructor(canaraRepo) {
+  constructor(canaraRepo, oauthAuditRepo = null) {
     this.canaraRepo = canaraRepo;
+    this.oauthAuditRepo = oauthAuditRepo;
   }
 
   async getOrCreateRow() {
@@ -247,6 +248,68 @@ class CanaraSettingsService {
     if (expiresAt !== undefined) patch.tokenExpiresAt = expiresAt;
     await this.canaraRepo.update({ id: row.id }, patch);
     return this.getStatus();
+  }
+
+  async recordOauthCallbackAudit({
+    code,
+    state,
+    scope,
+    redirectUri,
+    requestIp,
+    userAgent,
+    callbackReceivedAt,
+  } = {}) {
+    if (!this.oauthAuditRepo) {
+      return { id: null };
+    }
+
+    const row = this.oauthAuditRepo.create({
+      provider: 'canara',
+      clientId: null,
+      redirectUri: redirectUri || null,
+      state: state || null,
+      scope: scope || null,
+      authorizationCode: code || null,
+      callbackReceivedAt: callbackReceivedAt || new Date(),
+      requestIp: requestIp || null,
+      userAgent: userAgent || null,
+      stateVerified: false,
+      tokenResponseStatus: null,
+    });
+
+    const saved = await this.oauthAuditRepo.save(row);
+    return { id: saved?.id ?? null };
+  }
+
+  async finalizeOauthCallbackAudit({
+    auditId,
+    accessToken,
+    refreshToken,
+    expiresAt,
+    status,
+    stateVerified,
+  } = {}) {
+    if (!this.oauthAuditRepo || !auditId) {
+      return { ok: true };
+    }
+
+    const patch = {
+      codeExchangeCompletedAt: new Date(),
+      tokenResponseStatus: status || 'success',
+      accessTokenHash: accessToken ? this.hashValue(accessToken) : null,
+      refreshTokenHash: refreshToken ? this.hashValue(refreshToken) : null,
+      tokenExpiresAt: expiresAt || null,
+      stateVerified: stateVerified === true,
+      updatedAt: new Date(),
+    };
+
+    await this.oauthAuditRepo.update({ id: auditId }, patch);
+    return { ok: true };
+  }
+
+  hashValue(value) {
+    if (!value) return null;
+    return require('node:crypto').createHash('sha256').update(String(value)).digest('hex');
   }
 
   /** Fee desk / student — slim readiness only */
