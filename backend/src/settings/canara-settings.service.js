@@ -9,6 +9,18 @@ function maskSecret(value) {
   return `••••${value.slice(-4)}`;
 }
 
+function fallbackCanaraApiUrl() {
+  const publicApiUrl = (config.publicApiUrl || '').trim();
+  if (!publicApiUrl) {
+    return 'https://ems.pydah.edu.in';
+  }
+  const normalized = publicApiUrl.replace(/\/$/, '');
+  if (/^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(normalized)) {
+    return 'https://ems.pydah.edu.in';
+  }
+  return normalized;
+}
+
 /**
  * Canara Bank Dynamic QR settings — own table `canara_payment_settings`.
  */
@@ -94,11 +106,15 @@ class CanaraSettingsService {
       row.baseUrl?.trim() ||
       env.baseUrl?.trim() ||
       'https://api.canarauat.bank.in';
+    const fallbackApiUrl = fallbackCanaraApiUrl();
     const oauthRedirectUri =
       row.oauthRedirectUri?.trim() ||
       env.oauthRedirectUri?.trim() ||
-      `${(config.publicApiUrl || '').replace(/\/$/, '')}/api/fees/canara/oauth/callback`;
-    const qrCallbackUrl = `${(config.publicApiUrl || '').replace(/\/$/, '')}/api/fees/canara/qr-callback`;
+      `${fallbackApiUrl}/api/fees/canara/oauth/callback`;
+    const qrCallbackUrl =
+      row.qrCallbackUrl?.trim() ||
+      env.qrCallbackUrl?.trim() ||
+      `${fallbackApiUrl}/api/fees/canara/qr-callback`;
 
     return {
       enabled: enabledFlag,

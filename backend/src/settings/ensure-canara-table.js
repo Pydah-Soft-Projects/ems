@@ -100,6 +100,48 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
     }
   }
 
+  if (!created) {
+    const schemaCols = await dataSource.query(
+      `SELECT COLUMN_NAME AS name
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'canara_payment_settings'
+         AND COLUMN_NAME IN ('tokenType','refreshTokenExpiresAt')`,
+    );
+    const existingCols = new Set(schemaCols.map((row) => row.name));
+    let modified = false;
+
+    if (!existingCols.has('tokenType')) {
+      await dataSource.query(
+        `ALTER TABLE canara_payment_settings ADD COLUMN tokenType VARCHAR(50) NULL`,
+      );
+      modified = true;
+      if (typeof log.info === 'function') {
+        log.info(
+          { event: 'schema.canara_payment_settings_tokenType_added' },
+          'Added tokenType column to canara_payment_settings',
+        );
+      }
+    }
+
+    if (!existingCols.has('refreshTokenExpiresAt')) {
+      await dataSource.query(
+        `ALTER TABLE canara_payment_settings ADD COLUMN refreshTokenExpiresAt DATETIME NULL`,
+      );
+      modified = true;
+      if (typeof log.info === 'function') {
+        log.info(
+          { event: 'schema.canara_payment_settings_refreshTokenExpiresAt_added' },
+          'Added refreshTokenExpiresAt column to canara_payment_settings',
+        );
+      }
+    }
+
+    if (modified) {
+      created = true;
+    }
+  }
+
   // One-time migrate from legacy payment_gateway_settings.canara* columns
   let migrated = false;
   try {

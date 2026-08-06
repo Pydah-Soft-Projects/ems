@@ -108,6 +108,7 @@ class CanaraQrService {
       code,
       redirectUri: callbackRedirectUri,
       state,
+      scope,
     });
     await this.canaraSettings.finalizeOauthCallbackAudit({
       auditId: audit?.id,

@@ -38,18 +38,39 @@ class CanaraApiClient {
   /**
    * Exchange authorization code for tokens.
    */
-  async exchangeAuthorizationCode({ code, redirectUri, state }) {
+  async exchangeAuthorizationCode({ code, redirectUri, state, scope }) {
     const cfg = await this.getOauthConfig();
     const url = `${cfg.baseUrl.replace(/\/$/, '')}/v1/oauth2/token`;
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
-      redirect_uri: redirectUri || cfg.oauthRedirectUri,
+      // redirect_uri: redirectUri || cfg.oauthRedirectUri,
+      
+  redirect_uri: 'https://ems.pydah.edu.in/api/fees/canara/oauth/callback',
       code: String(code),
-      scope: cfg.scope || '',
+      scope: typeof scope === 'string' && String(scope).trim()
+        ? String(scope).trim()
+        : cfg.scope || '',
     });
     if (typeof state !== 'undefined' && state !== null && String(state).trim()) {
       body.set('state', String(state));
     }
+
+    const requestBodyDebug = {
+      grant_type: 'authorization_code',
+     // redirect_uri: redirectUri || cfg.oauthRedirectUri,
+     redirect_uri: 'https://ems.pydah.edu.in/api/fees/canara/oauth/callback',
+      code: String(code),
+      scope:
+        typeof scope === 'string' && String(scope).trim()
+          ? String(scope).trim()
+          : cfg.scope || '',
+    };
+    if (typeof state !== 'undefined' && state !== null && String(state).trim()) {
+      requestBodyDebug.state = String(state);
+    }
+
+    console.log('Canara token exchange request body:');
+    console.log(JSON.stringify(requestBodyDebug, null, 2));
 
     const res = await fetch(url, {
       method: 'POST',
@@ -61,17 +82,46 @@ class CanaraApiClient {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      const failureInfo = {
+        request: requestBodyDebug,
+        status: res.status,
+        response: data,
+      };
       log.warn(
-        { event: 'canara.oauth.token_failed', status: res.status, data },
+        {
+          event: 'canara.oauth.token_failed',
+          status: res.status,
+          requestBody: body.toString(),
+          data,
+        },
         'Canara token exchange failed',
       );
+      console.warn('Canara token exchange failed:');
+      console.warn(JSON.stringify(failureInfo, null, 2));
       throw AppError.badRequest(
         data.error_description ||
           data.message ||
           `Canara token exchange failed (${res.status})`,
       );
     }
-    return normalizeTokenResponse(data);
+    const tokenResponse = normalizeTokenResponse(data);
+    if (!tokenResponse.accessToken) {
+      const failureInfo = {
+        request: requestBodyDebug,
+        response: data,
+      };
+      log.warn(
+        {
+          event: 'canara.oauth.token_invalid_response',
+          requestBody: body.toString(),
+          data,
+        },
+        'Canara token response missing access_token',
+      );
+      console.warn('Canara token response missing access_token:');
+      console.warn(JSON.stringify(failureInfo, null, 2));
+    }
+    return tokenResponse;
   }
 
   async refreshAccessToken(refreshToken) {

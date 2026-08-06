@@ -7,6 +7,7 @@ const { CanaraQrService } = require('../src/exam/canara/canara-qr.service');
 test('records Canara OAuth callback audit before exchanging the authorization code', async () => {
   let auditPayload = null;
   let completionPayload = null;
+  let savePayload = null;
 
   const canaraSettings = {
     getConfig: async () => ({
@@ -21,7 +22,10 @@ test('records Canara OAuth callback audit before exchanging the authorization co
       scope: 'van',
       baseUrl: 'https://api.canarauat.bank.in',
     }),
-    saveTokens: async () => ({ ok: true }),
+    saveTokens: async (payload) => {
+      savePayload = payload;
+      return { ok: true };
+    },
     recordOauthCallbackAudit: async (payload) => {
       auditPayload = payload;
       return { id: 42 };
@@ -40,13 +44,17 @@ test('records Canara OAuth callback audit before exchanging the authorization co
   );
 
   service.client = {
-    exchangeAuthorizationCode: async ({ code, redirectUri, state }) => {
+    exchangeAuthorizationCode: async ({ code, redirectUri, state, scope }) => {
       assert.equal(code, 'auth-code-123');
       assert.equal(redirectUri, 'https://example.com/callback');
       assert.equal(state, 'state-xyz');
+      assert.equal(scope, 'van');
       return {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        tokenType: 'Bearer',
+        scope: 'collection',
+        refreshTokenExpiresAt: new Date('2036-01-01T00:00:00Z'),
         expiresAt: new Date('2035-01-01T00:00:00Z'),
       };
     },
@@ -75,6 +83,14 @@ test('records Canara OAuth callback audit before exchanging the authorization co
   assert.equal(completionPayload.auditId, 42);
   assert.equal(completionPayload.accessToken, 'access-token');
   assert.equal(completionPayload.refreshToken, 'refresh-token');
+  assert.deepEqual(savePayload, {
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    tokenType: 'Bearer',
+    refreshTokenExpiresAt: new Date('2036-01-01T00:00:00Z'),
+    expiresAt: new Date('2035-01-01T00:00:00Z'),
+    scope: 'collection',
+  });
 });
 
 test('allows OAuth callback exchange even when no live token is already stored', async () => {
