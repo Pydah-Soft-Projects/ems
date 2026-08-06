@@ -107,6 +107,7 @@ class CanaraQrService {
     const tokens = await this.client.exchangeAuthorizationCode({
       code,
       redirectUri: callbackRedirectUri,
+      state,
     });
     await this.canaraSettings.finalizeOauthCallbackAudit({
       auditId: audit?.id,
@@ -119,7 +120,10 @@ class CanaraQrService {
     await this.canaraSettings.saveTokens({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      tokenType: tokens.tokenType,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
       expiresAt: tokens.expiresAt,
+      scope: tokens.scope,
     });
     log.info(
       { event: 'canara.oauth.connected', state: state || null, scope: scope || null },

@@ -38,7 +38,7 @@ class CanaraApiClient {
   /**
    * Exchange authorization code for tokens.
    */
-  async exchangeAuthorizationCode({ code, redirectUri }) {
+  async exchangeAuthorizationCode({ code, redirectUri, state }) {
     const cfg = await this.getOauthConfig();
     const url = `${cfg.baseUrl.replace(/\/$/, '')}/v1/oauth2/token`;
     const body = new URLSearchParams({
@@ -47,6 +47,9 @@ class CanaraApiClient {
       code: String(code),
       scope: cfg.scope || '',
     });
+    if (typeof state !== 'undefined' && state !== null && String(state).trim()) {
+      body.set('state', String(state));
+    }
 
     const res = await fetch(url, {
       method: 'POST',
@@ -110,6 +113,9 @@ class CanaraApiClient {
     const expiresAt = cfg.tokenExpiresAt
       ? new Date(cfg.tokenExpiresAt).getTime()
       : 0;
+    const refreshTokenExpiresAt = cfg.refreshTokenExpiresAt
+      ? new Date(cfg.refreshTokenExpiresAt).getTime()
+      : 0;
     const skewMs = 60_000;
     if (cfg.accessToken && expiresAt > Date.now() + skewMs) {
       return cfg.accessToken;
@@ -119,11 +125,19 @@ class CanaraApiClient {
         'Canara OAuth not connected. Complete OAuth authorize flow in Settings.',
       );
     }
+    if (refreshTokenExpiresAt && refreshTokenExpiresAt <= Date.now() + skewMs) {
+      throw AppError.badRequest(
+        'Canara refresh token has expired. Reconnect Canara OAuth.',
+      );
+    }
     const tokens = await this.refreshAccessToken(cfg.refreshToken);
     await this.canaraSettings.saveTokens({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken || cfg.refreshToken,
+      tokenType: tokens.tokenType,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
       expiresAt: tokens.expiresAt,
+      scope: tokens.scope,
     });
     return tokens.accessToken;
   }
@@ -157,8 +171,9 @@ class CanaraApiClient {
     );
 
     const url = `${cfg.baseUrl.replace(/\/$/, '')}${path}`;
+    const authScheme = String(cfg.tokenType || 'Bearer').trim() || 'Bearer';
     const headers = {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `${authScheme} ${accessToken}`,
       'Content-Type': 'application/json',
       'x-client-id': cfg.clientId,
       'x-Client-Secret': cfg.clientSecret,
@@ -209,6 +224,16 @@ function normalizeTokenResponse(data) {
     data.access_token || data.accessToken || data.token || null;
   const refreshToken =
     data.refresh_token || data.refreshToken || null;
+  const tokenType = String(
+    data.token_type || data.tokenType || 'Bearer',
+  ).trim();
+  const scope = data.scope || null;
+  const refreshTokenExpiresIn =
+    data.refresh_token_expires_in || data.refreshTokenExpiresIn || null;
+  const refreshTokenExpiresAt =
+    refreshTokenExpiresIn != null && Number.isFinite(Number(refreshTokenExpiresIn))
+      ? new Date(Date.now() + Number(refreshTokenExpiresIn) * 1000)
+      : null;
   const expiresIn = parseInt(
     String(data.expires_in || data.expiresIn || 86400),
     10,
@@ -219,7 +244,15 @@ function normalizeTokenResponse(data) {
   if (!accessToken) {
     throw AppError.badRequest('Canara token response missing access_token');
   }
-  return { accessToken, refreshToken, expiresAt, raw: data };
+  return {
+    accessToken,
+    refreshToken,
+    tokenType: tokenType || 'Bearer',
+    scope,
+    expiresAt,
+    refreshTokenExpiresAt,
+    raw: data,
+  };
 }
 
 module.exports = { CanaraApiClient };

@@ -83,7 +83,9 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
         publicCertPem TEXT NULL,
         accessToken TEXT NULL,
         refreshToken TEXT NULL,
+        tokenType VARCHAR(50) NULL,
         tokenExpiresAt DATETIME NULL,
+        refreshTokenExpiresAt DATETIME NULL,
         createdAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         updatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
         PRIMARY KEY (id)

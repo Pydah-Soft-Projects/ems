@@ -132,7 +132,9 @@ class CanaraSettingsService {
       sid: sid || null,
       terminalId: terminalId || null,
       upiId: upiId || null,
+      tokenType: row.tokenType?.trim() || null,
       tokenExpiresAt: row.tokenExpiresAt || null,
+      refreshTokenExpiresAt: row.refreshTokenExpiresAt || null,
     };
   }
 
@@ -180,7 +182,9 @@ class CanaraSettingsService {
         row.publicCertPem?.trim() || env.publicCertPem?.trim() || '',
       accessToken: row.accessToken?.trim() || '',
       refreshToken: row.refreshToken?.trim() || '',
+      tokenType: row.tokenType?.trim() || null,
       tokenExpiresAt: row.tokenExpiresAt || null,
+      refreshTokenExpiresAt: row.refreshTokenExpiresAt || null,
       _rowId: row.id,
     };
   }
@@ -266,12 +270,16 @@ class CanaraSettingsService {
     return this.getStatus();
   }
 
-  async saveTokens({ accessToken, refreshToken, expiresAt }) {
+  async saveTokens({ accessToken, refreshToken, expiresAt, tokenType, refreshTokenExpiresAt, scope }) {
     const row = await this.getOrCreateRow();
     const patch = {};
     if (accessToken != null) patch.accessToken = accessToken || null;
     if (refreshToken != null) patch.refreshToken = refreshToken || null;
+    if (tokenType != null) patch.tokenType = tokenType || null;
+    if (refreshTokenExpiresAt !== undefined)
+      patch.refreshTokenExpiresAt = refreshTokenExpiresAt;
     if (expiresAt !== undefined) patch.tokenExpiresAt = expiresAt;
+    if (scope != null) patch.scope = scope || null;
     await this.canaraRepo.update({ id: row.id }, patch);
     return this.getStatus();
   }

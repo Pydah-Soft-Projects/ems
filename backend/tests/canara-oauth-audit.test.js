@@ -40,9 +40,10 @@ test('records Canara OAuth callback audit before exchanging the authorization co
   );
 
   service.client = {
-    exchangeAuthorizationCode: async ({ code, redirectUri }) => {
+    exchangeAuthorizationCode: async ({ code, redirectUri, state }) => {
       assert.equal(code, 'auth-code-123');
       assert.equal(redirectUri, 'https://example.com/callback');
+      assert.equal(state, 'state-xyz');
       return {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
