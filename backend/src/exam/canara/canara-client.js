@@ -213,12 +213,16 @@ class CanaraApiClient {
    * POST encrypted business API.
    */
   async postEncrypted(path, encryptDataPlain) {
+    return this.postJson(path, encryptDataPlain, { wrapped: true });
+  }
+
+  async postPlainBody(path, payload) {
+    return this.postJson(path, payload, { wrapped: false });
+  }
+
+  async postJson(path, payload, { wrapped = true } = {}) {
     const cfg = await this.canaraSettings.getConfig({ requireLive: false });
     const accessToken = await this.ensureAccessToken();
-    const { body, signature } = await buildSignedEncryptedRequest(
-      encryptDataPlain,
-      cfg,
-    );
 
     const url = `${cfg.baseUrl.replace(/\/$/, '')}${path}`;
     const authScheme = String(cfg.tokenType || 'Bearer').trim() || 'Bearer';
@@ -230,34 +234,66 @@ class CanaraApiClient {
       'x-client-Certificate': publicCertHeaderValue(cfg.publicCertPem),
       'x-api-interaction-id': interactionId(),
       'x-timestamp': String(Math.floor(Date.now() / 1000)),
-      'x-signature': signature,
       'x-forwarded-for': process.env.CANARA_FORWARD_IP || '127.0.0.1',
       Cookie: 'ems=1',
     };
 
+    const requestBody = wrapped
+      ? {
+          Request: {
+            body: {
+              encryptData: payload,
+            },
+          },
+        }
+      : payload;
+
+    console.log('===== Canara outbound request =====');
+    console.log('Path:', path);
+    console.log('URL:', url);
+    console.log('Plaintext payload:');
+    console.log(JSON.stringify(payload, null, 2));
+    console.log('Request body:');
+    console.log(JSON.stringify(requestBody, null, 2));
+
     const res = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
     });
 
-    const raw = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      log.warn(
-        { event: 'canara.api.error', path, status: res.status, raw },
-        'Canara API error',
-      );
-      throw AppError.badRequest(
-        raw.message ||
-          raw.error ||
-          `Canara API ${path} failed (${res.status})`,
-      );
+    const responseText = await res.text();
+    let parsed = {};
+    if (responseText) {
+      try {
+        parsed = JSON.parse(responseText);
+      } catch (error) {
+        parsed = responseText;
+      }
     }
 
-    const encrypted =
-      raw?.Response?.body?.encryptData ?? raw?.Request?.body?.encryptData;
-    const decrypted = await decryptEncryptData(encrypted, cfg.symmetricKey);
-    return { raw, decrypted };
+    console.log('===== Canara inbound response =====');
+    console.log('Path:', path);
+    console.log('Status:', res.status);
+    console.log('Response content-type:', res.headers.get('content-type') || 'n/a');
+    console.log('Raw response text:');
+    console.log(responseText || '<empty>');
+    console.log('Parsed response:');
+    console.log(JSON.stringify(parsed, null, 2));
+
+    if (!res.ok) {
+      console.error('===== Canara API error =====');
+      console.error('Path:', path);
+      console.error('Status:', res.status);
+      console.error('Raw response text:', responseText || '<empty>');
+      const errorMessage =
+        (parsed && typeof parsed === 'object' && (parsed.message || parsed.error)) ||
+        responseText ||
+        `Canara API ${path} failed (${res.status})`;
+      throw AppError.badRequest(errorMessage);
+    }
+
+    return { raw: parsed, decrypted: parsed, rawText: responseText };
   }
 
   generateQr(encryptDataPlain) {

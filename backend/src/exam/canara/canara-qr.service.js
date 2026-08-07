@@ -140,6 +140,7 @@ class CanaraQrService {
 
   async createOrder(feeRecordId, opts = {}) {
     const cfg = await this.canaraSettings.getConfig();
+    const activeVpa = await this.canaraSettings.canaraVpas?.getActiveConfig?.();
     const feeRecord = await this.exam.getFeeRecord(feeRecordId);
     await this.assertFeeActor(feeRecord, opts.actor);
 
@@ -227,13 +228,13 @@ class CanaraQrService {
       channel: 'api',
       remark,
       source: cfg.mid,
-      terminalId: cfg.terminalId,
+      // terminalId is optional — intentionally not sent from merchant settings
       type: 'D',
       param1: String(feeRecordId),
       Param2: feeRecord.studentRollNumber || '',
       param3: String(payment.id),
-      sid: cfg.sid,
-      upiId: cfg.upiId,
+      sid: activeVpa?.sid || null,
+      upiId: activeVpa?.upiId || null,
       requestTime,
       reciept: cfg.qrCallbackUrl || 'https://localhost/receipt',
       checksum: '',
@@ -317,6 +318,7 @@ class CanaraQrService {
           })
         : null);
 
+    const activeVpaForResponse = await this.canaraSettings.canaraVpas?.getActiveConfig?.();
     return {
       paymentId: payment.id,
       feeRecordId: payment.feeRecordId,
@@ -326,7 +328,7 @@ class CanaraQrService {
       status: payment.status,
       receiptNumber: payment.receiptNumber,
       temporary: payment.status !== PaymentStatus.SUCCESS,
-      upiId: cfg.upiId,
+      upiId: activeVpaForResponse?.upiId || null,
       qrString,
       qrDataUrl,
       mockMode: Boolean(cfg.testMode || cfg.mockMode || gw.testMode || gw.mockMode),
@@ -668,14 +670,14 @@ class CanaraQrService {
     }
 
     const cfg = await this.canaraSettings.getConfig();
+    const activeVpa = await this.canaraSettings.canaraVpas?.getActiveConfig?.();
     const extTransactionId =
       payment.transactionReference || gw.extTransactionId;
 
     const encryptData = {
       mid: cfg.mid,
       channel: 'api',
-      sid: cfg.sid,
-      terminalId: cfg.terminalId,
+      sid: activeVpa?.sid || null,
       extTransactionId,
       checksum: '',
     };
@@ -740,6 +742,7 @@ class CanaraQrService {
     const ext =
       payment.transactionReference ||
       this.exam.parseGateway(payment.gatewayResponse)?.extTransactionId;
+    const activeVpaForSim = await this.canaraSettings.canaraVpas?.getActiveConfig?.();
     return this.handleQrCallback({
       Request: {
         body: {
@@ -749,7 +752,7 @@ class CanaraQrService {
             status: 'SUCCESS',
             errCode: '',
             customer_vpa: 'student@test',
-            merchant_vpa: cfg.upiId || 'merchant@cnrb',
+            merchant_vpa: activeVpaForSim?.upiId || 'merchant@cnrb',
             rrn: `SIM${Date.now().toString().slice(-10)}`,
             txnId: `SIMTXN${crypto.randomBytes(6).toString('hex')}`,
             amount: roundMoney(payment.amountPaid).toFixed(2),

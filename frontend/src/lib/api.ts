@@ -765,6 +765,12 @@ export const api = {
     scope?: string;
     oauthRedirectUri?: string;
     mid?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    merchantName?: string;
+    mcc?: string;
+    bankName?: string;
+    channel?: string;
     sid?: string;
     terminalId?: string;
     upiId?: string;
@@ -775,6 +781,46 @@ export const api = {
     return request<import('@/types/canara').CanaraStatus>('/settings/canara', {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  getCanaraVpas() {
+    return request<import('@/types/canara').CanaraVPARecord[]>('/settings/canara/vpas');
+  },
+
+  createCanaraVpa(data: {
+    sid: string;
+    name?: string;
+    mobileNumber?: string;
+    additionalNumber?: string;
+    usedFor?: string;
+  }) {
+    return request<{ created: import('@/types/canara').CanaraVPARecord }>(
+      '/settings/canara/vpas',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    );
+  },
+
+  activateCanaraVpa(id: number) {
+    return request<import('@/types/canara').CanaraVPARecord>(
+      `/settings/canara/vpas/${id}/activate`,
+      { method: 'POST' },
+    );
+  },
+
+  inquireCanaraVpa(id: number) {
+    return request<import('@/types/canara').CanaraVPARecord>(
+      `/settings/canara/vpas/${id}/enquire`,
+      { method: 'POST' },
+    );
+  },
+
+  deleteCanaraVpa(id: number) {
+    return request<{ deleted: boolean; id: number }>(`/settings/canara/vpas/${id}`, {
+      method: 'DELETE',
     });
   },
 

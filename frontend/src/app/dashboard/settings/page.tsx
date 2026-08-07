@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -562,6 +563,27 @@ export default function SettingsPage() {
               </Button>
             </form>
           )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Canara VPA / SID Management"
+          description="Create and manage the SID/VPA records used for Canara onboarding and QR generation."
+        />
+        <CardBody>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-slate-50 px-3.5 py-3">
+            <div>
+              <p className="text-sm font-medium text-slate-800">Create or manage Canara VPA/SID records</p>
+              <p className="text-xs text-[var(--muted)]">Use this screen to onboard new SIDs, review inquiry results, and activate the one you want to use.</p>
+            </div>
+            <Link
+              href="/dashboard/settings/canara-vpas"
+              className="inline-flex items-center rounded-full border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+            >
+              Manage VPA / SID
+            </Link>
+          </div>
         </CardBody>
       </Card>
 

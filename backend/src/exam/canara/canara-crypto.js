@@ -107,13 +107,7 @@ async function decryptEncryptData(jweCompact, symmetricKeyRaw) {
  * Build final bank request body + x-signature from plaintext encryptData fields.
  */
 async function buildSignedEncryptedRequest(encryptDataPlain, cfg) {
-  const plainForSign = JSON.stringify({
-    Request: {
-      body: {
-        encryptData: encryptDataPlain,
-      },
-    },
-  });
+  const plainForSign = JSON.stringify(encryptDataPlain);
   const signature = signPayload(plainForSign, cfg.privateKeyPem);
   const encrypted = await encryptEncryptData(
     encryptDataPlain,

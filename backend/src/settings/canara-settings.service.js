@@ -28,6 +28,7 @@ class CanaraSettingsService {
   constructor(canaraRepo, oauthAuditRepo = null) {
     this.canaraRepo = canaraRepo;
     this.oauthAuditRepo = oauthAuditRepo;
+    this.canaraVpas = null;
   }
 
   async getOrCreateRow() {
@@ -46,9 +47,12 @@ class CanaraSettingsService {
         scope: null,
         oauthRedirectUri: null,
         mid: null,
-        sid: null,
-        terminalId: null,
-        upiId: null,
+        accountNumber: '2400201001060',
+        ifscCode: null,
+        merchantName: null,
+        mcc: '5411',
+        bankName: null,
+        channel: 'api',
         symmetricKey: null,
         privateKeyPem: null,
         publicCertPem: null,
@@ -56,6 +60,10 @@ class CanaraSettingsService {
         refreshToken: null,
         tokenExpiresAt: null,
       });
+      row = await this.canaraRepo.save(row);
+    } else if (!String(row.accountNumber || '').trim()) {
+      row.accountNumber = '2400201001060';
+      row.mcc = row.mcc?.trim() || '5411';
       row = await this.canaraRepo.save(row);
     }
     return row;
@@ -69,10 +77,6 @@ class CanaraSettingsService {
       row.clientSecret?.trim() || env.clientSecret?.trim(),
     );
     const mid = row.mid?.trim() || env.mid?.trim() || '';
-    const sid = row.sid?.trim() || env.sid?.trim() || '';
-    const terminalId =
-      row.terminalId?.trim() || env.terminalId?.trim() || '';
-    const upiId = row.upiId?.trim() || env.upiId?.trim() || '';
     const hasCrypto = Boolean(
       (row.symmetricKey?.trim() || env.symmetricKey?.trim()) &&
         (row.privateKeyPem?.trim() || env.privateKeyPem?.trim()),
@@ -80,13 +84,13 @@ class CanaraSettingsService {
     const hasToken = Boolean(row.accessToken?.trim());
     const enabledFlag =
       Boolean(row.enabled) || (!row.clientId?.trim() && Boolean(env.enabled));
-    const merchantReady = Boolean(mid && sid && terminalId && upiId);
+    const merchantReady = Boolean(mid);
 
     // Real bank credentials always required. mockMode = test mode only
     // (bank QR/callback still real; fee dues are NOT marked paid).
     const testMode = mockMode;
     const configured = Boolean(
-      clientId && hasSecret && merchantReady && hasCrypto,
+      clientId && hasSecret && mid && hasCrypto,
     );
     const oauthReady = hasToken || Boolean(row.refreshToken?.trim());
     const ready = Boolean(enabledFlag && configured && oauthReady);
@@ -96,9 +100,6 @@ class CanaraSettingsService {
     if (!clientId) missing.push('clientId');
     if (!hasSecret) missing.push('clientSecret');
     if (!mid) missing.push('mid');
-    if (!sid) missing.push('sid');
-    if (!terminalId) missing.push('terminalId');
-    if (!upiId) missing.push('upiId');
     if (!hasCrypto) missing.push('symmetricKey+privateKey');
     if (!oauthReady) missing.push('oauth');
 
@@ -145,9 +146,12 @@ class CanaraSettingsService {
       oauthRedirectUri,
       qrCallbackUrl,
       mid: mid || null,
-      sid: sid || null,
-      terminalId: terminalId || null,
-      upiId: upiId || null,
+      accountNumber: row.accountNumber?.trim() || env.accountNumber?.trim() || '2400201001060',
+      ifscCode: row.ifscCode?.trim() || null,
+      merchantName: row.merchantName?.trim() || null,
+      mcc: row.mcc?.trim() || '5411',
+      bankName: row.bankName?.trim() || null,
+      channel: row.channel?.trim() || 'api',
       tokenType: row.tokenType?.trim() || null,
       tokenExpiresAt: row.tokenExpiresAt || null,
       refreshTokenExpiresAt: row.refreshTokenExpiresAt || null,
@@ -250,9 +254,12 @@ class CanaraSettingsService {
       ['scope', 'canaraScope', 'scope'],
       ['oauthRedirectUri', 'canaraOauthRedirectUri', 'oauthRedirectUri'],
       ['mid', 'canaraMid', 'mid'],
-      ['sid', 'canaraSid', 'sid'],
-      ['terminalId', 'canaraTerminalId', 'terminalId'],
-      ['upiId', 'canaraUpiId', 'upiId'],
+      ['accountNumber', 'canaraAccountNumber', 'accountNumber'],
+      ['ifscCode', 'canaraIfscCode', 'ifscCode'],
+      ['merchantName', 'canaraMerchantName', 'merchantName'],
+      ['mcc', 'canaraMcc', 'mcc'],
+      ['bankName', 'canaraBankName', 'bankName'],
+      ['channel', 'canaraChannel', 'channel'],
     ];
     for (const [col, a, b] of mapStr) {
       const raw = dto[a] ?? dto[b];

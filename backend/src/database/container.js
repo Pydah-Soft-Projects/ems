@@ -36,10 +36,12 @@ const {
 const {
   CanaraOauthAudit,
 } = require('../settings/canara-oauth-audit.entity');
+const { CanaraVPA } = require('../settings/canara-vpa.entity');
 const { SettingsService } = require('../settings/settings.service');
 const {
   CanaraSettingsService,
 } = require('../settings/canara-settings.service');
+const { CanaraVpaService } = require('../settings/canara-vpa.service');
 const {
   FeeManagementService,
 } = require('../fee-management/fee-management.service');
@@ -103,6 +105,11 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(CanaraPaymentSettings),
     dataSource.getRepository(CanaraOauthAudit),
   );
+  const canaraVpas = new CanaraVpaService(
+    dataSource.getRepository(CanaraVPA),
+    canaraSettings,
+  );
+  canaraSettings.canaraVpas = canaraVpas;
   settings.setCanaraSettings(canaraSettings);
 
   const feeManagement = new FeeManagementService(sdms);
@@ -172,6 +179,7 @@ function createServices(dataSource, studentDataSource) {
     selfOnline,
     canaraQr,
     canaraSettings,
+    canaraVpas,
     sdms,
     settings,
     feeManagement,

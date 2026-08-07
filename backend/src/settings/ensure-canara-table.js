@@ -52,6 +52,50 @@ async function ensureCanaraOauthAuditTable(dataSource, log = console) {
   return { created };
 }
 
+async function ensureCanaraVpaTable(dataSource, log = console) {
+  if (!dataSource?.isInitialized) return { created: false };
+
+  const tables = await dataSource.query(
+    `SELECT TABLE_NAME AS name
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'canara_vpas'`,
+  );
+
+  if (tables.length) {
+    return { created: false };
+  }
+
+  await dataSource.query(`
+    CREATE TABLE canara_vpas (
+      id INT NOT NULL AUTO_INCREMENT,
+      -- SID/UPI moved to canara_vpas table; not stored on merchant settings
+      batchId VARCHAR(120) NULL,
+      mobileNumber VARCHAR(20) NULL,
+      additionalNumber VARCHAR(20) NULL,
+      usedFor VARCHAR(120) NULL,
+      status VARCHAR(30) NULL DEFAULT 'PENDING',
+      responseStatus VARCHAR(30) NULL,
+      responseCode VARCHAR(50) NULL,
+      responseMessage TEXT NULL,
+      merchantName VARCHAR(150) NULL,
+      qrString TEXT NULL,
+      suggestedVPA VARCHAR(150) NULL,
+      errorCode VARCHAR(50) NULL,
+      errorDescription TEXT NULL,
+      isActive TINYINT(1) NOT NULL DEFAULT 0,
+      createdAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+      updatedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+      PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  if (typeof log.info === 'function') {
+    log.info({ event: 'schema.canara_vpas_created' }, 'Created canara_vpas table');
+  }
+  return { created: true };
+}
+
 async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
   if (!dataSource?.isInitialized) return { created: false, migrated: false };
 
@@ -75,9 +119,13 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
         scope VARCHAR(100) NULL,
         oauthRedirectUri VARCHAR(500) NULL,
         mid VARCHAR(20) NULL,
-        sid VARCHAR(20) NULL,
-        terminalId VARCHAR(20) NULL,
-        upiId VARCHAR(150) NULL,
+        accountNumber VARCHAR(30) NULL,
+        ifscCode VARCHAR(20) NULL,
+        merchantName VARCHAR(150) NULL,
+        mcc VARCHAR(10) NULL DEFAULT '0001',
+        bankName VARCHAR(100) NULL,
+        channel VARCHAR(20) NULL DEFAULT 'api',
+        -- legacy SID/terminal/UPI columns removed
         symmetricKey TEXT NULL,
         privateKeyPem TEXT NULL,
         publicCertPem TEXT NULL,
@@ -105,8 +153,7 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
       `SELECT COLUMN_NAME AS name
        FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE()
-         AND TABLE_NAME = 'canara_payment_settings'
-         AND COLUMN_NAME IN ('tokenType','refreshTokenExpiresAt')`,
+         AND TABLE_NAME = 'canara_payment_settings'`,
     );
     const existingCols = new Set(schemaCols.map((row) => row.name));
     let modified = false;
@@ -137,9 +184,30 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
       }
     }
 
+    const extraCols = [
+      ['accountNumber', 'VARCHAR(30) NULL'],
+      ['ifscCode', 'VARCHAR(20) NULL'],
+      ['merchantName', 'VARCHAR(150) NULL'],
+      ['mcc', "VARCHAR(10) NULL DEFAULT '0001'"],
+      ['bankName', 'VARCHAR(100) NULL'],
+      ['channel', "VARCHAR(20) NULL DEFAULT 'api'"],
+    ];
+    for (const [col, def] of extraCols) {
+      if (!existingCols.has(col)) {
+        await dataSource.query(`ALTER TABLE canara_payment_settings ADD COLUMN ${col} ${def}`);
+        modified = true;
+      }
+    }
+
     if (modified) {
       created = true;
     }
+
+    await dataSource.query(`
+      UPDATE canara_payment_settings
+      SET mcc = COALESCE(NULLIF(TRIM(COALESCE(mcc, '')), ''), '0001')
+      WHERE mcc IS NULL OR TRIM(COALESCE(mcc, '')) = ''
+    `);
   }
 
   // One-time migrate from legacy payment_gateway_settings.canara* columns
@@ -161,7 +229,7 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
         await dataSource.query(`
           INSERT INTO canara_payment_settings (
             enabled, mockMode, clientId, clientSecret, baseUrl, scope,
-            oauthRedirectUri, mid, sid, terminalId, upiId,
+            oauthRedirectUri, mid,
             symmetricKey, privateKeyPem, publicCertPem,
             accessToken, refreshToken, tokenExpiresAt
           )
@@ -171,7 +239,7 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
             canaraClientId, canaraClientSecret,
             COALESCE(canaraBaseUrl, 'https://api.canarauat.bank.in'),
             canaraScope, canaraOauthRedirectUri,
-            canaraMid, canaraSid, canaraTerminalId, canaraUpiId,
+            canaraMid,
             canaraSymmetricKey, canaraPrivateKeyPem, canaraPublicCertPem,
             canaraAccessToken, canaraRefreshToken, canaraTokenExpiresAt
           FROM payment_gateway_settings
@@ -202,4 +270,5 @@ async function ensureCanaraPaymentSettingsTable(dataSource, log = console) {
 module.exports = {
   ensureCanaraPaymentSettingsTable,
   ensureCanaraOauthAuditTable,
+  ensureCanaraVpaTable,
 };

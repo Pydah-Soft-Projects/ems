@@ -46,6 +46,28 @@ export type CanaraOrder = {
   instructions: string[];
 };
 
+export type CanaraVPARecord = {
+  id: number;
+  sid: string | null;
+  upiId: string | null;
+  batchId: string | null;
+  mobileNumber: string | null;
+  additionalNumber: string | null;
+  usedFor: string | null;
+  status: string | null;
+  responseStatus: string | null;
+  responseCode: string | null;
+  responseMessage: string | null;
+  merchantName: string | null;
+  qrString: string | null;
+  suggestedVPA: string | null;
+  errorCode: string | null;
+  errorDescription: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type CanaraStatusCheck = {
   status: string;
   paid: boolean;

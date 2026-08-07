@@ -7,6 +7,24 @@ const { config } = require('../config');
 const SENSITIVE_KEY =
   /password|passcode|token|secret|signature|authorization|cookie|card|cvv|credential|private.?key/i;
 
+function formatStructured(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+      return trimmed;
+    }
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+  return String(value);
+}
+
 function sanitize(value, depth = 0) {
   if (value == null || depth > 6) return value;
   if (Buffer.isBuffer(value)) return `[Buffer ${value.length} bytes]`;
@@ -93,7 +111,13 @@ function requestLogger(req, res, next) {
         !req.path.includes('/razorpay/webhook')
           ? sanitize(req.body)
           : undefined,
+      requestSummary: formatStructured(sanitize(req.body)),
+      responseSummary: undefined,
     };
+
+    if (res.locals?.responsePayload) {
+      entry.responseSummary = formatStructured(res.locals.responsePayload);
+    }
 
     if (res.statusCode >= 500) {
       req.log.error(entry, 'Request failed');
