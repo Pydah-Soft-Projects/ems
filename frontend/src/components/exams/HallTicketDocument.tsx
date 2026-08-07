@@ -53,6 +53,9 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
           {ticket.examName}
         </p>
         <p className="text-center text-[10px] text-slate-500">
+          {ticket.center}
+        </p>
+        <p className="text-center text-[10px] text-slate-500">
           Y{ticket.yearOfStudy} / Sem {ticket.semester} · Batch {ticket.batch}
         </p>
 
@@ -72,8 +75,6 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
             <p className="font-bold capitalize">{examType}</p>
           </div>
           <div className="space-y-1 pl-2">
-            <p className="text-slate-500">Fee status</p>
-            <p className="font-bold capitalize">{ticket.feeStatus}</p>
             <p className="text-slate-500">Released on</p>
             <p className="font-bold">
               {formatDate(ticket.hallTicketsReleasedAt)}

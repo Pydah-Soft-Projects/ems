@@ -99,6 +99,7 @@ function buildHallTicketBlock(
       </div>
 
       <div class="exam-title">${esc(ticket.examName)}</div>
+      <div class="exam-sub">${esc(ticket.center)}</div>
       <div class="exam-sub">Y${esc(ticket.yearOfStudy)} / Sem ${esc(ticket.semester)} · Batch ${esc(ticket.batch)}</div>
 
       <div class="meta">
@@ -115,8 +116,6 @@ function buildHallTicketBlock(
           <span class="val">${esc(examType)}</span>
         </div>
         <div class="meta-col">
-          <span class="lbl">Fee status</span>
-          <span class="val">${esc(ticket.feeStatus)}</span>
           <span class="lbl">Released on</span>
           <span class="val">${esc(formatDate(ticket.hallTicketsReleasedAt))}</span>
         </div>

@@ -403,15 +403,13 @@ export interface HallTicket {
   examType: ExamType;
   college: string | null;
   course: string;
+  center: string;
   branch: string;
   batch: string;
   yearOfStudy: number;
   semester: number;
   studentRollNumber: string;
   studentName: string;
-  feeRecordId: number;
-  feeStatus: string;
-  paidAt: string | null;
   hallTicketsReleasedAt: string;
   papers: HallTicketPaper[];
 }

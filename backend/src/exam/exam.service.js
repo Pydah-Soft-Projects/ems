@@ -1638,6 +1638,7 @@ class ExamService {
             examName: exam.name,
             examType: application.examType,
             college: exam.college,
+            center: exam.center || 'Pydah college of Engineering Main Block',
             course: exam.course,
             branch: application.studentBranch || exam.branch,
             batch: exam.batch,
@@ -1645,10 +1646,6 @@ class ExamService {
             semester: exam.semester,
             studentRollNumber: application.studentRollNumber,
             studentName: application.studentName,
-            feeRecordId: feeRecord.id,
-            feeStatus: feeRecord.status,
-            paidAt: feeRecord.payments?.find((p) => p.status === PaymentStatus.SUCCESS)
-                ?.paidAt ?? null,
             hallTicketsReleasedAt: exam.hallTicketsReleasedAt,
             papers,
         };
