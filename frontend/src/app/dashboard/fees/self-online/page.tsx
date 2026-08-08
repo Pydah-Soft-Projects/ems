@@ -13,6 +13,7 @@ import type {
   SelfOnlineStatementTxn,
 } from '@/types/self-online';
 import { PermissionGate } from '@/components/auth/PermissionGate';
+import { formatIST } from '@/lib/formatIST';
 import { AccessDenied } from '@/components/auth/AccessDenied';
 
 export default function SelfOnlineReconcilePage() {
@@ -687,7 +688,7 @@ export default function SelfOnlineReconcilePage() {
                       </span>
                     </span>
                     <span className="text-xs text-[var(--muted)]">
-                      {new Date(s.createdAt).toLocaleString('en-IN')}
+                      {formatIST(s.createdAt)}
                     </span>
                   </li>
                 ))}

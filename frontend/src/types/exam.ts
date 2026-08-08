@@ -410,6 +410,7 @@ export interface HallTicket {
   semester: number;
   studentRollNumber: string;
   studentName: string;
+  studentPhotoUrl?: string | null;
   hallTicketsReleasedAt: string;
   papers: HallTicketPaper[];
 }

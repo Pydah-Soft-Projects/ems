@@ -13,6 +13,7 @@ import {
   Payment,
   PaymentMethod,
 } from '@/types/fee';
+import { formatPaymentIST } from '@/lib/formatIST';
 import { StudentExamListItem } from '@/types/exam';
 import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
@@ -797,7 +798,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                         className="border-t border-[var(--border)]"
                       >
                         <td className="px-4 py-3 text-xs text-[var(--muted)]">
-                          {new Date(p.paidAt).toLocaleString()}
+                          {formatPaymentIST(p.paidAt)}
                         </td>
                         <td className="px-4 py-3">
                           {paymentLineLabel(p)}

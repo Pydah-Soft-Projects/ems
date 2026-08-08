@@ -11,6 +11,7 @@ import {
   PaymentMethod,
   PaymentResult,
 } from '@/types/fee';
+import { formatPaymentIST } from '@/lib/formatIST';
 import { getStoredUser } from '@/lib/auth';
 
 function money(value: number | string | null | undefined) {
@@ -136,7 +137,7 @@ export function CollectPaymentModal({
             <div>
               <dt className="text-[var(--muted)]">Paid at</dt>
               <dd className="font-medium">
-                {new Date(receipt.payment.paidAt).toLocaleString()}
+                {formatPaymentIST(receipt.payment.paidAt)}
               </dd>
             </div>
           </dl>

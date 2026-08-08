@@ -10,6 +10,7 @@ export type NavItem = {
     | 'organization'
     | 'exams'
     | 'fees'
+    | 'reports'
     | 'remuneration'
     | 'settings'
     | 'users';
@@ -80,6 +81,13 @@ export const navigation: NavGroup[] = [
         privilege: 'exams:read',
       },
       {
+        href: '/dashboard/reports/subject-wise',
+        label: 'Subject-wise Reports',
+        description: 'Paid PIN numbers by timetable subject and exam date',
+        icon: 'reports',
+        privilege: 'exams:read',
+      },
+      {
         href: '/dashboard/remuneration',
         label: 'Remuneration',
         description: 'Bills for external setters, evaluators & examiners',
@@ -118,6 +126,13 @@ export const navigation: NavGroup[] = [
         description: 'Payment gateway and portal config',
         icon: 'settings',
         privilege: 'settings:payments',
+      },
+      {
+        href: '/dashboard/reports',
+        label: 'Payment Reports',
+        description: 'Day / month wise paid students report',
+        icon: 'fees',
+        privilege: ['fees:read'],
       },
     ],
   },

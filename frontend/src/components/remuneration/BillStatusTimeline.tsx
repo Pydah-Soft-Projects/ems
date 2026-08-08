@@ -10,16 +10,11 @@ import {
 } from '@/types/remuneration';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { formatIST } from '@/lib/formatIST';
 
 function formatWhen(iso: string) {
   try {
-    return new Date(iso).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatIST(iso);
   } catch {
     return iso;
   }

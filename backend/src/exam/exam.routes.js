@@ -278,6 +278,8 @@ function createFeesRoutes(services) {
         statusRaw === FeeStatus.PENDING || statusRaw === FeeStatus.PAID
           ? statusRaw
           : undefined;
+      const page = req.query.page ? parseInt(String(req.query.page), 10) : undefined;
+      const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
       res.json(
         await services.exam.listFeeRecords(
           req.query.examId
@@ -285,6 +287,8 @@ function createFeesRoutes(services) {
             : undefined,
           req.query.rollNumber,
           status,
+          page,
+          limit,
         ),
       );
     }),

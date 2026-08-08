@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { money } from '@/components/fees/money';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { formatPaymentIST } from '@/lib/formatIST';
 
 type VerifyResult = {
   valid: boolean;
@@ -128,7 +129,7 @@ export default function VerifyReceiptPage({
                 />
                 <Info
                   label="Paid at"
-                  value={new Date(data.paidAt).toLocaleString()}
+                  value={formatPaymentIST(data.paidAt)}
                 />
                 <Info
                   label="Mode"

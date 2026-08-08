@@ -495,6 +495,7 @@ class CanaraQrService {
     const feeRecord = await this.exam.getFeeRecord(payment.feeRecordId);
     if (feeRecord.status === FeeStatus.PAID) {
       payment.status = PaymentStatus.SUCCESS;
+      payment.paidAt = new Date();
       await this.paymentRepo.save(payment);
       return {
         payment: this.exam.withVerificationMeta(payment),
@@ -567,6 +568,7 @@ class CanaraQrService {
     }
 
     payment.status = PaymentStatus.SUCCESS;
+    payment.paidAt = new Date();
     payment.receiptNumber = this.exam.generateReceiptNumber();
     const gw = this.exam.parseGateway(payment.gatewayResponse) ?? {};
     payment.gatewayResponse = JSON.stringify({

@@ -1303,6 +1303,7 @@ class ExamService {
         return {
             id: student.id,
             studentName: student.studentName,
+            photoUrl: student.photoUrl ?? null,
             pinNo: student.pinNo,
             admissionNumber: student.admissionNumber,
             college: student.college,
@@ -1596,7 +1597,21 @@ class ExamService {
             feeRecord: refreshed,
         };
     }
-    buildHallTicketPayload(exam, application, feeRecord) {
+    async getStudentPhotoForRoll(rollNumber) {
+        if (!rollNumber)
+            return null;
+        try {
+            const student = await this.sdms.findStudentByPin(rollNumber);
+            if (!student?.id)
+                return null;
+            const studentWithPhoto = await this.sdms.getStudent(student.id);
+            return studentWithPhoto?.photoUrl ?? null;
+        }
+        catch {
+            return null;
+        }
+    }
+    buildHallTicketPayload(exam, application, feeRecord, student = null, studentPhotoUrl = null) {
         // Prefer the paper row scoped to the applicant's branch/section so
         // branch- or section-specific schedules print correctly.
         const scoped = this.examSubjectsForBranch(exam, application.studentBranch, application.studentSection)
@@ -1646,6 +1661,7 @@ class ExamService {
             semester: exam.semester,
             studentRollNumber: application.studentRollNumber,
             studentName: application.studentName,
+            studentPhotoUrl: student?.photoUrl ?? studentPhotoUrl,
             hallTicketsReleasedAt: exam.hallTicketsReleasedAt,
             papers,
         };
@@ -1668,7 +1684,13 @@ class ExamService {
                 hallTicketsReleasedAt: exam.hallTicketsReleasedAt,
                 status: exam.status,
             },
-            tickets: apps.map((a) => this.buildHallTicketPayload(exam, a, a.feeRecord)),
+            tickets: await Promise.all(apps.map(async (a) => this.buildHallTicketPayload(
+                exam,
+                a,
+                a.feeRecord,
+                null,
+                await this.getStudentPhotoForRoll(a.studentRollNumber),
+            ))),
             total: apps.length,
         };
     }
@@ -1686,7 +1708,13 @@ class ExamService {
         if (application.feeRecord?.status !== FeeStatus.PAID) {
             throw AppError.badRequest('Hall ticket is only available after examination fee is paid');
         }
-        return this.buildHallTicketPayload(exam, application, application.feeRecord);
+        return this.buildHallTicketPayload(
+            exam,
+            application,
+            application.feeRecord,
+            null,
+            await this.getStudentPhotoForRoll(application.studentRollNumber),
+        );
     }
     async listHallTicketsForStudent(studentId) {
         const student = await this.loadStudentForEnrollment(studentId);
@@ -1704,7 +1732,7 @@ class ExamService {
             .andWhere('exam.hallTicketsReleasedAt IS NOT NULL')
             .orderBy('a.submittedAt', 'DESC')
             .getMany();
-        return apps.map((a) => this.buildHallTicketPayload(a.exam, a, a.feeRecord));
+        return apps.map((a) => this.buildHallTicketPayload(a.exam, a, a.feeRecord, student));
     }
     async getHallTicketForStudent(applicationId, studentId) {
         const student = await this.loadStudentForEnrollment(studentId);
@@ -1730,7 +1758,7 @@ class ExamService {
         if (application.feeRecord?.status !== FeeStatus.PAID) {
             throw AppError.badRequest('Hall ticket is available only after the examination fee is paid');
         }
-        return this.buildHallTicketPayload(application.exam, application, application.feeRecord);
+        return this.buildHallTicketPayload(application.exam, application, application.feeRecord, student);
     }
     async getExamAnalytics(examId) {
         const eligible = await this.listEligibleStudents(examId);
@@ -2120,7 +2148,7 @@ class ExamService {
         }
         return record;
     }
-    async listFeeRecords(examId, rollNumber, status) {
+    async listFeeRecords(examId, rollNumber, status, page, limit) {
         const qb = this.feeRecordRepo
             .createQueryBuilder('fr')
             .leftJoinAndSelect('fr.exam', 'exam')
@@ -2141,6 +2169,11 @@ class ExamService {
         }
         if (status) {
             qb.andWhere('fr.status = :status', { status });
+        }
+        if (limit && limit > 0) {
+            const take = Math.min(limit, 1000);
+            const skip = Math.max((Math.max(page || 1, 1) - 1) * take, 0);
+            qb.skip(skip).take(take);
         }
         const records = await qb.getMany();
         for (const record of records) {
@@ -2596,6 +2629,7 @@ class ExamService {
                 provider: 'razorpay',
             };
             row.status = PaymentStatus.SUCCESS;
+            row.paidAt = new Date();
             row.transactionReference =
                 meta.paymentId || row.transactionReference;
             if (this.isExamFeeLine(existing)) {
@@ -2727,6 +2761,7 @@ class ExamService {
             paymentMode: PaymentMode.OFFLINE,
             paymentMethod: dto.paymentMethod,
             status: PaymentStatus.SUCCESS,
+            paidAt: new Date(),
             receiptNumber: this.generateReceiptNumber(),
             transactionReference: dto.transactionNumber?.trim() || null,
             collectedBy,
@@ -2783,6 +2818,19 @@ class ExamService {
         });
         if (!payment)
             throw AppError.notFound('Payment / receipt not found');
+        try {
+            const rollNumber = payment.feeRecord?.studentRollNumber;
+            if (rollNumber) {
+                const student = await this.sdms.findStudentByPin(rollNumber);
+                if (student?.id) {
+                    const studentWithPhoto = await this.sdms.getStudent(student.id);
+                    payment.studentPhotoUrl = studentWithPhoto?.photoUrl ?? null;
+                }
+            }
+        }
+        catch {
+            payment.studentPhotoUrl = null;
+        }
         return payment;
     }
     async getPaymentByReceiptNumber(receiptNumber) {

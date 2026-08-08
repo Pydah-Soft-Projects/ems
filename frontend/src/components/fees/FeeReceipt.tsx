@@ -4,6 +4,7 @@ import { Payment } from '@/types/fee';
 import { DocumentHeader } from '@/components/documents/DocumentHeader';
 import { money, moneyPlain } from './money';
 import { buildReceiptVerificationUrl } from '@/lib/receiptVerification';
+import { formatPaymentIST, formatPaymentISTDate } from '@/lib/formatIST';
 
 interface FeeReceiptProps {
   payment: Payment;
@@ -21,9 +22,8 @@ export function FeeReceipt({
 }: FeeReceiptProps) {
   const fr = payment.feeRecord;
   const exam = fr?.exam;
-  const paidAt = new Date(payment.paidAt);
-  const dateStr = paidAt.toLocaleDateString('en-IN');
-  const timeStr = paidAt.toLocaleString('en-IN');
+  const dateStr = formatPaymentISTDate(payment.paidAt);
+  const timeStr = formatPaymentIST(payment.paidAt);
   const verifyUrl = buildReceiptVerificationUrl(payment);
 
   const amountPaid = Number(payment.amountPaid);
@@ -84,24 +84,25 @@ export function FeeReceipt({
           }
         />
 
-        <div className="mt-3 grid grid-cols-3 gap-2 rounded border border-dashed border-slate-400 p-2 text-[10px]">
-          <div className="space-y-1 border-r border-dashed border-slate-300 pr-2">
+        <div className="mt-3 flex items-start gap-3 text-[10px]">
+          <div className="grid flex-1 grid-cols-3 gap-2 rounded border border-dashed border-slate-400 p-2">
+            <div className="space-y-1 border-r border-dashed border-slate-300 pr-2">
             <p className="text-slate-500">Receipt No.</p>
             <p className="font-mono text-[11px] font-bold">
               {payment.receiptNumber}
             </p>
             <p className="text-slate-500">Date</p>
             <p className="font-bold">{dateStr}</p>
-          </div>
-          <div className="space-y-1 border-r border-dashed border-slate-300 px-2">
+            </div>
+            <div className="space-y-1 border-r border-dashed border-slate-300 px-2">
             <p className="text-slate-500">Student Name</p>
             <p className="font-bold">{fr?.studentName ?? '—'}</p>
             <p className="text-slate-500">PIN / Roll No.</p>
             <p className="font-mono font-bold">
               {fr?.studentRollNumber ?? '—'}
             </p>
-          </div>
-          <div className="space-y-1 pl-2">
+            </div>
+            <div className="space-y-1 pl-2">
             <p className="text-slate-500">Course / Branch</p>
             <p className="font-bold">
               {exam ? `${exam.course} — ${exam.branch}` : '—'}
@@ -112,6 +113,18 @@ export function FeeReceipt({
                 ? `${exam.batch} · Y${exam.yearOfStudy}/S${exam.semester}`
                 : '—'}
             </p>
+            </div>
+          </div>
+          <div className="flex h-24 w-20 shrink-0 items-center justify-center overflow-hidden rounded border border-slate-400 bg-slate-200">
+            {payment.studentPhotoUrl ? (
+              <img
+                src={payment.studentPhotoUrl}
+                alt={`${fr?.studentName ?? 'Student'} photo`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-base font-bold text-slate-600">—</span>
+            )}
           </div>
         </div>
 

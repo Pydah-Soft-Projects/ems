@@ -1,4 +1,5 @@
 import { HallTicket } from '@/types/exam';
+import { formatIST } from '@/lib/formatIST';
 
 function esc(value: string | number | null | undefined): string {
   return String(value ?? '')
@@ -42,7 +43,7 @@ function timingLabel(p: HallTicket['papers'][number]) {
       p.durationMinutes ? ` (${p.durationMinutes} min)` : ''
     }`;
   }
-  if (p.startTime) return `from ${p.startTime}`;
+  if (p.startTime) return p.startTime;
   if (p.durationMinutes) return `${p.durationMinutes} min`;
   return '—';
 }
@@ -61,21 +62,26 @@ function buildHallTicketBlock(
     options.collegeName || ticket.college || 'Examination Management System';
   const collegePlace = options.collegePlace || '';
   const signer = options.signatoryName || 'Controller of Examinations';
-  const generatedOn = new Date().toLocaleString('en-IN');
+  const generatedOn = formatIST(new Date());
   const examType = ticket.examType.replace(/_/g, ' ');
+  const studentInitials = ticket.studentName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 
   const paperRows = ticket.papers
     .map(
       (p, i) => `
           <tr>
             <td class="sno">${i + 1}</td>
-            <td>
-              <div><b>${esc(p.code)}</b></div>
-              <div class="sub">${esc(p.name)}</div>
-            </td>
+            <td class="code"><b>${esc(p.code)}</b></td>
+            <td class="subject-name">${esc(p.name)}</td>
             <td class="date">${esc(formatDate(p.examDate))}</td>
-            <td class="sess">${esc(sessionLabel(p.session))}</td>
             <td class="time">${esc(timingLabel(p))}</td>
+            <td class="sess">${esc(sessionLabel(p.session))}</td>
           </tr>`,
     )
     .join('');
@@ -98,26 +104,37 @@ function buildHallTicketBlock(
         </div>
       </div>
 
-      <div class="exam-title">${esc(ticket.examName)}</div>
-      <div class="exam-sub">${esc(ticket.center)}</div>
-      <div class="exam-sub">Y${esc(ticket.yearOfStudy)} / Sem ${esc(ticket.semester)} · Batch ${esc(ticket.batch)}</div>
+      <div class="exam-summary">
+        <div>
+          <div class="exam-title">${esc(ticket.examName)} (${esc(examType)})</div>
+          <div class="exam-sub">${esc(ticket.center)}</div>
+          <div class="exam-sub">Y${esc(ticket.yearOfStudy)} / Sem ${esc(ticket.semester)} · Batch ${esc(ticket.batch)}</div>
+        </div>
+        <div class="photo-panel">
+          ${ticket.studentPhotoUrl
+            ? `<img class="student-photo" src="${esc(ticket.studentPhotoUrl)}" alt="${esc(ticket.studentName)} photo" />`
+            : `<div class="student-photo student-initials">${esc(studentInitials || '?')}</div>`}
+        </div>
+      </div>
 
-      <div class="meta">
-        <div class="meta-col">
+      <div class="candidate-meta">
+        <div class="meta">
+          <div class="meta-col">
           <span class="lbl">Candidate Name</span>
           <span class="val">${esc(ticket.studentName)}</span>
           <span class="lbl">PIN / Roll No.</span>
           <span class="val">${esc(ticket.studentRollNumber)}</span>
-        </div>
-        <div class="meta-col">
+          </div>
+          <div class="meta-col">
           <span class="lbl">Course / Branch</span>
           <span class="val">${esc(`${ticket.course} — ${ticket.branch}`)}</span>
-          <span class="lbl">Enrollment type</span>
-          <span class="val">${esc(examType)}</span>
-        </div>
-        <div class="meta-col">
-          <span class="lbl">Released on</span>
-          <span class="val">${esc(formatDate(ticket.hallTicketsReleasedAt))}</span>
+          </div>
+          <div class="meta-col">
+          <span class="lbl">Year / Semester</span>
+          <span class="val">Y${esc(ticket.yearOfStudy)} / Sem ${esc(ticket.semester)}</span>
+          <span class="lbl">Batch</span>
+          <span class="val">${esc(ticket.batch)}</span>
+          </div>
         </div>
       </div>
 
@@ -125,14 +142,15 @@ function buildHallTicketBlock(
         <thead>
           <tr>
             <th class="sno">#</th>
-            <th>Subject / Paper</th>
+            <th class="code">Subject code</th>
+            <th>Subject name</th>
             <th class="date">Exam date</th>
-            <th class="sess">Session</th>
             <th class="time">Timing</th>
+            <th class="sess">Session</th>
           </tr>
         </thead>
         <tbody>
-          ${paperRows || `<tr><td colspan="5" style="text-align:center">No papers listed</td></tr>`}
+          ${paperRows || `<tr><td colspan="6" style="text-align:center">No papers listed</td></tr>`}
         </tbody>
       </table>
 
@@ -251,6 +269,18 @@ function buildPrintDocument(
     margin-bottom: 1.2mm;
   }
 
+  .exam-summary {
+    position: relative;
+    min-height: 0;
+  }
+  .exam-summary > div:first-child {
+    margin-right: 30mm;
+  }
+  .candidate-meta {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-right: 30mm;
+  }
   .meta {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -266,6 +296,35 @@ function buildPrintDocument(
     word-break: break-word; text-transform: capitalize;
   }
   .meta-col .val:last-child { margin-bottom: 0; }
+  .student-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    margin: 0 auto;
+  }
+  .student-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 10pt;
+    font-weight: 700;
+  }
+  .photo-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    border: 1px solid #94a3b8;
+    padding: 0;
+    width: 25mm;
+    height: 32mm;
+    overflow: hidden;
+  }
 
   table {
     width: 100%;
@@ -276,6 +335,8 @@ function buildPrintDocument(
   th, td { border: 1px solid #0d1b3d; padding: 1mm 1.6mm; vertical-align: top; }
   th { background: #f1f5f9; text-align: left; font-size: 6.5pt; }
   .sno { width: 8mm; text-align: center; }
+  .code { width: 22mm; }
+  .subject-name { width: 35mm; }
   .date { width: 24mm; white-space: nowrap; }
   .sess { width: 26mm; }
   .time { width: 32mm; white-space: nowrap; }

@@ -10,6 +10,7 @@ import {
 } from '@/types/results';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
+import { formatIST } from '@/lib/formatIST';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 
@@ -483,7 +484,7 @@ export function ExamResultsPanel({ exam }: { exam: Exam }) {
               <ul className="space-y-0.5 text-xs text-[var(--muted)]">
                 {report.uploads.map((u) => (
                   <li key={u.id}>
-                    {new Date(u.createdAt).toLocaleString()} —{' '}
+                    {formatIST(u.createdAt)} —{' '}
                     {u.fileName ?? 'sheet'} ({u.rowCount} rows,{' '}
                     {u.studentCount} students)
                     {u.uploadedBy ? ` by ${u.uploadedBy}` : ''}

@@ -43,6 +43,7 @@ class SdmsService {
         this.studentSectionRepo = studentSectionRepo;
         this.credentialsRepo = credentialsRepo;
         this.dataSource = dataSource;
+        this.studentPhotoColumn = undefined;
     }
     async getStatus() {
         await this.dataSource.query('SELECT 1');
@@ -584,7 +585,33 @@ class SdmsService {
         });
         if (!student)
             throw AppError.notFound('Student not found');
+        student.photoUrl = await this.getStudentPhotoUrl(id);
         return student;
+    }
+    async getStudentPhotoUrl(id) {
+        if (this.studentPhotoColumn === undefined) {
+            try {
+                const columns = await this.dataSource.query('SHOW COLUMNS FROM students');
+                const names = new Map(columns.map((column) => [String(column.Field).toLowerCase(), column.Field]));
+                const candidates = ['photo_url', 'photo', 'image_url', 'image', 'student_photo', 'profile_photo'];
+                this.studentPhotoColumn = candidates.find((name) => names.has(name))
+                    ? names.get(candidates.find((name) => names.has(name)))
+                    : null;
+            }
+            catch {
+                this.studentPhotoColumn = null;
+            }
+        }
+        if (!this.studentPhotoColumn)
+            return null;
+        const column = String(this.studentPhotoColumn).replace(/`/g, '``');
+        try {
+            const rows = await this.dataSource.query(`SELECT \`${column}\` AS photoUrl FROM students WHERE id = ? LIMIT 1`, [id]);
+            return rows[0]?.photoUrl || null;
+        }
+        catch {
+            return null;
+        }
     }
     async getBatchScopeInsight(params) {
         const course = await this.getCourse(params.courseId);

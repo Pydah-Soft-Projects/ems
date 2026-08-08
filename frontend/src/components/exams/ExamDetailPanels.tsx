@@ -6,6 +6,7 @@ import { ExamHallTicketsPanel } from '@/components/exams/ExamHallTicketsPanel';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { formatIST } from '@/lib/formatIST';
 
 function fmtDate(value: string | null | undefined) {
   if (!value) return '—';
@@ -23,13 +24,7 @@ function fmtDate(value: string | null | undefined) {
 function fmtDateTime(value: string | null | undefined) {
   if (!value) return '—';
   try {
-    return new Date(value).toLocaleString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatIST(value);
   } catch {
     return value;
   }

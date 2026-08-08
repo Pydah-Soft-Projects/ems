@@ -42,6 +42,7 @@ export interface Payment {
   remarks: string | null;
   gatewayResponse: string | null;
   paidAt: string;
+    studentPhotoUrl?: string | null;
   verificationToken?: string;
   feeRecord?: ExamFeeRecord;
 }

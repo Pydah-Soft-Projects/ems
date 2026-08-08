@@ -26,7 +26,7 @@ function timingLabel(p: HallTicket['papers'][number]) {
       p.durationMinutes ? ` (${p.durationMinutes} min)` : ''
     }`;
   }
-  if (p.startTime) return `from ${p.startTime}`;
+  if (p.startTime) return p.startTime;
   if (p.durationMinutes) return `${p.durationMinutes} min`;
   return '—';
 }
@@ -34,6 +34,13 @@ function timingLabel(p: HallTicket['papers'][number]) {
 /** On-screen A5 preview. Printing uses printA5HallTicket() standalone HTML. */
 export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
   const examType = ticket.examType.replace(/_/g, ' ');
+  const studentInitials = ticket.studentName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 
   return (
     <div className="hall-ticket-preview mx-auto bg-white text-black shadow-sm">
@@ -49,36 +56,53 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
           }
         />
 
-        <p className="mt-2 text-center text-sm font-bold text-slate-900">
-          {ticket.examName}
-        </p>
-        <p className="text-center text-[10px] text-slate-500">
-          {ticket.center}
-        </p>
-        <p className="text-center text-[10px] text-slate-500">
-          Y{ticket.yearOfStudy} / Sem {ticket.semester} · Batch {ticket.batch}
-        </p>
+        <div className="relative mt-2">
+          <div className="pr-[7rem]">
+            <p className="text-center text-sm font-bold text-slate-900">
+              {ticket.examName} ({examType})
+            </p>
+            <p className="text-center text-[10px] text-slate-500">
+              {ticket.center}
+            </p>
+            <p className="text-center text-[10px] text-slate-500">
+              Y{ticket.yearOfStudy} / Sem {ticket.semester} · Batch {ticket.batch}
+            </p>
+          </div>
+          <div className="absolute right-0 top-0 flex h-[8rem] w-[6.25rem] items-start justify-center overflow-hidden rounded border border-slate-400 p-0">
+            {ticket.studentPhotoUrl ? (
+              <img
+                src={ticket.studentPhotoUrl}
+                alt={`${ticket.studentName} photo`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-slate-200 text-base font-bold text-slate-600">
+                {studentInitials || '?'}
+              </div>
+            )}
+          </div>
+        </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2 rounded border border-dashed border-slate-400 p-2 text-[10px]">
-          <div className="space-y-1 border-r border-dashed border-slate-300 pr-2">
-            <p className="text-slate-500">Candidate Name</p>
-            <p className="font-bold">{ticket.studentName}</p>
-            <p className="text-slate-500">PIN / Roll No.</p>
-            <p className="font-mono font-bold">{ticket.studentRollNumber}</p>
-          </div>
-          <div className="space-y-1 border-r border-dashed border-slate-300 px-2">
-            <p className="text-slate-500">Course / Branch</p>
-            <p className="font-bold">
-              {ticket.course} — {ticket.branch}
-            </p>
-            <p className="text-slate-500">Enrollment type</p>
-            <p className="font-bold capitalize">{examType}</p>
-          </div>
-          <div className="space-y-1 pl-2">
-            <p className="text-slate-500">Released on</p>
-            <p className="font-bold">
-              {formatDate(ticket.hallTicketsReleasedAt)}
-            </p>
+        <div className="mr-[7rem] mt-3 text-[10px]">
+          <div className="grid grid-cols-3 gap-2 rounded border border-dashed border-slate-400 p-2">
+            <div className="space-y-1 border-r border-dashed border-slate-300 pr-2">
+              <p className="text-slate-500">Candidate Name</p>
+              <p className="font-bold">{ticket.studentName}</p>
+              <p className="text-slate-500">PIN / Roll No.</p>
+              <p className="font-mono font-bold">{ticket.studentRollNumber}</p>
+            </div>
+            <div className="space-y-1 border-r border-dashed border-slate-300 px-2">
+              <p className="text-slate-500">Course / Branch</p>
+              <p className="font-bold">
+                {ticket.course} — {ticket.branch}
+              </p>
+            </div>
+            <div className="space-y-1 pl-2">
+              <p className="text-slate-500">Year / Semester</p>
+              <p className="font-bold">Y{ticket.yearOfStudy} / Sem {ticket.semester}</p>
+              <p className="text-slate-500">Batch</p>
+              <p className="font-bold">{ticket.batch}</p>
+            </div>
           </div>
         </div>
 
@@ -87,16 +111,19 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
             <tr className="bg-slate-100">
               <th className="border border-slate-800 px-2 py-1.5 text-left">#</th>
               <th className="border border-slate-800 px-2 py-1.5 text-left">
-                Subject / Paper
+                Subject code
+              </th>
+              <th className="border border-slate-800 px-2 py-1.5 text-left">
+                Subject name
               </th>
               <th className="border border-slate-800 px-2 py-1.5 text-left">
                 Exam date
               </th>
               <th className="border border-slate-800 px-2 py-1.5 text-left">
-                Session
+                Timing
               </th>
               <th className="border border-slate-800 px-2 py-1.5 text-left">
-                Timing
+                Session
               </th>
             </tr>
           </thead>
@@ -106,18 +133,20 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
                 <td className="border border-slate-800 px-2 py-2 text-center">
                   {i + 1}
                 </td>
-                <td className="border border-slate-800 px-2 py-2">
-                  <p className="font-semibold">{p.code}</p>
-                  <p className="text-[10px] text-slate-600">{p.name}</p>
+                <td className="border border-slate-800 px-2 py-2 font-semibold">
+                  {p.code}
+                </td>
+                <td className="border border-slate-800 px-2 py-2 text-[10px] text-slate-600">
+                  {p.name}
                 </td>
                 <td className="border border-slate-800 px-2 py-2 whitespace-nowrap">
                   {formatDate(p.examDate)}
                 </td>
-                <td className="border border-slate-800 px-2 py-2">
-                  {sessionLabel(p.session)}
-                </td>
                 <td className="border border-slate-800 px-2 py-2 whitespace-nowrap">
                   {timingLabel(p)}
+                </td>
+                <td className="border border-slate-800 px-2 py-2">
+                  {sessionLabel(p.session)}
                 </td>
               </tr>
             ))}

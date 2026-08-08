@@ -1,4 +1,5 @@
 import { Payment } from '@/types/fee';
+import { formatPaymentIST, formatPaymentISTDate } from '@/lib/formatIST';
 
 function esc(value: string | number | null | undefined): string {
   return String(value ?? '')
@@ -31,9 +32,8 @@ function buildReceiptBlock(
 ): string {
   const fr = payment.feeRecord;
   const exam = fr?.exam;
-  const paidAt = new Date(payment.paidAt);
-  const dateStr = paidAt.toLocaleDateString('en-IN');
-  const timeStr = paidAt.toLocaleString('en-IN');
+  const dateStr = formatPaymentISTDate(payment.paidAt);
+  const timeStr = formatPaymentIST(payment.paidAt);
 
   const collegeName =
     options.collegeName ||
@@ -139,6 +139,11 @@ function buildReceiptBlock(
           <span class="val">${esc(
             exam ? `${exam.batch} · Y${exam.yearOfStudy}/S${exam.semester}` : '—',
           )}</span>
+        </div>
+        <div class="photo-panel">
+          ${payment.studentPhotoUrl
+            ? `<img class="student-photo" src="${esc(payment.studentPhotoUrl)}" alt="Student photo" />`
+            : '<span class="photo-placeholder">—</span>'}
         </div>
       </div>
 
@@ -271,7 +276,7 @@ function buildPrintDocument(payment: Payment, options: PrintReceiptOptions) {
   .meta {
     margin-top: 1.8mm;
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr 25mm;
     border: 1px dashed #94a3b8;
     border-radius: 1.2mm;
     padding: 1.6mm 0;
@@ -284,6 +289,19 @@ function buildPrintDocument(payment: Payment, options: PrintReceiptOptions) {
     word-break: break-word;
   }
   .meta-col .val:last-child { margin-bottom: 0; }
+  .photo-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px dashed #cbd5e1;
+    overflow: hidden;
+  }
+  .student-photo {
+    width: 25mm;
+    height: 32mm;
+    object-fit: cover;
+  }
+  .photo-placeholder { font-size: 10pt; font-weight: 700; color: #64748b; }
 
   table {
     width: 100%;

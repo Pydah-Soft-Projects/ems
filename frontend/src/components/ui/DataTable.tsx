@@ -17,6 +17,8 @@ export function DataTable<T>({
   emptyTitle = 'No records found',
   emptyDescription,
   emptyAction,
+  footer,
+  monochrome = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -25,6 +27,8 @@ export function DataTable<T>({
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: ReactNode;
+  footer?: ReactNode;
+  monochrome?: boolean;
 }) {
   if (loading) return <LoadingBlock />;
   if (!rows.length) {
@@ -40,7 +44,7 @@ export function DataTable<T>({
   return (
     <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-white shadow-sm">
       <table className="min-w-full text-left text-sm">
-        <thead className="bg-[var(--surface-subtle)] text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+        <thead className={`${monochrome ? 'bg-white text-black' : 'bg-[var(--surface-subtle)] text-[var(--muted)]'} text-xs font-semibold uppercase tracking-wide`}>
           <tr>
             {columns.map((col) => (
               <th key={col.key} className={`px-4 py-3 ${col.className || ''}`}>
@@ -51,15 +55,16 @@ export function DataTable<T>({
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="hover:bg-slate-50/80">
+            <tr key={rowKey(row)} className={monochrome ? '' : 'hover:bg-slate-50/80'}>
               {columns.map((col) => (
-                <td key={col.key} className={`px-4 py-3 text-slate-700 ${col.className || ''}`}>
+                <td key={col.key} className={`px-4 py-3 ${monochrome ? 'text-black' : 'text-slate-700'} ${col.className || ''}`}>
                   {col.render(row)}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
+        {footer ? <tfoot>{footer}</tfoot> : null}
       </table>
     </div>
   );

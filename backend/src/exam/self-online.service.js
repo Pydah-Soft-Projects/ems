@@ -992,6 +992,7 @@ class SelfOnlineService {
     }
 
     payment.status = PaymentStatus.SUCCESS;
+    payment.paidAt = new Date();
     payment.receiptNumber = this.exam.generateReceiptNumber();
     const gw = this.exam.parseGateway(payment.gatewayResponse) ?? {};
     payment.gatewayResponse = JSON.stringify({

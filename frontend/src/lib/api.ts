@@ -577,12 +577,16 @@ export const api = {
       examId?: number;
       rollNumber?: string;
       status?: 'pending' | 'paid';
+      page?: number;
+      limit?: number;
     } = {},
   ) {
     const params = new URLSearchParams();
     if (filters.examId) params.set('examId', String(filters.examId));
     if (filters.rollNumber) params.set('rollNumber', filters.rollNumber.trim());
     if (filters.status) params.set('status', filters.status);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.limit) params.set('limit', String(filters.limit));
     const query = params.toString() ? `?${params}` : '';
     return request<ExamFeeRecord[]>(`/fees/records${query}`);
   },

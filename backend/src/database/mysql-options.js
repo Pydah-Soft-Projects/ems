@@ -12,6 +12,7 @@ function buildExamPortalMysqlOptions() {
     username: db.user,
     password: db.password,
     database: db.name,
+    timezone: '+05:30',
     synchronize: db.synchronize,
     charset: 'utf8mb4',
     ssl: buildMysqlSslOptions(db.ssl),
