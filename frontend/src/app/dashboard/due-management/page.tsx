@@ -173,7 +173,8 @@ export default function DueManagementPage() {
   }, [studentRequestFilters]);
 
   const collegeOptions = useMemo(
-    () => [...new Set(students.map((student) => student.college).filter(Boolean))].sort(),
+    () =>
+      [...new Set(students.map((student) => student.college).filter((value): value is string => Boolean(value)))].sort(),
     [students],
   );
 
@@ -181,7 +182,7 @@ export default function DueManagementPage() {
     const list = students
       .filter((student) => !collegeFilter || student.college === collegeFilter)
       .map((student) => student.course)
-      .filter(Boolean);
+      .filter((value): value is string => Boolean(value));
     return [...new Set(list)].sort();
   }, [collegeFilter, students]);
 
@@ -193,7 +194,7 @@ export default function DueManagementPage() {
           (!courseFilter || student.course === courseFilter),
       )
       .map((student) => student.branch)
-      .filter(Boolean);
+      .filter((value): value is string => Boolean(value));
     return [...new Set(list)].sort();
   }, [collegeFilter, courseFilter, students]);
 
@@ -206,7 +207,7 @@ export default function DueManagementPage() {
           (!branchFilter || student.branch === branchFilter),
       )
       .map((student) => student.batch)
-      .filter(Boolean);
+      .filter((value): value is string => Boolean(value));
     return [...new Set(list)].sort();
   }, [branchFilter, collegeFilter, courseFilter, students]);
 
@@ -220,7 +221,7 @@ export default function DueManagementPage() {
           (!batchFilter || student.batch === batchFilter),
       )
       .map((student) => student.section)
-      .filter(Boolean);
+      .filter((value): value is string => Boolean(value));
     return [...new Set(list)].sort();
   }, [batchFilter, branchFilter, collegeFilter, courseFilter, students]);
 
