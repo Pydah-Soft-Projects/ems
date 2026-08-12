@@ -173,25 +173,55 @@ class CanaraSettingsService {
     const pub = this.publicFromRow(row);
     const env = config.canara || {};
 
+    console.log('===== Canara config validation start =====');
+    console.log('DB row raw values:', JSON.stringify({
+      id: row?.id,
+      enabled: row?.enabled,
+      clientId: row?.clientId,
+      clientSecret: row?.clientSecret,
+      mid: row?.mid,
+      accountNumber: row?.accountNumber,
+      symmetricKeyExists: !!row?.symmetricKey,
+      privateKeyExists: !!row?.privateKeyPem,
+      publicCertExists: !!row?.publicCertPem,
+      accessTokenExists: !!row?.accessToken,
+      refreshTokenExists: !!row?.refreshToken,
+      tokenExpiresAt: row?.tokenExpiresAt,
+      refreshTokenExpiresAt: row?.refreshTokenExpiresAt,
+    }, null, 2));
+    console.log('Public summary:', JSON.stringify(pub, null, 2));
+    console.log('Env fallback values present:', JSON.stringify({
+      enabled: !!env.enabled,
+      clientId: !!env.clientId,
+      clientSecret: !!env.clientSecret,
+      mid: !!env.mid,
+      symmetricKey: !!env.symmetricKey,
+      privateKeyPem: !!env.privateKeyPem,
+      publicCertPem: !!env.publicCertPem,
+    }, null, 2));
+
     if (!pub.enabled) {
+      console.log('Canara config rejected: enabled=false');
       throw AppError.badRequest(
         'Canara Dynamic QR is disabled. Enable it in Settings → Canara Bank Dynamic QR.',
       );
     }
 
     if (!pub.configured) {
+      console.log('Canara config rejected: configured=false; missing=', JSON.stringify(pub.missing || [], null, 2));
       throw AppError.badRequest(
         `Canara credentials incomplete. Missing: ${(pub.missing || []).join(', ') || 'merchant / crypto / client fields'}`,
       );
     }
 
     if (requireLive && !pub.oauthReady) {
+      console.log('Canara config rejected: OAuth not ready');
       throw AppError.badRequest(
         'Canara OAuth not connected. Use Connect Canara OAuth in Settings.',
       );
     }
 
-    return {
+    const resolved = {
       ...pub,
       clientId: row.clientId?.trim() || env.clientId?.trim() || '',
       clientSecret: row.clientSecret?.trim() || env.clientSecret?.trim() || '',
@@ -207,6 +237,23 @@ class CanaraSettingsService {
       refreshTokenExpiresAt: row.refreshTokenExpiresAt || null,
       _rowId: row.id,
     };
+
+    console.log('Canara config accepted; resolved values:', JSON.stringify({
+      enabled: resolved.enabled,
+      configured: resolved.configured,
+      oauthReady: resolved.oauthReady,
+      clientId: !!resolved.clientId,
+      clientSecret: !!resolved.clientSecret,
+      mid: resolved.mid,
+      hasSymmetricKey: !!resolved.symmetricKey,
+      hasPrivateKey: !!resolved.privateKeyPem,
+      hasPublicCert: !!resolved.publicCertPem,
+      hasAccessToken: !!resolved.accessToken,
+      _rowId: resolved._rowId,
+    }, null, 2));
+    console.log('===== Canara config validation end =====');
+
+    return resolved;
   }
 
   async getOauthConfig() {

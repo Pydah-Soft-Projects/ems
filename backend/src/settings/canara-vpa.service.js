@@ -32,33 +32,63 @@ class CanaraVpaService {
     };
   }
 
+  isBankSuccessResponse(data = {}) {
+    if (!data || typeof data !== 'object') return false;
+
+    const rawStatus = String(
+      data.status || data.response?.status || data.respStatus || '',
+    ).trim().toUpperCase();
+    const rawRespCode = String(
+      data.respCode || data.response?.respCode || data.response?.responseCode || '',
+    ).trim();
+
+    return rawStatus === 'SUCCESS' || rawRespCode === '0' || rawRespCode === '00';
+  }
+
   async createVpa(payload = {}) {
-    const row = this.vpaRepo.create({
-      sid: payload.sid,
-      batchId: payload.batchId || null,
-      mobileNumber: payload.mobileNumber || null,
-      additionalNumber: payload.additionalNumber || null,
-      usedFor: payload.usedFor || null,
-      status: payload.status || 'PENDING',
-      responseStatus: payload.responseStatus || null,
-      responseCode: payload.responseCode || null,
-      responseMessage: payload.responseMessage || null,
-      merchantName: payload.merchantName || null,
-      qrString: payload.qrString || null,
-      suggestedVPA: payload.suggestedVPA || null,
-      errorCode: payload.errorCode || null,
-      errorDescription: payload.errorDescription || null,
-      upiId: payload.upiId || null,
-      isActive: false,
-    });
-    const saved = await this.vpaRepo.save(row);
+    console.log('===== Canara VPA createVpa start =====');
+    console.log('Incoming createVpa payload:', JSON.stringify(payload, null, 2));
 
     if (!this.client || !this.canaraSettings) {
-      return saved;
+      console.log('Canara VPA create aborted: client/config missing');
+      const row = this.vpaRepo.create({
+        sid: payload.sid,
+        batchId: payload.batchId || null,
+        mobileNumber: payload.mobileNumber || null,
+        additionalNumber: payload.additionalNumber || null,
+        usedFor: payload.usedFor || null,
+        status: payload.status || 'PENDING',
+        responseStatus: payload.responseStatus || null,
+        responseCode: payload.responseCode || null,
+        responseMessage: payload.responseMessage || null,
+        merchantName: payload.merchantName || null,
+        qrString: payload.qrString || null,
+        suggestedVPA: payload.suggestedVPA || null,
+        errorCode: payload.errorCode || null,
+        errorDescription: payload.errorDescription || null,
+        upiId: payload.upiId || null,
+        isActive: false,
+      });
+      return this.vpaRepo.save(row);
     }
 
     try {
+      console.log('Calling Canara settings.getConfig...');
       const cfg = await this.canaraSettings.getConfig({ requireLive: false });
+      console.log('Canara config used for VPA creation:', JSON.stringify({
+        mid: cfg.mid,
+        accountNumber: cfg.accountNumber,
+        ifscCode: cfg.ifscCode,
+        merchantName: cfg.merchantName,
+        mcc: cfg.mcc,
+        bankName: cfg.bankName,
+        channel: cfg.channel,
+        baseUrl: cfg.baseUrl,
+        enabled: cfg.enabled,
+        configured: cfg.configured,
+        oauthReady: cfg.oauthReady,
+      }, null, 2));
+
       const trimmedSid = String(payload.sid || '').trim();
       const trimmedMobile = String(payload.mobileNumber || '').trim();
       const trimmedName = String(payload.name || payload.merchantName || '').trim();
@@ -82,24 +112,57 @@ class CanaraVpaService {
         additionalNo: trimmedAdditionalNo || '',
         checksum: '',
       };
-      const createResult = await this.client.postPlainBody('/v1/upi/vpa-creation', createPayload);
+      console.log('Prepared createPayload for bank call:', JSON.stringify(createPayload, null, 2));
+      const createResult = await this.client.postEncrypted('/v1/upi/vpa-creation', createPayload);
+      console.log('Bank create response received from Canara client:', JSON.stringify(createResult, null, 2));
       const createData = createResult?.decrypted || {};
       const batchId = createData?.response?.batch_id || createData?.batch_id || null;
-      const isSuccess =
-        createData?.status === 'SUCCESS' ||
-        createData?.respCode === '0' ||
-        createData?.response?.status === 'SUCCESS';
-      const createPatch = {
-        batchId,
-        status: isSuccess ? 'SUCCESS' : 'PENDING',
-        responseStatus: createData?.status || createData?.response?.status || null,
-        responseCode: createData?.respCode || createData?.response?.respCode || null,
-        responseMessage: createData?.respMessge || createData?.response?.message || createData?.response?.error_desc || null,
-      };
-      await this.vpaRepo.update({ id: saved.id }, createPatch);
+      const isSuccess = this.isBankSuccessResponse(createData);
+
+      if (!isSuccess) {
+        const failedRow = this.vpaRepo.create({
+          sid: trimmedSid || payload.sid || null,
+          batchId: batchId || payload.batchId || null,
+          mobileNumber: trimmedMobile || payload.mobileNumber || null,
+          additionalNumber: trimmedAdditionalNo || payload.additionalNumber || null,
+          usedFor: payload.usedFor || null,
+          status: 'FAILED',
+          responseStatus: createData?.status || createData?.response?.status || null,
+          responseCode: createData?.respCode || createData?.response?.respCode || null,
+          responseMessage: createData?.respMessge || createData?.response?.message || createData?.response?.error_desc || null,
+          merchantName: trimmedName || payload.merchantName || null,
+          qrString: payload.qrString || null,
+          suggestedVPA: payload.suggestedVPA || null,
+          errorCode: createData?.errorCode || createData?.response?.error_code || null,
+          errorDescription: createData?.error_desc || createData?.response?.error_desc || null,
+          upiId: payload.upiId || null,
+          isActive: false,
+        });
+        return this.vpaRepo.save(failedRow);
+      }
+
+      const saved = this.vpaRepo.create({
+        sid: trimmedSid || payload.sid || null,
+        batchId: batchId || payload.batchId || null,
+        mobileNumber: trimmedMobile || payload.mobileNumber || null,
+        additionalNumber: trimmedAdditionalNo || payload.additionalNumber || null,
+        usedFor: payload.usedFor || null,
+        status: 'SUCCESS',
+        responseStatus: createData?.status || createData?.response?.status || 'SUCCESS',
+        responseCode: createData?.respCode || createData?.response?.respCode || '0',
+        responseMessage: createData?.respMessge || createData?.response?.message || null,
+        merchantName: trimmedName || payload.merchantName || null,
+        qrString: payload.qrString || null,
+        suggestedVPA: payload.suggestedVPA || null,
+        errorCode: null,
+        errorDescription: null,
+        upiId: payload.upiId || null,
+        isActive: false,
+      });
+      const savedRow = await this.vpaRepo.save(saved);
 
       if (!batchId) {
-        return this.vpaRepo.findOne({ where: { id: saved.id } });
+        return this.vpaRepo.findOne({ where: { id: savedRow.id } });
       }
 
       const inquiryPayload = {
@@ -109,7 +172,7 @@ class CanaraVpaService {
         batch_id: batchId,
         checksum: '',
       };
-      const inquiryResult = await this.client.postPlainBody('/v1/upi/vpa-creation-enq', inquiryPayload);
+      const inquiryResult = await this.client.postEncrypted('/v1/upi/vpa-creation-enq', inquiryPayload);
       const inquiryData = inquiryResult?.decrypted || {};
       const inquiryPatch = {
         upiId: inquiryData?.response?.upiId || inquiryData?.upiId || null,
@@ -120,22 +183,28 @@ class CanaraVpaService {
         suggestedVPA: inquiryData?.response?.suggestedVpa || inquiryData?.suggestedVpa || null,
         errorCode: inquiryData?.response?.error_code || inquiryData?.error_code || null,
         errorDescription: inquiryData?.response?.error_desc || inquiryData?.error_desc || null,
-        status: String(inquiryData?.status || createPatch.status || 'PENDING').trim(),
-        responseStatus: inquiryData?.status || null,
-        responseCode: inquiryData?.respCode || null,
+        status: String(inquiryData?.status || 'SUCCESS').trim(),
+        responseStatus: inquiryData?.status || 'SUCCESS',
+        responseCode: inquiryData?.respCode || '0',
         responseMessage: inquiryData?.respMessge || inquiryData?.response?.error_desc || null,
         batchId,
         updatedAt: new Date(),
       };
-      await this.vpaRepo.update({ id: saved.id }, inquiryPatch);
-      return this.vpaRepo.findOne({ where: { id: saved.id } });
+      await this.vpaRepo.update({ id: savedRow.id }, inquiryPatch);
+      return this.vpaRepo.findOne({ where: { id: savedRow.id } });
     } catch (err) {
-      await this.vpaRepo.update({ id: saved.id }, {
+      const row = this.vpaRepo.create({
+        sid: payload.sid || null,
+        mobileNumber: payload.mobileNumber || null,
+        additionalNumber: payload.additionalNumber || null,
+        usedFor: payload.usedFor || null,
         status: 'FAILED',
         responseMessage: err.message || 'VPA onboarding failed',
-        updatedAt: new Date(),
+        merchantName: payload.merchantName || null,
+        isActive: false,
       });
-      return this.vpaRepo.findOne({ where: { id: saved.id } });
+      const saved = await this.vpaRepo.save(row);
+      return saved;
     }
   }
 
@@ -185,7 +254,7 @@ class CanaraVpaService {
         batch_id: row.batchId || null,
         checksum: '',
       };
-      const inquiryResult = await this.client.postPlainBody('/v1/upi/vpa-creation-enq', inquiryPayload);
+      const inquiryResult = await this.client.postEncrypted('/v1/upi/vpa-creation-enq', inquiryPayload);
       const inquiryData = inquiryResult?.decrypted || {};
       const inquiryPatch = {
         upiId: inquiryData?.response?.upiId || inquiryData?.upiId || row.upiId || null,

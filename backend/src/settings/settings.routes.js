@@ -57,26 +57,30 @@ function createSettingsRoutes(services) {
     requirePrivilege('settings:payments'),
     asyncHandler(async (req, res) => {
       const payload = req.body ?? {};
+      console.log('===== Canara VPA route received =====');
+      console.log('Route path: /canara/vpas');
+      console.log('Incoming payload:', JSON.stringify(payload, null, 2));
       const sid = String(payload.sid || '').trim();
       if (!sid) {
+        console.log('Canara VPA create rejected: sid missing');
         throw AppError.badRequest('sid is required');
       }
+      console.log('SID present, resolving Canara config...');
       const settings = await services.canaraSettings.getConfig({ requireLive: false });
-      const created = await services.canaraVpas.createVpa({
+      console.log('Canara settings resolved from backend config:', JSON.stringify(settings, null, 2));
+      const createInput = {
         sid,
         name: payload.name || null,
         mobileNumber: payload.mobileNumber || null,
         additionalNumber: payload.additionalNumber || null,
         usedFor: payload.usedFor || null,
         status: 'PENDING',
-      });
-      const vpa = await services.canaraVpas.markInquiryResult(created.id, {
-        status: 'PENDING',
-        responseStatus: 'PENDING',
-        responseMessage: 'VPA creation pending',
-      });
-      res.status(201).json({
-        created: vpa,
+      };
+      console.log('Calling createVpa with payload:', JSON.stringify(createInput, null, 2));
+      const created = await services.canaraVpas.createVpa(createInput);
+      console.log('createVpa result:', JSON.stringify(created, null, 2));
+      res.status(created?.status === 'FAILED' ? 400 : 201).json({
+        created,
         settings,
       });
     }),

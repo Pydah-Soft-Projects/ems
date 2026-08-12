@@ -15,6 +15,7 @@
     "seed:demo": "node scripts/reset-and-seed-demo.js",
     "seed:pydah-btech": "node scripts/seed-pydah-btech-exams.js",
     "seed:pydah-btech-2000": "node scripts/seed-pydah-btech-batch-2000.js",
+    "payments:delete-interactive": "node scripts/delete-payment-interactive.js",
     "fix:indexes": "node scripts/fix-subject-mapping-indexes.js",
     "migrate:statement-txn-columns": "node scripts/migrate-merchant-statement-txn-columns.js",
     "migrate:add-self-online": "node scripts/migrate-add-self-online-columns.js",

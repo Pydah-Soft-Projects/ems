@@ -226,6 +226,9 @@ class CanaraApiClient {
 
     const url = `${cfg.baseUrl.replace(/\/$/, '')}${path}`;
     const authScheme = String(cfg.tokenType || 'Bearer').trim() || 'Bearer';
+
+    const signedRequest = await buildSignedEncryptedRequest(payload, cfg);
+    const requestBody = wrapped ? signedRequest.body : payload;
     const headers = {
       Authorization: `${authScheme} ${accessToken}`,
       'Content-Type': 'application/json',
@@ -234,33 +237,36 @@ class CanaraApiClient {
       'x-client-Certificate': publicCertHeaderValue(cfg.publicCertPem),
       'x-api-interaction-id': interactionId(),
       'x-timestamp': String(Math.floor(Date.now() / 1000)),
+      'x-signature': signedRequest.signature,
       'x-forwarded-for': process.env.CANARA_FORWARD_IP || '127.0.0.1',
       Cookie: 'ems=1',
     };
 
-    const requestBody = wrapped
-      ? {
-          Request: {
-            body: {
-              encryptData: payload,
-            },
-          },
-        }
-      : payload;
-
     console.log('===== Canara outbound request =====');
     console.log('Path:', path);
     console.log('URL:', url);
+    console.log('Authorization header:', headers.Authorization);
+    console.log('x-signature header:', headers['x-signature']);
+    console.log('Headers JSON:');
+    console.log(JSON.stringify(headers, null, 2));
+    console.log('Headers raw object:');
+    console.log(headers);
     console.log('Plaintext payload:');
     console.log(JSON.stringify(payload, null, 2));
+    console.log('Signed payload JSON string used for signature:');
+    console.log(signedRequest.plaintextSigned);
     console.log('Request body:');
     console.log(JSON.stringify(requestBody, null, 2));
 
-    const res = await fetch(url, {
+    const fetchInit = {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
-    });
+    };
+    console.log('Fetch init:');
+    console.log(JSON.stringify(fetchInit, null, 2));
+
+    const res = await fetch(url, fetchInit);
 
     const responseText = await res.text();
     let parsed = {};

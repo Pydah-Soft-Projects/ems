@@ -128,6 +128,13 @@ export const navigation: NavGroup[] = [
         privilege: 'settings:payments',
       },
       {
+        href: '/dashboard/due-management',
+        label: 'Due Management',
+        description: 'Manage examination due status per student',
+        icon: 'fees',
+        privilege: ['fees:read'],
+      },
+      {
         href: '/dashboard/reports',
         label: 'Payment Reports',
         description: 'Day / month wise paid students report',

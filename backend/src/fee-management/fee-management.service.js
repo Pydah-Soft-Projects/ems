@@ -298,6 +298,21 @@ class FeeManagementService {
       studentId,
       studentName:
         payload.student?.studentName || payload.studentName || undefined,
+      college:
+        payload.student?.college || payload.college || payload.exam?.college || undefined,
+      collegeId:
+        payload.student?.collegeId ?? payload.collegeId ?? undefined,
+      course:
+        payload.student?.course || payload.course || payload.exam?.course || undefined,
+      courseId:
+        payload.student?.courseId ?? payload.courseId ?? undefined,
+      branch:
+        payload.student?.branch || payload.branch || payload.exam?.branch || undefined,
+      branchId:
+        payload.student?.branchId ?? payload.branchId ?? undefined,
+      pinNo: payload.student?.pinNo || payload.pinNo || undefined,
+      admissionNumber:
+        payload.student?.admissionNumber || payload.admissionNumber || undefined,
       paymentDate: payload.paymentDate || new Date(),
       transactionType: 'DEBIT',
       paymentMode: mapPaymentMode(payload.paymentMethod),
@@ -318,6 +333,7 @@ class FeeManagementService {
             : undefined,
       collectedBy: payload.collectorUsername || payload.collectedBy || undefined,
       collectedByName: payload.collectedBy || undefined,
+      gatewayPaymentId: payload.gatewayPaymentId || undefined,
       status: 'active',
       emsPaymentId: payload.emsPaymentId,
       emsFeeRecordId: payload.emsFeeRecordId,

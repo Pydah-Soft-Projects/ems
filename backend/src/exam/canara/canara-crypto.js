@@ -45,17 +45,40 @@ async function importOctKey(rawKey, alg = 'A256KW') {
 /**
  * RSA-SHA256 sign plaintext JSON string → base64url (bank sample style).
  */
-function signPayload(plaintext, privateKeyPem) {
-  if (!privateKeyPem?.trim()) {
+function normalizeBase64KeyMaterial(rawValue) {
+  if (rawValue == null) return null;
+  const v = String(rawValue).trim();
+  if (!v) return null;
+  return v.replace(/\r/g, '').replace(/\n/g, '').replace(/\s+/g, '');
+}
+
+function createPrivateKeyFromBankMaterial(privateKeyMaterial) {
+  const normalized = normalizeBase64KeyMaterial(privateKeyMaterial);
+  if (!normalized) {
     throw AppError.badRequest('Canara RSA private key is not configured');
   }
+
+  const der = Buffer.from(normalized, 'base64');
+  return crypto.createPrivateKey({
+    key: der,
+    format: 'der',
+    type: 'pkcs8',
+  });
+}
+
+function signPayload(plaintext, privateKeyMaterial) {
+  if (!privateKeyMaterial?.trim()) {
+    throw AppError.badRequest('Canara RSA private key is not configured');
+  }
+
   const data =
     typeof plaintext === 'string' ? plaintext : JSON.stringify(plaintext);
+  const privateKey = createPrivateKeyFromBankMaterial(privateKeyMaterial);
   const signer = crypto.createSign('RSA-SHA256');
   signer.update(data);
   signer.end();
-  const sig = signer.sign(privateKeyPem.trim());
-  return sig.toString('base64url');
+  const sig = signer.sign(privateKey);
+  return sig.toString('base64');
 }
 
 /**
@@ -107,12 +130,21 @@ async function decryptEncryptData(jweCompact, symmetricKeyRaw) {
  * Build final bank request body + x-signature from plaintext encryptData fields.
  */
 async function buildSignedEncryptedRequest(encryptDataPlain, cfg) {
-  const plainForSign = JSON.stringify(encryptDataPlain);
+  const wrappedPlain = {
+    Request: {
+      body: {
+        encryptData: encryptDataPlain,
+      },
+    },
+  };
+
+  const plainForSign = JSON.stringify(wrappedPlain);
   const signature = signPayload(plainForSign, cfg.privateKeyPem);
   const encrypted = await encryptEncryptData(
     encryptDataPlain,
     cfg.symmetricKey,
   );
+
   return {
     body: {
       Request: {
@@ -132,7 +164,8 @@ async function buildSignedEncryptedRequest(encryptDataPlain, cfg) {
  */
 function publicCertHeaderValue(publicCertPem) {
   if (!publicCertPem?.trim()) return '';
-  return publicCertPem.trim().replace(/\r\n/g, '\n');
+  const normalized = normalizeBase64KeyMaterial(publicCertPem);
+  return normalized || '';
 }
 
 /**
