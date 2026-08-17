@@ -3,6 +3,38 @@
 const { EntitySchema } = require('typeorm');
 const { ExamType, ExamStatus } = require('./exam.enums');
 
+/**
+ * Date transformer to handle timezone issues.
+ * Converts DATE columns from MySQL to/from YYYY-MM-DD strings to prevent
+ * timezone-based date shifts between local and hosted environments.
+ */
+const dateTransformer = {
+  to: (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    // If it's a Date object, convert to YYYY-MM-DD string
+    if (value instanceof Date) {
+      const year = value.getUTCFullYear();
+      const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(value.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return value;
+  },
+  from: (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    // If it's already a Date object, convert to string
+    if (value instanceof Date) {
+      const year = value.getUTCFullYear();
+      const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(value.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    return value;
+  },
+};
+
 const Exam = new EntitySchema({
   name: 'Exam',
   tableName: 'exams',
@@ -19,11 +51,11 @@ const Exam = new EntitySchema({
     yearOfStudy: { type: 'int', default: 1 },
     semester: { type: 'int' },
     status: { type: 'varchar', length: 30, default: ExamStatus.DRAFT },
-    examinationStartDate: { type: 'date', nullable: true },
-    examinationEndDate: { type: 'date', nullable: true },
-    applicationStartDate: { type: 'date', nullable: true },
-    applicationEndDate: { type: 'date', nullable: true },
-    lateFeeStartDate: { type: 'date', nullable: true },
+    examinationStartDate: { type: 'date', nullable: true, transformer: dateTransformer },
+    examinationEndDate: { type: 'date', nullable: true, transformer: dateTransformer },
+    applicationStartDate: { type: 'date', nullable: true, transformer: dateTransformer },
+    applicationEndDate: { type: 'date', nullable: true, transformer: dateTransformer },
+    lateFeeStartDate: { type: 'date', nullable: true, transformer: dateTransformer },
     packageFee: { type: 'decimal', precision: 10, scale: 2, nullable: true },
     /** Branch/section-wise package fees: [{ branch, section|null, amount }] */
     packageFees: { type: 'simple-json', nullable: true },
@@ -114,7 +146,7 @@ const ExamSubject = new EntitySchema({
     /** Section within the branch; null = all sections of the branch */
     section: { type: 'varchar', length: 64, nullable: true },
     fee: { type: 'decimal', precision: 10, scale: 2 },
-    examDate: { type: 'date', nullable: true },
+    examDate: { type: 'date', nullable: true, transformer: dateTransformer },
     /** 'FN' (forenoon) or 'AN' (afternoon) */
     session: { type: 'varchar', length: 2, nullable: true },
     startTime: { type: 'varchar', length: 5, nullable: true },
@@ -145,9 +177,9 @@ const LateFeeSlab = new EntitySchema({
     id: { type: 'int', primary: true, generated: true },
     examId: { type: 'int' },
     /** Inclusive start date for this late-fee amount */
-    fromDate: { type: 'date' },
+    fromDate: { type: 'date', transformer: dateTransformer },
     /** Inclusive end date; null on the last slab = until application end date */
-    toDate: { type: 'date', nullable: true },
+    toDate: { type: 'date', nullable: true, transformer: dateTransformer },
     amount: { type: 'decimal', precision: 10, scale: 2 },
   },
   relations: {
