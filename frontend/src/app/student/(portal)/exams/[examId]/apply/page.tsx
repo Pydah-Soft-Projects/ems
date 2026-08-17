@@ -75,7 +75,7 @@ export default function StudentExamApplyPage({
         new Set(
           res.exam.subjects
             .filter(
-              (s) => initialType !== 'supply' || s.supplyStatus?.eligible,
+              (s) => initialType !== 'supply' || (s.supplyStatus?.eligible ?? true),
             )
             .map((s) => s.subjectId),
         ),
@@ -106,7 +106,7 @@ export default function StudentExamApplyPage({
   const selectableSubjects = useMemo(
     () =>
       subjects.filter(
-        (s) => enrollType !== 'supply' || s.supplyStatus?.eligible,
+        (s) => enrollType !== 'supply' || (s.supplyStatus?.eligible ?? true),
       ),
     [enrollType, subjects],
   );
@@ -160,7 +160,7 @@ export default function StudentExamApplyPage({
     setSelected(
       new Set(
         subjects
-          .filter((s) => type !== 'supply' || s.supplyStatus?.eligible)
+          .filter((s) => type !== 'supply' || (s.supplyStatus?.eligible ?? true))
           .map((s) => s.subjectId),
       ),
     );
@@ -529,7 +529,7 @@ export default function StudentExamApplyPage({
               {enrollType === 'regular'
                 ? 'Regular enrollment includes all papers. Fee is the package amount for your branch.'
                 : enrollType === 'supply'
-                  ? 'Only subjects whose latest result is failed can be selected. Fee is by count (1…N−1); selecting all papers uses the package fee.'
+                  ? 'Only failed results are selectable; if there is no prior result, you may choose the subject manually. Fee is by count (1…N−1); selecting all papers uses the package fee.'
                   : 'Select the papers you are applying for. Fee is by count (1…N−1); selecting all papers uses the package fee.'}
               {enrollType === 'regular' && exam.packageFee != null
                 ? ` Package fee: ₹${exam.packageFee}.`
@@ -545,7 +545,7 @@ export default function StudentExamApplyPage({
             <ul className="space-y-2">
               {subjects.map((s) => {
                 const supplyDisabled =
-                  enrollType === 'supply' && !s.supplyStatus?.eligible;
+                  enrollType === 'supply' && !(s.supplyStatus?.eligible ?? true);
                 const regularLocked = enrollType === 'regular';
                 return (
                 <li key={s.subjectId}>
@@ -563,8 +563,8 @@ export default function StudentExamApplyPage({
                         {enrollType === 'supply' && (
                           <span className={`block text-xs ${s.supplyStatus?.eligible ? 'text-rose-700' : 'text-[var(--muted)]'}`}>
                             {s.supplyStatus
-                              ? `${s.supplyStatus.eligible ? 'Not passed — eligible' : s.supplyStatus.passed ? 'Passed — not selectable' : 'No previous result found — not selectable'} · Grade ${s.supplyStatus.grade ?? '—'} · Grade points ${s.supplyStatus.gradePoints ?? '—'}`
-                              : 'No previous result found — not selectable'}
+                              ? `${s.supplyStatus.eligible ? (s.supplyStatus.passed === null ? 'No previous result found — selectable' : 'Not passed — eligible') : 'Passed — not selectable'} · Grade ${s.supplyStatus.grade ?? '—'} · Grade points ${s.supplyStatus.gradePoints ?? '—'}`
+                              : 'No previous result found — selectable'}
                           </span>
                         )}
                         {(s.examDate || s.startTime) && (

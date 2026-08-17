@@ -5,7 +5,6 @@ import { money } from '@/components/fees/money';
 import { ExamHallTicketsPanel } from '@/components/exams/ExamHallTicketsPanel';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingBlock } from '@/components/ui/Spinner';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatIST } from '@/lib/formatIST';
 
 function fmtDate(value: string | null | undefined) {
@@ -130,7 +129,15 @@ function TimelineItem({
   );
 }
 
-export function ExamOverviewPanel({ exam }: { exam: Exam }) {
+export function ExamOverviewPanel({
+  exam,
+  canEditSlabs = false,
+  onEditSlabs,
+}: {
+  exam: Exam;
+  canEditSlabs?: boolean;
+  onEditSlabs?: () => void;
+}) {
   const types = exam.allowedTypes?.length ? exam.allowedTypes : [exam.type];
   const branches = exam.scopes?.length
     ? [...new Set(exam.scopes.map((s) => s.branch))]
@@ -354,6 +361,20 @@ export function ExamOverviewPanel({ exam }: { exam: Exam }) {
           title="Late fee slabs"
           description="Counted from the late fee start date"
         >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="text-xs text-[var(--muted)]">
+              {sortedSlabs.length} slab{sortedSlabs.length === 1 ? '' : 's'}
+            </div>
+            {canEditSlabs && onEditSlabs ? (
+              <button
+                type="button"
+                onClick={onEditSlabs}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100"
+              >
+                Edit late fee slabs
+              </button>
+            ) : null}
+          </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {sortedSlabs.map((s, idx) => (
               <div

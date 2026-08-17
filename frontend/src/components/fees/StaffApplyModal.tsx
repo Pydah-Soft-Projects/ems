@@ -60,7 +60,7 @@ export function StaffApplyModal({
         new Set(
           res.exam.subjects
             .filter(
-              (s) => initialType !== 'supply' || s.supplyStatus?.eligible,
+              (s) => initialType !== 'supply' || (s.supplyStatus?.eligible ?? true),
             )
             .map((s) => s.subjectId),
         ),
@@ -87,7 +87,7 @@ export function StaffApplyModal({
   const selectableSubjects = useMemo(
     () =>
       subjects.filter(
-        (s) => enrollType !== 'supply' || s.supplyStatus?.eligible,
+        (s) => enrollType !== 'supply' || (s.supplyStatus?.eligible ?? true),
       ),
     [enrollType, subjects],
   );
@@ -126,7 +126,7 @@ export function StaffApplyModal({
     setSelected(
       new Set(
         subjects
-          .filter((s) => type !== 'supply' || s.supplyStatus?.eligible)
+          .filter((s) => type !== 'supply' || (s.supplyStatus?.eligible ?? true))
           .map((s) => s.subjectId),
       ),
     );
@@ -347,7 +347,7 @@ export function StaffApplyModal({
               ) : (
                 <p className="mb-2 text-xs text-[var(--muted)]">
                   {enrollType === 'supply'
-                    ? 'Only subjects with a latest failed result are selectable. '
+                    ? 'Only failed results are selectable; if there is no prior result, you may choose the subject manually. '
                     : ''}
                   Fee by subject count (1…N−1); all subjects uses package fee
                   {Array.isArray(detail.exam.supplyFeeByCount) &&
@@ -365,7 +365,7 @@ export function StaffApplyModal({
               <ul className="space-y-2">
                 {subjects.map((s) => {
                   const supplyDisabled =
-                    enrollType === 'supply' && !s.supplyStatus?.eligible;
+                    enrollType === 'supply' && !(s.supplyStatus?.eligible ?? true);
                   const regularLocked = enrollType === 'regular';
                   return (
                   <li key={s.subjectId}>
@@ -383,8 +383,8 @@ export function StaffApplyModal({
                           {enrollType === 'supply' && (
                             <span className={`block text-xs ${s.supplyStatus?.eligible ? 'text-rose-700' : 'text-[var(--muted)]'}`}>
                               {s.supplyStatus
-                                ? `${s.supplyStatus.eligible ? 'Not passed — eligible' : s.supplyStatus.passed ? 'Passed — not selectable' : 'No previous result found — not selectable'} · Grade ${s.supplyStatus.grade ?? '—'} · Grade points ${s.supplyStatus.gradePoints ?? '—'}`
-                                : 'No previous result found — not selectable'}
+                                ? `${s.supplyStatus.eligible ? (s.supplyStatus.passed === null ? 'No previous result found — selectable' : 'Not passed — eligible') : 'Passed — not selectable'} · Grade ${s.supplyStatus.grade ?? '—'} · Grade points ${s.supplyStatus.gradePoints ?? '—'}`
+                                : 'No previous result found — selectable'}
                             </span>
                           )}
                           {(s.examDate || s.startTime) && (

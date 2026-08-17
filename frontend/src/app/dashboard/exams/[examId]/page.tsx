@@ -60,24 +60,55 @@ export default function ExamDetailPage() {
   }, [examId]);
 
   useEffect(() => {
-    if (Number.isFinite(examId)) void loadExam();
-  }, [examId, loadExam]);
+    if (!Number.isFinite(examId)) return;
+    let cancelled = false;
+    const run = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const next = await api.getExam(examId);
+        if (!cancelled) setExam(next);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof ApiError ? err.message : 'Failed to load examination.',
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [examId]);
 
   useEffect(() => {
     if (!exam || tabParam !== 'analytics') return;
-    setAnalyticsLoading(true);
-    setAnalyticsError('');
-    api
-      .getExamAnalytics(exam.id)
-      .then(setAnalytics)
-      .catch((err) =>
-        setAnalyticsError(
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to load exam analytics.',
-        ),
-      )
-      .finally(() => setAnalyticsLoading(false));
+    let cancelled = false;
+    const run = async () => {
+      setAnalyticsLoading(true);
+      setAnalyticsError('');
+      try {
+        const next = await api.getExamAnalytics(exam.id);
+        if (!cancelled) setAnalytics(next);
+      } catch (err) {
+        if (!cancelled) {
+          setAnalyticsError(
+            err instanceof ApiError
+              ? err.message
+              : 'Failed to load exam analytics.',
+          );
+        }
+      } finally {
+        if (!cancelled) setAnalyticsLoading(false);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [exam, tabParam]);
 
   async function handleSubmit() {
@@ -180,7 +211,7 @@ export default function ExamDetailPage() {
     );
   }
 
-  const canEdit = exam.status === 'draft' || exam.status === 'rejected';
+  const canEdit = true;
   const staff = getStoredUser();
   const types = exam.allowedTypes?.length ? exam.allowedTypes : [exam.type];
 
@@ -288,7 +319,13 @@ export default function ExamDetailPage() {
       />
 
       <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] sm:p-6">
-          {tabParam === 'overview' ? <ExamOverviewPanel exam={exam} /> : null}
+          {tabParam === 'overview' ? (
+            <ExamOverviewPanel
+              exam={exam}
+              canEditSlabs={canEdit && can(staff, 'exams:write')}
+              onEditSlabs={() => router.push(`/dashboard/exams/${exam.id}/edit?step=3#late-fee-slabs`)}
+            />
+          ) : null}
           {tabParam === 'subjects' ? <ExamSubjectsPanel exam={exam} /> : null}
           {tabParam === 'analytics' ? (
             <ExamAnalyticsPanel

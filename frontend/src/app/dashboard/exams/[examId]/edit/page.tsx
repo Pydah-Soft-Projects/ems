@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { Regulation } from '@/types/regulation';
 import { CreateExamInput, Exam, UpdateExamInput } from '@/types/exam';
@@ -17,7 +17,12 @@ export default function EditExamPage() {
   const params = useParams<{ examId: string }>();
   const examId = Number(params.examId);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useToast();
+  const requestedStep = searchParams.get('step');
+  const defaultStep = requestedStep === '2' || requestedStep === '3' || requestedStep === '4'
+    ? (Number(requestedStep) as 2 | 3 | 4)
+    : 1;
   const [regulations, setRegulations] = useState<Regulation[]>([]);
   const [exam, setExam] = useState<Exam | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,6 +108,7 @@ export default function EditExamPage() {
             <ExamForm
               regulations={regulations}
               initial={exam}
+              defaultStep={defaultStep}
               onSubmit={handleSave}
               onCancel={() => router.push(`/dashboard/exams/${exam.id}`)}
               loading={saving}

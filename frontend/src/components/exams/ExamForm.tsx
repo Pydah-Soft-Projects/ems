@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+
 'use client';
 
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
@@ -10,7 +12,6 @@ import {
   ExamType,
   ExamSession,
   ExamSubjectFeeInput,
-  LateFeeSlabInput,
   PackageFeeEntry,
   SupplyFeeBranchEntry,
 } from '@/types/exam';
@@ -32,6 +33,7 @@ interface ExamFormProps {
   regulations: Regulation[];
   initial?: Exam | null;
   defaultRegulationId?: number;
+  defaultStep?: Step;
   onSubmit: (data: CreateExamInput) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
@@ -178,17 +180,16 @@ export function ExamForm({
   regulations,
   initial,
   defaultRegulationId,
+  defaultStep = 1,
   onSubmit,
   onCancel,
   loading,
 }: ExamFormProps) {
   const isEdit = !!initial;
 
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(defaultStep);
   const [name, setName] = useState('');
-  /** Legacy single type — used when editing */
-  const [type, setType] = useState<ExamType>('regular');
-  /** Multi-type for create */
+  /** Multi-type for create and edit */
   const [types, setTypes] = useState<ExamType[]>(DEFAULT_CREATE_TYPES);
   const [regulationId, setRegulationId] = useState('');
   const [collegeId, setCollegeId] = useState('');
@@ -244,8 +245,11 @@ export function ExamForm({
   const [error, setError] = useState('');
   const [loadingScope, setLoadingScope] = useState(false);
 
-  const reg = regulations.find((r) => r.id === parseInt(regulationId, 10));
-  const scopes = reg?.scopes ?? [];
+  const reg = useMemo(
+    () => regulations.find((r) => r.id === parseInt(regulationId, 10)),
+    [regulations, regulationId],
+  );
+  const scopes = useMemo(() => reg?.scopes ?? [], [reg]);
   const colleges = useMemo(() => getScopedColleges(scopes), [scopes]);
   const courses = useMemo(
     () =>
@@ -367,7 +371,6 @@ export function ExamForm({
   useEffect(() => {
     if (initial) {
       setName(initial.name);
-      setType(initial.type);
       const nextTypes = (
         initial.allowedTypes?.length
           ? [...initial.allowedTypes]
@@ -436,7 +439,6 @@ export function ExamForm({
       setSupplyFeeByBranch(branchSupply);
       setSelectedBranchIds([]);
       setBranchSections({});
-      setStep(1);
 
       const regulation = regulations.find((r) => r.id === initial.regulationId);
       const scope = regulation?.scopes?.find(
@@ -451,7 +453,6 @@ export function ExamForm({
       }
     } else {
       setName('');
-      setType('regular');
       setTypes(DEFAULT_CREATE_TYPES);
       setRegulationId(defaultRegulationId ? String(defaultRegulationId) : '');
       setCollegeId('');
@@ -1995,7 +1996,10 @@ export function ExamForm({
             />
           </div>
 
-          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/50 p-4">
+          <div
+            id="late-fee-slabs"
+            className="rounded-[var(--radius)] border border-[var(--border)] bg-slate-50/50 p-4 scroll-mt-24"
+          >
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-slate-900">Late fee slabs</p>

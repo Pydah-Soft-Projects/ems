@@ -611,9 +611,8 @@ class ExamService {
     }
     async update(id, dto) {
         const exam = await this.findOne(id);
-        if (exam.status !== ExamStatus.DRAFT &&
-            exam.status !== ExamStatus.REJECTED) {
-            throw AppError.badRequest('Only draft or rejected examinations can be updated');
+        if (exam.status === ExamStatus.ARCHIVED) {
+            throw AppError.badRequest('Archived examinations cannot be updated');
         }
         if (dto.subjects) {
             const branch = dto.branch ??
@@ -1185,7 +1184,7 @@ class ExamService {
                     attemptNumber: result.attemptNumber,
                 }
                 : {
-                    eligible: false,
+                    eligible: true,
                     grade: null,
                     gradePoints: null,
                     passed: null,
@@ -1505,7 +1504,7 @@ class ExamService {
             // Supply: only failed papers. Improvement/special_supply: keep all scope papers
             // until those flows define their own filters (same selection UI as supply).
             if (examType === ExamType.SUPPLY) {
-                allowedSubjects = branchSubjects.filter((es) => supplyStatuses.get(es.subjectId)?.eligible);
+                allowedSubjects = branchSubjects.filter((es) => supplyStatuses.get(es.subjectId)?.eligible ?? true);
                 if (allowedSubjects.length === 0) {
                     throw AppError.badRequest('You have no failed subjects eligible for Supply in this semester');
                 }
@@ -2027,9 +2026,12 @@ class ExamService {
             return `${y}-${m}-${d}`;
         };
         const normalized = slabs.map((s) => {
-            const fromDate = toIso(s.fromDate);
-            const toDate = toIso(s.toDate);
-            const amount = Number(s.amount);
+            const rawToDate = s?.toDate;
+            const fromDate = toIso(s?.fromDate);
+            const toDate = rawToDate == null || rawToDate === '' || String(rawToDate).trim().toLowerCase() === 'null'
+                ? null
+                : toIso(rawToDate);
+            const amount = Number(s?.amount);
             return { fromDate, toDate, amount };
         });
         normalized.sort((a, b) => String(a.fromDate).localeCompare(String(b.fromDate)));
