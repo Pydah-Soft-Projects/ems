@@ -10,7 +10,20 @@ import { formatIST } from '@/lib/formatIST';
 function fmtDate(value: string | null | undefined) {
   if (!value) return '—';
   try {
-    return new Date(`${value}T12:00:00`).toLocaleDateString('en-IN', {
+    const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, y, m, d] = match;
+      const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+      return dt.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: 'numeric',
       month: 'short',
       year: 'numeric',

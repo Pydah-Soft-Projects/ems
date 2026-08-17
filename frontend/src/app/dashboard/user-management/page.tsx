@@ -1451,9 +1451,14 @@ export default function UserManagementPage() {
                         </dt>
                         <dd className="text-sm font-medium text-slate-800">
                           {selectedHrms.dateOfJoining
-                            ? new Date(
-                                selectedHrms.dateOfJoining,
-                              ).toLocaleDateString()
+                            ? (() => {
+                                const match = String(selectedHrms.dateOfJoining).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                                if (match) {
+                                  const [, y, m, d] = match;
+                                  return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0).toLocaleDateString();
+                                }
+                                return new Date(selectedHrms.dateOfJoining).toLocaleDateString();
+                              })()
                             : '—'}
                         </dd>
                       </div>

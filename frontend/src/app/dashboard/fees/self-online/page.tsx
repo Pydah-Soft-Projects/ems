@@ -187,7 +187,17 @@ export default function SelfOnlineReconcilePage() {
 
   function fmtDate(value: string | null) {
     if (!value) return '—';
-    return new Date(value).toLocaleDateString('en-IN');
+    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, y, m, d] = match;
+      const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+      return dt.toLocaleDateString('en-IN');
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+    });
   }
 
   function fmtMoney(value: number | null) {

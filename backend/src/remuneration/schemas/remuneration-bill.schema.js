@@ -2,6 +2,7 @@
 
 const { EntitySchema } = require('typeorm');
 const { BillType, BillStatus } = require('./remuneration.enums');
+const { dateTransformer } = require('../../common/date-transformer');
 
 /**
  * Remuneration bill for external examination work
@@ -18,35 +19,37 @@ const RemunerationBill = new EntitySchema({
     billNumber: { type: 'varchar', length: 40, unique: true },
     billType: {
       type: 'varchar',
-      length: 30,
-      default: BillType.QP_SETTING,
+      length: 40,
+      enum: Object.values(BillType),
     },
     status: {
       type: 'varchar',
-      length: 20,
+      length: 40,
+      enum: Object.values(BillStatus),
       default: BillStatus.DRAFT,
     },
-    examId: { type: 'int', nullable: true },
-    professionalId: { type: 'int', nullable: true },
 
-    /** Snapshotted professional details */
-    professionalName: { type: 'varchar', length: 200 },
+    // Snapshot of professional profile
+    professionalId: { type: 'int', nullable: true },
+    accountHolderName: { type: 'varchar', length: 200, nullable: true },
     designation: { type: 'varchar', length: 150, nullable: true },
-    organization: { type: 'text', nullable: true },
-    contactNumber: { type: 'varchar', length: 30, nullable: true },
+    organization: { type: 'varchar', length: 255, nullable: true },
+    pan: { type: 'varchar', length: 20, nullable: true },
+    phone: { type: 'varchar', length: 30, nullable: true },
     email: { type: 'varchar', length: 150, nullable: true },
     bankName: { type: 'varchar', length: 150, nullable: true },
-    accountHolderName: { type: 'varchar', length: 200, nullable: true },
-    accountNumber: { type: 'varchar', length: 50, nullable: true },
-    ifscCode: { type: 'varchar', length: 20, nullable: true },
-    bankAddress: { type: 'text', nullable: true },
+    branchName: { type: 'varchar', length: 150, nullable: true },
+    accountNumber: { type: 'varchar', length: 60, nullable: true },
+    ifscCode: { type: 'varchar', length: 30, nullable: true },
 
-    /** Exam context (denormalized for print / historical display) */
-    regulationId: { type: 'int', nullable: true },
-    regulationCode: { type: 'varchar', length: 50, nullable: true },
-    academicYear: { type: 'varchar', length: 50, nullable: true },
-    course: { type: 'varchar', length: 100, nullable: true },
-    branch: { type: 'varchar', length: 100, nullable: true },
+    // Academic / exam context
+    examId: { type: 'int', nullable: true },
+    collegeId: { type: 'int', nullable: true },
+    courseId: { type: 'int', nullable: true },
+    branchId: { type: 'int', nullable: true },
+    collegeName: { type: 'varchar', length: 255, nullable: true },
+    courseName: { type: 'varchar', length: 150, nullable: true },
+    branchNameSnap: { type: 'varchar', length: 150, nullable: true },
     batch: { type: 'varchar', length: 50, nullable: true },
     yearOfStudy: { type: 'int', nullable: true },
     semester: { type: 'int', nullable: true },
@@ -58,8 +61,8 @@ const RemunerationBill = new EntitySchema({
     subjects: { type: 'simple-json', nullable: true },
 
     /** Lab/project duration */
-    durationFrom: { type: 'date', nullable: true },
-    durationTo: { type: 'date', nullable: true },
+    durationFrom: { type: 'date', nullable: true, transformer: dateTransformer },
+    durationTo: { type: 'date', nullable: true, transformer: dateTransformer },
     numberOfDays: { type: 'int', nullable: true },
 
     /**
@@ -81,7 +84,7 @@ const RemunerationBill = new EntitySchema({
     },
     amountInWords: { type: 'varchar', length: 500, nullable: true },
 
-    billDate: { type: 'date', nullable: true },
+    billDate: { type: 'date', nullable: true, transformer: dateTransformer },
     officeNotes: { type: 'text', nullable: true },
     /**
      * Audit timeline:

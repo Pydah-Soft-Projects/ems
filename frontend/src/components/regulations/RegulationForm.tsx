@@ -45,8 +45,9 @@ export function RegulationForm({
     if (initial) {
       setCode(initial.code);
       setName(initial.name);
-      setDescription(initial.description ?? '');
-      setEffectiveDate(initial.effectiveDate ?? '');
+      setEffectiveDate(
+        initial.effectiveDate ? String(initial.effectiveDate).slice(0, 10) : '',
+      );
       setStatus(initial.status);
       setScopes(scopesToFormInput(initial.scopes ?? []));
       setSelectedCollegeIds(

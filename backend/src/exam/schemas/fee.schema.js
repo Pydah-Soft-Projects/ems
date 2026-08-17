@@ -2,36 +2,7 @@
 
 const { EntitySchema } = require('typeorm');
 const { ExamType, FeeStatus } = require('./exam.enums');
-
-/**
- * Date transformer to handle timezone issues.
- * Converts DATE columns from MySQL to/from YYYY-MM-DD strings to prevent
- * timezone-based date shifts between local and hosted environments.
- */
-const dateTransformer = {
-  to: (value) => {
-    if (!value) return null;
-    if (typeof value === 'string') return value;
-    if (value instanceof Date) {
-      const year = value.getUTCFullYear();
-      const month = String(value.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(value.getUTCDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    return value;
-  },
-  from: (value) => {
-    if (!value) return null;
-    if (typeof value === 'string') return value;
-    if (value instanceof Date) {
-      const year = value.getUTCFullYear();
-      const month = String(value.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(value.getUTCDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    return value;
-  },
-};
+const { dateTransformer } = require('../../common/date-transformer');
 
 const ExamFeeRecord = new EntitySchema({
   name: 'ExamFeeRecord',

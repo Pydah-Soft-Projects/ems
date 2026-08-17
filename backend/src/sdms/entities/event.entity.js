@@ -1,6 +1,7 @@
 'use strict';
 
 const { EntitySchema } = require('typeorm');
+const { dateTransformer } = require('../../common/date-transformer');
 
 /**
  * Student database (SDMS) timeline/events table.
@@ -13,8 +14,8 @@ const SdmsEvent = new EntitySchema({
     id: { type: 'int', primary: true, generated: true },
     title: { type: 'varchar', length: 255, nullable: false, name: 'title' },
     description: { type: 'text', nullable: true, name: 'description' },
-    eventDate: { type: 'date', nullable: false, name: 'event_date' },
-    endDate: { type: 'date', nullable: true, name: 'end_date' },
+    eventDate: { type: 'date', nullable: false, name: 'event_date', transformer: dateTransformer },
+    endDate: { type: 'date', nullable: true, name: 'end_date', transformer: dateTransformer },
     startTime: { type: 'time', nullable: true, name: 'start_time' },
     endTime: { type: 'time', nullable: true, name: 'end_time' },
     eventType: { type: 'varchar', length: 30, nullable: true, name: 'event_type' },

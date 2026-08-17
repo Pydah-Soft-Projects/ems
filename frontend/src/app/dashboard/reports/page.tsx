@@ -45,7 +45,18 @@ function isPaidPayment(payment: Payment) {
 }
 
 function formatReportDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, y, m, d] = match;
+    const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+    return dt.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+  return new Date(value).toLocaleDateString(undefined, {
+    timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -53,7 +64,17 @@ function formatReportDate(value: string) {
 }
 
 function formatReportMonth(value: string) {
-  return new Date(`${value}-01T00:00:00`).toLocaleDateString(undefined, {
+  const match = value.match(/^(\d{4})-(\d{2})/);
+  if (match) {
+    const [, y, m] = match;
+    const dt = new Date(Number(y), Number(m) - 1, 1, 12, 0, 0);
+    return dt.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+    });
+  }
+  return new Date(`${value}-01T12:00:00`).toLocaleDateString(undefined, {
+    timeZone: 'Asia/Kolkata',
     year: 'numeric',
     month: 'long',
   });
@@ -421,8 +442,15 @@ export default function ReportsPage() {
       {
         key: 'dueAt',
         header: 'Due Date',
-        render: (r: ExamFeeRecord) =>
-          r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-',
+        render: (r: ExamFeeRecord) => {
+          if (!r.dueDate) return '-';
+          const match = String(r.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (match) {
+            const [, y, m, d] = match;
+            return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0).toLocaleDateString();
+          }
+          return new Date(r.dueDate).toLocaleDateString();
+        },
       },
       { key: 'exam', header: 'Exam', render: (r: ExamFeeRecord) => r.exam?.name || '-' },
       { key: 'student', header: 'Student', render: (r: ExamFeeRecord) => r.studentName || '-' },
@@ -530,7 +558,16 @@ export default function ReportsPage() {
       amount: formatFeeValue(getFeeRecordDisplayValues(r).actualAmount),
       lateFee: formatFeeValue(getFeeRecordDisplayValues(r).lateFee),
       status: String(r.status),
-      dueDate: r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '-',
+      dueDate: r.dueDate
+        ? (() => {
+            const match = String(r.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (match) {
+              const [, y, m, d] = match;
+              return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0).toLocaleDateString();
+            }
+            return new Date(r.dueDate).toLocaleDateString();
+          })()
+        : '-',
     }));
 
     const paidRows: Array<Record<string, string>> = filteredPayments.map((p) => ({

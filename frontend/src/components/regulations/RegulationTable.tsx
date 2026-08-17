@@ -13,7 +13,21 @@ interface RegulationTableProps {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString('en-IN', {
+  if (!value) return '—';
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, y, m, d] = match;
+    const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+    return dt.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',

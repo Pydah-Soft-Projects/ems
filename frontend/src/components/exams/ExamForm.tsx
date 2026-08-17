@@ -386,11 +386,21 @@ export function ExamForm({
       setPackageFee(
         initial.packageFee != null ? String(initial.packageFee) : '',
       );
-      setApplicationStartDate(initial.applicationStartDate ?? '');
-      setApplicationEndDate(initial.applicationEndDate ?? '');
-      setExaminationStartDate(initial.examinationStartDate ?? '');
-      setExaminationEndDate(initial.examinationEndDate ?? '');
-      setLateFeeStartDate(initial.lateFeeStartDate ?? '');
+      setApplicationStartDate(
+        initial.applicationStartDate ? String(initial.applicationStartDate).slice(0, 10) : '',
+      );
+      setApplicationEndDate(
+        initial.applicationEndDate ? String(initial.applicationEndDate).slice(0, 10) : '',
+      );
+      setExaminationStartDate(
+        initial.examinationStartDate ? String(initial.examinationStartDate).slice(0, 10) : '',
+      );
+      setExaminationEndDate(
+        initial.examinationEndDate ? String(initial.examinationEndDate).slice(0, 10) : '',
+      );
+      setLateFeeStartDate(
+        initial.lateFeeStartDate ? String(initial.lateFeeStartDate).slice(0, 10) : '',
+      );
       setInstructions(initial.instructions ?? '');
       setSlabs(
         initial.lateFeeSlabs?.length

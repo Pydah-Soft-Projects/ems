@@ -184,6 +184,38 @@ class ExamService {
             }
         }
     }
+    /**
+     * Normalize a date value to YYYY-MM-DD string.
+     * Handles Date objects, ISO strings, and date strings.
+     * Uses UTC methods to avoid timezone shifts.
+     */
+    normalizeDateToString(value) {
+        if (!value) return value;
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+            if (match) return match[1];
+            const d = new Date(trimmed);
+            if (!Number.isNaN(d.getTime())) {
+                return new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                }).format(d);
+            }
+            return trimmed;
+        }
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).format(value);
+        }
+        return value;
+    }
     validateDates(dto) {
         if (dto.applicationEndDate &&
             dto.examinationStartDate &&
@@ -2067,8 +2099,13 @@ class ExamService {
         if (!value)
             return null;
         if (value instanceof Date && !Number.isNaN(value.getTime())) {
-            // MySQL DATE values come back as JS Dates; use UTC parts to avoid TZ shift.
-            return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+            const formatted = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            }).format(value);
+            return new Date(`${formatted}T00:00:00`);
         }
         const s = String(value).slice(0, 10);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(s))
