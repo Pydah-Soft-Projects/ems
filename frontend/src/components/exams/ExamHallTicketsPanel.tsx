@@ -19,6 +19,16 @@ export function ExamHallTicketsPanel({ exam }: ExamHallTicketsPanelProps) {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [previewTicket, setPreviewTicket] = useState<HallTicket | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [ticketsToPrint, setTicketsToPrint] = useState<HallTicket[]>([]);
+  const [selectedCopies, setSelectedCopies] = useState<{
+    original: boolean;
+    duplicate: boolean;
+  }>({
+    original: true,
+    duplicate: false,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -57,10 +67,54 @@ export function ExamHallTicketsPanel({ exam }: ExamHallTicketsPanelProps) {
     );
   }, [tickets, filter]);
 
+  const isAllSelected =
+    filtered.length > 0 &&
+    filtered.every((t) => selectedIds.has(t.applicationId));
+
+  const toggleSelectAll = () => {
+    const next = new Set(selectedIds);
+    if (isAllSelected) {
+      filtered.forEach((t) => next.delete(t.applicationId));
+    } else {
+      filtered.forEach((t) => next.add(t.applicationId));
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleSelect = (id: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
   function handlePrint(ticket: HallTicket) {
-    printA5HallTicket(ticket, {
-      collegeName: ticket.college || exam.college || undefined,
+    setTicketsToPrint([ticket]);
+    setPrintModalOpen(true);
+  }
+
+  function handleBulkPrintTrigger() {
+    const selected = tickets.filter((t) => selectedIds.has(t.applicationId));
+    if (selected.length === 0) return;
+    setTicketsToPrint(selected);
+    setPrintModalOpen(true);
+  }
+
+  function handleExecutePrint() {
+    const copies: ('original' | 'duplicate')[] = [];
+    if (selectedCopies.original) copies.push('original');
+    if (selectedCopies.duplicate) copies.push('duplicate');
+
+    if (copies.length === 0) return;
+
+    printA5HallTicket(ticketsToPrint, {
+      collegeName: ticketsToPrint[0].college || exam.college || undefined,
+      copies,
     });
+    setPrintModalOpen(false);
   }
 
   return (
@@ -73,12 +127,23 @@ export function ExamHallTicketsPanel({ exam }: ExamHallTicketsPanelProps) {
             not the browser page print.
           </p>
         </div>
-        <p className="text-xs text-[var(--muted)]">
-          {tickets.length} paid applicant{tickets.length !== 1 ? 's' : ''}
-          {exam.hallTicketsReleasedAt
-            ? ' · student portal released'
-            : ' · student portal not released yet'}
-        </p>
+        <div className="flex flex-col items-end gap-1.5">
+          <p className="text-xs text-[var(--muted)]">
+            {tickets.length} paid applicant{tickets.length !== 1 ? 's' : ''}
+            {exam.hallTicketsReleasedAt
+              ? ' · student portal released'
+              : ' · student portal not released yet'}
+          </p>
+          {selectedIds.size > 0 && (
+            <Button
+              type="button"
+              className="text-xs !py-1 !px-3 font-semibold"
+              onClick={handleBulkPrintTrigger}
+            >
+              Bulk Print ({selectedIds.size})
+            </Button>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -102,6 +167,14 @@ export function ExamHallTicketsPanel({ exam }: ExamHallTicketsPanelProps) {
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-[var(--muted)]">
                 <tr>
+                  <th className="w-10 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-3 py-2 font-semibold">Roll / PIN</th>
                   <th className="px-3 py-2 font-semibold">Name</th>
                   <th className="px-3 py-2 font-semibold">Type</th>
@@ -113,8 +186,16 @@ export function ExamHallTicketsPanel({ exam }: ExamHallTicketsPanelProps) {
                 {filtered.map((t) => (
                   <tr
                     key={t.applicationId}
-                    className="border-t border-[var(--border)]"
+                    className="border-t border-[var(--border)] hover:bg-slate-50/50"
                   >
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(t.applicationId)}
+                        onChange={() => toggleSelect(t.applicationId)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-3 py-2 font-medium tabular-nums">
                       {t.studentRollNumber}
                     </td>
@@ -176,6 +257,62 @@ export function ExamHallTicketsPanel({ exam }: ExamHallTicketsPanelProps) {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={printModalOpen}
+        onClose={() => setPrintModalOpen(false)}
+        title="Select Copies to Print"
+        size="md"
+      >
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-slate-600">
+            Select the copies you want to print for {ticketsToPrint.length === 1 ? 'this hall ticket' : `${ticketsToPrint.length} hall tickets`}:
+          </p>
+          <div className="space-y-3 rounded-lg border border-slate-200 p-4 bg-slate-50">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedCopies.original}
+                onChange={(e) => setSelectedCopies(prev => ({ ...prev, original: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div>
+                <span className="font-semibold text-slate-800 text-sm">Original</span>
+                <p className="text-xs text-slate-500">Prints the student copy (marked ORIGINAL)</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer border-t border-slate-200 pt-3">
+              <input
+                type="checkbox"
+                checked={selectedCopies.duplicate}
+                onChange={(e) => setSelectedCopies(prev => ({ ...prev, duplicate: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div>
+                <span className="font-semibold text-slate-800 text-sm">Duplicate</span>
+                <p className="text-xs text-slate-500">Prints the duplicate copy (marked DUPLICATE)</p>
+              </div>
+            </label>
+          </div>
+          
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setPrintModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!selectedCopies.original && !selectedCopies.duplicate}
+              onClick={handleExecutePrint}
+            >
+              Print
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

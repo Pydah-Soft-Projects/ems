@@ -72,11 +72,8 @@ export function HallTicketDocument({ ticket }: { ticket: HallTicket }) {
             <p className="text-center text-sm font-bold text-slate-900">
               {ticket.examName} ({examType})
             </p>
-            <p className="text-center text-[10px] text-slate-500">
-              {ticket.center}
-            </p>
-            <p className="text-center text-[10px] text-slate-500">
-              Y{ticket.yearOfStudy} / Sem {ticket.semester} · Batch {ticket.batch}
+            <p className="text-left text-[10px] font-semibold text-slate-800">
+              Center: {ticket.center}
             </p>
           </div>
           <div className="absolute right-0 top-0 flex h-[8rem] w-[6.25rem] items-start justify-center overflow-hidden rounded border border-slate-400 p-0">

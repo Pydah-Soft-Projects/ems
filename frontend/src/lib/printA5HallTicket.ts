@@ -52,11 +52,13 @@ export type PrintHallTicketOptions = {
   collegeName?: string;
   collegePlace?: string;
   signatoryName?: string;
+  copies?: ('original' | 'duplicate')[];
 };
 
 function buildHallTicketBlock(
   ticket: HallTicket,
   options: PrintHallTicketOptions,
+  copyLabel?: string,
 ): string {
   const collegeName =
     options.collegeName || ticket.college || 'Examination Management System';
@@ -101,14 +103,14 @@ function buildHallTicketBlock(
         <div class="doc-type">
           <b>Hall Ticket</b>
           <span>Admit card · ${esc(examType)}</span>
+          ${copyLabel ? `<div class="copy-tag">${esc(copyLabel)} COPY</div>` : ''}
         </div>
       </div>
 
       <div class="exam-summary">
         <div>
           <div class="exam-title">${esc(ticket.examName)} (${esc(examType)})</div>
-          <div class="exam-sub">${esc(ticket.center)}</div>
-          <div class="exam-sub">Y${esc(ticket.yearOfStudy)} / Sem ${esc(ticket.semester)} · Batch ${esc(ticket.batch)}</div>
+          <div class="exam-sub center-line">Center: ${esc(ticket.center)}</div>
         </div>
         <div class="photo-panel">
           ${ticket.studentPhotoUrl
@@ -176,16 +178,50 @@ function buildHallTicketBlock(
 }
 
 function buildPrintDocument(
-  ticket: HallTicket,
+  ticketOrTickets: HallTicket | HallTicket[],
   options: PrintHallTicketOptions,
 ) {
-  const body = buildHallTicketBlock(ticket, options);
+  const tickets = Array.isArray(ticketOrTickets) ? ticketOrTickets : [ticketOrTickets];
+  const copies = options.copies && options.copies.length > 0 ? options.copies : ['original'];
+
+  const sheets: string[] = [];
+
+  if (copies.length === 1) {
+    const copyLabel = copies[0];
+    const labelUpper = copyLabel.toUpperCase();
+    for (let i = 0; i < tickets.length; i += 2) {
+      const blocks: string[] = [];
+      blocks.push(buildHallTicketBlock(tickets[i], options, labelUpper));
+      if (i + 1 < tickets.length) {
+        blocks.push(buildHallTicketBlock(tickets[i + 1], options, labelUpper));
+      }
+      sheets.push(`<div class="sheet">${blocks.join('')}</div>`);
+    }
+  } else {
+    tickets.forEach((ticket) => {
+      const blocks: string[] = [];
+      if (copies.includes('original')) {
+        blocks.push(buildHallTicketBlock(ticket, options, 'ORIGINAL'));
+      }
+      if (copies.includes('duplicate')) {
+        blocks.push(buildHallTicketBlock(ticket, options, 'DUPLICATE'));
+      }
+      sheets.push(`<div class="sheet">${blocks.join('')}</div>`);
+    });
+  }
+
+  const sheetsHtml = sheets.join('');
+
+  const docTitle =
+    tickets.length === 1
+      ? `Hall Ticket — ${esc(tickets[0].studentRollNumber)}`
+      : `Hall Tickets — Bulk (${tickets.length})`;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Hall Ticket — ${esc(ticket.studentRollNumber)}</title>
+<title>${docTitle}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
   @page {
@@ -253,6 +289,18 @@ function buildPrintDocument(
   .doc-type { text-align: right; min-width: 28mm; }
   .doc-type b { display: block; font-size: 10pt; text-transform: uppercase; }
   .doc-type span { font-size: 7pt; color: #64748b; font-weight: 700; text-transform: capitalize; }
+  .copy-tag {
+    display: inline-block;
+    margin-top: 1.5mm;
+    font-size: 7pt;
+    font-weight: 700;
+    color: #0d1b3d;
+    border: 1px solid #0d1b3d;
+    padding: 0.4mm 1.6mm;
+    border-radius: 0.6mm;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 
   .exam-title {
     margin-top: 1.5mm;
@@ -267,6 +315,11 @@ function buildPrintDocument(
     color: #64748b;
     margin-top: 0.4mm;
     margin-bottom: 1.2mm;
+  }
+  .exam-sub.center-line {
+    color: #0d1b3d;
+    font-weight: 600;
+    text-align: left;
   }
 
   .exam-summary {
@@ -385,32 +438,38 @@ function buildPrintDocument(
   }
 
   @media print {
-    html, body, .sheet {
+    html, body {
       width: 210mm !important;
       height: 297mm !important;
+    }
+    .sheet {
+      width: 210mm !important;
+      height: 297mm !important;
+      page-break-after: always !important;
+      page-break-inside: avoid !important;
+    }
+    .sheet:last-child {
+      page-break-after: avoid !important;
     }
   }
 </style>
 </head>
 <body>
-  <div class="sheet">
-    ${body}
-  </div>
+  ${sheetsHtml}
 </body>
 </html>`;
 }
 
 /**
- * Print hall ticket on the top half of an A4 page (A5 landscape size/padding),
- * matching the fee receipt print layout.
+ * Print hall ticket(s) on A4 portrait, A5 landscape format (top/bottom copy splits).
  */
 export function printA5HallTicket(
-  ticket: HallTicket,
+  ticketOrTickets: HallTicket | HallTicket[],
   options: PrintHallTicketOptions = {},
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
-  const html = buildPrintDocument(ticket, options);
+  const html = buildPrintDocument(ticketOrTickets, options);
   const iframeId = 'ems-a5-hall-ticket-print-frame';
 
   let iframe = document.getElementById(iframeId) as HTMLIFrameElement | null;
@@ -455,5 +514,25 @@ export function printA5HallTicket(
     }
   };
 
-  setTimeout(triggerPrint, 250);
+  // Wait for student photos to load before triggering print
+  const imgs = Array.from(doc.images);
+  if (imgs.length === 0) {
+    setTimeout(triggerPrint, 250);
+    return;
+  }
+
+  let left = imgs.length;
+  const done = () => {
+    left -= 1;
+    if (left <= 0) setTimeout(triggerPrint, 200);
+  };
+  imgs.forEach((img) => {
+    if (img.complete) done();
+    else {
+      img.onload = done;
+      img.onerror = done;
+    }
+  });
+  // Safety timeout if images hang
+  setTimeout(triggerPrint, 2000);
 }
