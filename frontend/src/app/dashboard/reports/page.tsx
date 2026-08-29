@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Tabs } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
-import jsPDF from 'jspdf';
+import { downloadPaymentReportPdf } from '@/lib/printPaymentReport';
 import type { ExamFeeRecord, Payment } from '@/types/fee';
 import type { EligibleExamStudent, Exam } from '@/types/exam';
 import { formatPaymentIST } from '@/lib/formatIST';
@@ -144,6 +144,91 @@ function getConfiguredFeeValues(exam?: Exam | null, branch?: string | null) {
   const lateFee = getConfiguredLateFee(exam);
   const totalAmount = baseFee != null ? baseFee + lateFee : null;
   return { baseFee, lateFee, totalAmount };
+}
+
+function formatReportMoney(value: number) {
+  return Number(value || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function paymentMethodLabel(method: string | null | undefined) {
+  const value = String(method || '').trim().toLowerCase();
+  if (value === 'upi') return 'UPI';
+  if (value === 'self_online') return 'Self online';
+  if (value === 'cash') return 'Cash';
+  if (value === 'bank_transfer') return 'Bank transfer';
+  if (value === 'net_banking') return 'Net banking';
+  if (value === 'debit_card') return 'Debit card';
+  if (value === 'credit_card') return 'Credit card';
+  return value ? String(method) : 'Other';
+}
+
+function findEligibleBranch(
+  eligibleStudents: (EligibleExamStudent & { examId: number })[],
+  examId: number | undefined,
+  rollNumber: string | null | undefined,
+) {
+  if (!examId || !rollNumber) return null;
+  const roll = rollNumber.trim().toLowerCase();
+  return (
+    eligibleStudents.find(
+      (student) =>
+        student.examId === examId && student.rollNumber.trim().toLowerCase() === roll,
+    )?.branch ?? null
+  );
+}
+
+function resolveReportBranch(options: {
+  exam?: Exam | null;
+  examId?: number;
+  rollNumber?: string | null;
+  applicationBranch?: string | null;
+  eligibleBranch?: string | null;
+}) {
+  const fromApplication = options.applicationBranch?.trim();
+  if (fromApplication) return fromApplication;
+  const fromEligible = options.eligibleBranch?.trim();
+  if (fromEligible) return fromEligible;
+  const fromExam = options.exam?.branch?.trim();
+  if (fromExam) return fromExam;
+  return 'Unassigned';
+}
+
+function paymentReportBranch(
+  payment: Payment,
+  eligibleStudents: (EligibleExamStudent & { examId: number })[],
+) {
+  const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId;
+  return resolveReportBranch({
+    exam: payment.feeRecord?.exam,
+    examId,
+    rollNumber: payment.feeRecord?.studentRollNumber,
+    applicationBranch: payment.feeRecord?.application?.studentBranch,
+    eligibleBranch: findEligibleBranch(
+      eligibleStudents,
+      examId,
+      payment.feeRecord?.studentRollNumber,
+    ),
+  });
+}
+
+function dueReportBranch(
+  record: ExamFeeRecord,
+  eligibleStudents: (EligibleExamStudent & { examId: number })[],
+) {
+  return resolveReportBranch({
+    exam: record.exam,
+    examId: record.examId,
+    rollNumber: record.studentRollNumber,
+    applicationBranch: record.application?.studentBranch,
+    eligibleBranch: findEligibleBranch(eligibleStudents, record.examId, record.studentRollNumber),
+  });
+}
+
+function getCollectedAmount(payment: Payment) {
+  return Number(getActualAmountValue(payment) || 0) + Number(payment.feeRecord?.lateFee || 0);
 }
 
 function getFeeRecordDisplayValues(record: ExamFeeRecord, fallbackExam: Exam | null = null) {
@@ -345,8 +430,8 @@ export default function ReportsPage() {
       const examId = p.feeRecord?.exam?.id ?? p.feeRecord?.examId;
       if (selectedExam && examId !== selectedExam) return false;
       if (branchFilter) {
-        const branchValue = p.feeRecord?.exam?.branch;
-        if (String(branchValue || '').toLowerCase() !== branchFilter.toLowerCase()) return false;
+        const branchValue = paymentReportBranch(p, eligibleStudents);
+        if (branchValue.toLowerCase() !== branchFilter.toLowerCase()) return false;
       }
       if (
         paymentMethodFilter !== 'all' &&
@@ -354,7 +439,7 @@ export default function ReportsPage() {
       ) return false;
       return true;
     });
-  }, [payments, selectedExam, branchFilter, paymentMethodFilter, selectedDate, selectedMonth, tab]);
+  }, [payments, selectedExam, branchFilter, paymentMethodFilter, selectedDate, selectedMonth, tab, eligibleStudents]);
 
   const filteredDueRecords = useMemo(() => {
     const paidRolls = new Set(
@@ -367,8 +452,8 @@ export default function ReportsPage() {
       if (paidRolls.has(record.studentRollNumber.trim().toLowerCase())) return false;
       if (selectedExam && record.examId !== selectedExam) return false;
       if (branchFilter) {
-        const branchValue = record.exam?.branch;
-        if (String(branchValue || '').toLowerCase() !== branchFilter.toLowerCase()) return false;
+        const branchValue = dueReportBranch(record, eligibleStudents);
+        if (branchValue.toLowerCase() !== branchFilter.toLowerCase()) return false;
       }
       return true;
     });
@@ -514,177 +599,306 @@ export default function ReportsPage() {
   const displayedPayments = filteredPayments;
 
   function handleDownloadPdf() {
-    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const xStart = margin;
-    const xEnd = pageWidth - margin;
-    const reportPeriod = tab === 'day'
-      ? `Day wise - ${formatReportDate(selectedDate)}`
-      : tab === 'month'
-      ? `Month wise - ${formatReportMonth(selectedMonth)}`
-      : 'Pending dues';
-    const title = tab === 'due' ? 'Due Report' : `Payment Report - ${reportPeriod}`;
-    const lineHeight = 18;
+    const isDue = tab === 'due';
+    const reportPeriod =
+      tab === 'day'
+        ? `Day wise - ${formatReportDate(selectedDate)}`
+        : tab === 'month'
+          ? `Month wise - ${formatReportMonth(selectedMonth)}`
+          : 'Pending dues';
+    const documentTitle = isDue ? 'Due Report' : 'Payment Report';
+    const generatedAt = `${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`;
+
+    const collegeFromRows = isDue
+      ? filteredDueRecords.map((record) => record.exam?.college).filter(Boolean)
+      : filteredPayments.map((payment) => payment.feeRecord?.exam?.college).filter(Boolean);
+    const collegeName =
+      selectedExamObject?.college?.trim() ||
+      String(collegeFromRows[0] || '').trim() ||
+      exams.find((exam) => exam.college?.trim())?.college?.trim() ||
+      'Examination Management System';
 
     const filters: string[] = [];
-    if (selectedExamObject) {
-      filters.push(`Exam: ${selectedExamObject.name}`);
-    }
-    if (branchFilter) {
-      filters.push(`Branch: ${branchFilter}`);
-    }
-    if (paymentMethodFilter !== 'all') {
-      filters.push(`Method: ${paymentMethodFilter.toUpperCase()}`);
-    }
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, pageWidth / 2, 50, { align: 'center' });
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    filters.forEach((line, index) => {
-      doc.text(line, xStart, 76 + index * lineHeight);
-    });
-
-    let y = 76 + filters.length * lineHeight + 14;
-    y += 4;
-
-    const dueRows: Array<Record<string, string>> = filteredDueRecords.map((r) => ({
-      student: r.studentName ?? '-',
-      roll: r.studentRollNumber ?? '-',
-      exam: r.exam?.name ?? '-',
-      applied: formatFeeValue(getFeeRecordDisplayValues(r).totalAmount),
-      amount: formatFeeValue(getFeeRecordDisplayValues(r).actualAmount),
-      lateFee: formatFeeValue(getFeeRecordDisplayValues(r).lateFee),
-      status: String(r.status),
-      dueDate: r.dueDate
-        ? (() => {
-            const match = String(r.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (match) {
-              const [, y, m, d] = match;
-              return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0).toLocaleDateString();
-            }
-            return new Date(r.dueDate).toLocaleDateString();
-          })()
-        : '-',
-    }));
-
-    const paidRows: Array<Record<string, string>> = filteredPayments.map((p) => ({
-      student: p.feeRecord?.studentName ?? '-',
-      roll: p.feeRecord?.studentRollNumber ?? '-',
-      amount: formatFeeValue(getActualAmountValue(p)),
-      lateFee: formatFeeValue(p.feeRecord?.lateFee ?? '-'),
-      method: String(p.paymentMethod),
-      paidAt: paymentTimestamp(p) ? formatPaymentIST(paymentTimestamp(p) as string) : '-',
-    }));
-
-    const dueColumns = [
-      { key: 'student', label: 'Student', width: 88 },
-      { key: 'roll', label: 'Roll', width: 52 },
-      { key: 'exam', label: 'Exam', width: 82 },
-      { key: 'applied', label: 'Fee applied', width: 58 },
-      { key: 'amount', label: 'Actual amount', width: 62 },
-      { key: 'lateFee', label: 'Late Fee', width: 52 },
-      { key: 'status', label: 'Status', width: 52 },
-      { key: 'dueDate', label: 'Due Date', width: 64 },
-    ];
-
-    const paidColumns = [
-      { key: 'student', label: 'Student', width: 140 },
-      { key: 'roll', label: 'Roll', width: 65 },
-      { key: 'amount', label: 'Amount', width: 65 },
-      { key: 'lateFee', label: 'Late Fee', width: 65 },
-      { key: 'method', label: 'Method', width: 75 },
-      { key: 'paidAt', label: 'Paid At', width: 110 },
-    ];
-
-    const baseColumns = tab === 'due' ? dueColumns : paidColumns;
-    const widthScale = (xEnd - xStart) / baseColumns.reduce(
-      (total, column) => total + column.width,
-      0,
-    );
-    const selectedColumns = baseColumns.map((column) => ({
-      ...column,
-      width: column.width * widthScale,
-    }));
-    const selectedRows = tab === 'due' ? dueRows : paidRows;
-
-    const renderTableHeader = () => {
-      let x = xStart;
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      const wrappedHeaders = selectedColumns.map((column) =>
-        doc.splitTextToSize(column.label, column.width - 4),
+    filters.push(selectedExamObject ? `Exam: ${selectedExamObject.name}` : 'Exam: All examinations');
+    filters.push(branchFilter ? `Branch: ${branchFilter}` : 'Branch: All branches');
+    if (!isDue) {
+      filters.push(
+        paymentMethodFilter !== 'all'
+          ? `Method: ${paymentMethodLabel(paymentMethodFilter)}`
+          : 'Method: All payment methods',
       );
-      const headerLineCount = Math.max(...wrappedHeaders.map((lines) => lines.length));
-      const headerTop = y - 10;
-      const headerHeight = headerLineCount * lineHeight + 10;
-      selectedColumns.forEach((column) => {
-        const columnIndex = selectedColumns.indexOf(column);
-        wrappedHeaders[columnIndex].forEach((line: string, lineIndex: number) => {
-          doc.text(
-            line,
-            x + column.width / 2,
-            headerTop + 10 + lineIndex * lineHeight,
-            { align: 'center' },
+    }
+
+    const includeExamColumn = !selectedExam;
+    const sortBranchKeys = (a: string, b: string) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b);
+    };
+
+    if (isDue) {
+      const totalActual = filteredDueRecords.reduce(
+        (sum, record) => sum + getFeeRecordDisplayValues(record).actualAmount,
+        0,
+      );
+      const totalLate = filteredDueRecords.reduce(
+        (sum, record) => sum + getFeeRecordDisplayValues(record).lateFee,
+        0,
+      );
+      const lateCount = filteredDueRecords.filter(
+        (record) => getFeeRecordDisplayValues(record).lateFee > 0,
+      ).length;
+
+      const examTotals = new Map<string, { count: number; amount: number; lateFee: number }>();
+      for (const record of filteredDueRecords) {
+        const examName = record.exam?.name || 'Unspecified examination';
+        const current = examTotals.get(examName) || { count: 0, amount: 0, lateFee: 0 };
+        const display = getFeeRecordDisplayValues(record);
+        current.count += 1;
+        current.amount += display.actualAmount + display.lateFee;
+        current.lateFee += display.lateFee;
+        examTotals.set(examName, current);
+      }
+
+      const branchGroups = new Map<string, ExamFeeRecord[]>();
+      for (const record of filteredDueRecords) {
+        const branch = dueReportBranch(record, eligibleStudents);
+        const rows = branchGroups.get(branch) || [];
+        rows.push(record);
+        branchGroups.set(branch, rows);
+      }
+
+      const dueDetailColumns = [
+        { key: 'sno', label: 'S.No', width: 32 },
+        { key: 'student', label: 'Student', width: includeExamColumn ? 90 : 120 },
+        { key: 'roll', label: 'Roll', width: 68 },
+        ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 90 }] : []),
+        { key: 'amount', label: 'Actual amount', width: 62 },
+        { key: 'lateFee', label: 'Late fee', width: 50 },
+        { key: 'status', label: 'Status', width: 50 },
+        { key: 'dueDate', label: 'Due date', width: 68 },
+      ];
+
+      downloadPaymentReportPdf({
+        collegeName,
+        documentTitle,
+        periodLabel: reportPeriod,
+        generatedAt,
+        filters,
+        transactionSummaryTitle: 'Due summary',
+        transactionSummary: [
+          {
+            particular: 'Pending dues',
+            count: String(filteredDueRecords.length),
+            amount: formatReportMoney(totalActual),
+          },
+          {
+            particular: 'Late fee pending',
+            count: String(lateCount),
+            amount: formatReportMoney(totalLate),
+          },
+          {
+            particular: 'Total due',
+            count: String(filteredDueRecords.length),
+            amount: formatReportMoney(totalActual + totalLate),
+          },
+        ],
+        examSummary: selectedExam
+          ? null
+          : [
+              ...[...examTotals.entries()]
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([exam, totals]) => ({
+                  exam,
+                  count: String(totals.count),
+                  amount: formatReportMoney(totals.amount),
+                  lateFee: formatReportMoney(totals.lateFee),
+                })),
+              {
+                exam: 'Total',
+                count: String(filteredDueRecords.length),
+                amount: formatReportMoney(totalActual + totalLate),
+                lateFee: formatReportMoney(totalLate),
+              },
+            ],
+        branchSections: [...branchGroups.entries()]
+          .sort(([a], [b]) => sortBranchKeys(a, b))
+          .map(([branch, records]) => {
+            const sorted = [...records].sort((a, b) =>
+              `${a.studentRollNumber} ${a.studentName}`.localeCompare(
+                `${b.studentRollNumber} ${b.studentName}`,
+              ),
+            );
+            const branchActual = sorted.reduce(
+              (sum, record) => sum + getFeeRecordDisplayValues(record).actualAmount,
+              0,
+            );
+            const branchLate = sorted.reduce(
+              (sum, record) => sum + getFeeRecordDisplayValues(record).lateFee,
+              0,
+            );
+            return {
+              branch,
+              columns: dueDetailColumns,
+              rows: sorted.map((record, index) => {
+                const display = getFeeRecordDisplayValues(record);
+                const dueDate = record.dueDate
+                  ? (() => {
+                      const match = String(record.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                      if (match) {
+                        const [, year, month, day] = match;
+                        return new Date(
+                          Number(year),
+                          Number(month) - 1,
+                          Number(day),
+                          12,
+                          0,
+                          0,
+                        ).toLocaleDateString('en-IN');
+                      }
+                      return new Date(record.dueDate).toLocaleDateString('en-IN');
+                    })()
+                  : '-';
+                return {
+                  sno: String(index + 1),
+                  student: record.studentName || '-',
+                  roll: record.studentRollNumber || '-',
+                  exam: record.exam?.name || '-',
+                  amount: formatReportMoney(display.actualAmount),
+                  lateFee: formatReportMoney(display.lateFee),
+                  status: String(record.status),
+                  dueDate,
+                };
+              }),
+              footer: `Branch total: ${sorted.length} dues    Rs. ${formatReportMoney(branchActual + branchLate)}`,
+            };
+          }),
+        grandTotal: `Grand total: ${filteredDueRecords.length} dues    Rs. ${formatReportMoney(totalActual + totalLate)}`,
+        fileName: `due-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`,
+      });
+      return;
+    }
+
+    const methodTotals = new Map<string, { count: number; amount: number }>();
+    let totalCollected = 0;
+    let totalLate = 0;
+    let lateCount = 0;
+    for (const payment of filteredPayments) {
+      const method = paymentMethodLabel(payment.paymentMethod);
+      const current = methodTotals.get(method) || { count: 0, amount: 0 };
+      const collected = getCollectedAmount(payment);
+      current.count += 1;
+      current.amount += collected;
+      methodTotals.set(method, current);
+      totalCollected += collected;
+      const lateFee = Number(payment.feeRecord?.lateFee || 0);
+      totalLate += lateFee;
+      if (lateFee > 0) lateCount += 1;
+    }
+
+    const examTotals = new Map<string, { count: number; amount: number; lateFee: number }>();
+    for (const payment of filteredPayments) {
+      const examName = payment.feeRecord?.exam?.name || 'Unspecified examination';
+      const current = examTotals.get(examName) || { count: 0, amount: 0, lateFee: 0 };
+      current.count += 1;
+      current.amount += getCollectedAmount(payment);
+      current.lateFee += Number(payment.feeRecord?.lateFee || 0);
+      examTotals.set(examName, current);
+    }
+
+    const branchGroups = new Map<string, Payment[]>();
+    for (const payment of filteredPayments) {
+      const branch = paymentReportBranch(payment, eligibleStudents);
+      const rows = branchGroups.get(branch) || [];
+      rows.push(payment);
+      branchGroups.set(branch, rows);
+    }
+
+    const paidDetailColumns = [
+      { key: 'sno', label: 'S.No', width: 28 },
+      { key: 'student', label: 'Student', width: includeExamColumn ? 88 : 118 },
+      { key: 'roll', label: 'Roll', width: 68 },
+      ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 86 }] : []),
+      { key: 'amount', label: 'Amount', width: 58 },
+      { key: 'lateFee', label: 'Late fee', width: 48 },
+      { key: 'method', label: 'Method', width: 50 },
+      { key: 'paidAt', label: 'Paid at', width: 92 },
+    ];
+
+    downloadPaymentReportPdf({
+      collegeName,
+      documentTitle,
+      periodLabel: reportPeriod,
+      generatedAt,
+      filters,
+      transactionSummaryTitle: 'Transaction summary',
+      transactionSummary: [
+        ...[...methodTotals.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([method, totals]) => ({
+            particular: method,
+            count: String(totals.count),
+            amount: formatReportMoney(totals.amount),
+          })),
+        {
+          particular: 'Late fee (included above)',
+          count: String(lateCount),
+          amount: formatReportMoney(totalLate),
+        },
+        {
+          particular: 'Total collections',
+          count: String(filteredPayments.length),
+          amount: formatReportMoney(totalCollected),
+        },
+      ],
+      examSummary: selectedExam
+        ? null
+        : [
+            ...[...examTotals.entries()]
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([exam, totals]) => ({
+                exam,
+                count: String(totals.count),
+                amount: formatReportMoney(totals.amount),
+                lateFee: formatReportMoney(totals.lateFee),
+              })),
+            {
+              exam: 'Total',
+              count: String(filteredPayments.length),
+              amount: formatReportMoney(totalCollected),
+              lateFee: formatReportMoney(totalLate),
+            },
+          ],
+      branchSections: [...branchGroups.entries()]
+        .sort(([a], [b]) => sortBranchKeys(a, b))
+        .map(([branch, records]) => {
+          const sorted = [...records].sort((a, b) =>
+            `${a.feeRecord?.studentRollNumber || ''} ${a.feeRecord?.studentName || ''}`.localeCompare(
+              `${b.feeRecord?.studentRollNumber || ''} ${b.feeRecord?.studentName || ''}`,
+            ),
           );
-        });
-        doc.rect(x, headerTop, column.width, headerHeight);
-        x += column.width;
-      });
-      y = headerTop + headerHeight + 10;
-      doc.setFont('helvetica', 'normal');
-    };
-
-    const addPageWithHeader = () => {
-      doc.addPage();
-      y = margin;
-      renderTableHeader();
-    };
-
-    renderTableHeader();
-
-    for (const row of selectedRows) {
-      const cells = selectedColumns.map((column) => String(row[column.key] ?? ''));
-      const wrappedCells = cells.map((value, index) =>
-        doc.splitTextToSize(value, selectedColumns[index].width - 4),
-      );
-      const maxLines = Math.max(...wrappedCells.map((lines) => lines.length));
-      const rowHeight = maxLines * lineHeight + 8;
-      let rowTop = y - 10;
-      let rowBottom = rowTop + rowHeight;
-
-      if (rowBottom > pageHeight - margin) {
-        addPageWithHeader();
-        rowTop = y - 10;
-        rowBottom = rowTop + rowHeight;
-      }
-
-      let x = xStart;
-      doc.setFontSize(8);
-      for (let lineIndex = 0; lineIndex < maxLines; lineIndex += 1) {
-        for (let columnIndex = 0; columnIndex < selectedColumns.length; columnIndex += 1) {
-          const value = wrappedCells[columnIndex][lineIndex] ?? '';
-          doc.text(value, x + selectedColumns[columnIndex].width / 2, y, {
-            align: 'center',
-          });
-          x += selectedColumns[columnIndex].width;
-        }
-        y += lineHeight;
-        x = xStart;
-      }
-
-      doc.setDrawColor(60);
-      let xBorder = xStart;
-      selectedColumns.forEach((column) => {
-        doc.rect(xBorder, rowTop, column.width, rowBottom - rowTop);
-        xBorder += column.width;
-      });
-      y += 8;
-    }
-
-    doc.save(`payment-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+          const branchTotal = sorted.reduce((sum, payment) => sum + getCollectedAmount(payment), 0);
+          return {
+            branch,
+            columns: paidDetailColumns,
+            rows: sorted.map((payment, index) => ({
+              sno: String(index + 1),
+              student: payment.feeRecord?.studentName || '-',
+              roll: payment.feeRecord?.studentRollNumber || '-',
+              exam: payment.feeRecord?.exam?.name || '-',
+              amount: formatReportMoney(getActualAmountValue(payment)),
+              lateFee: formatReportMoney(Number(payment.feeRecord?.lateFee || 0)),
+              method: paymentMethodLabel(payment.paymentMethod),
+              paidAt: paymentTimestamp(payment)
+                ? formatPaymentIST(paymentTimestamp(payment) as string)
+                : '-',
+            })),
+            footer: `Branch total: ${sorted.length} payments    Rs. ${formatReportMoney(branchTotal)}`,
+          };
+        }),
+      grandTotal: `Grand total: ${filteredPayments.length} payments    Rs. ${formatReportMoney(totalCollected)}`,
+      fileName: `payment-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`,
+    });
   }
 
   const columns = [

@@ -63,6 +63,10 @@ export interface ExamFeeRecord {
   createdAt: string;
   exam?: Exam;
   payments?: Payment[];
+  application?: {
+    studentBranch?: string | null;
+    studentSection?: string | null;
+  };
 }
 
 export interface FeeCollectionLookup {

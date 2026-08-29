@@ -2195,6 +2195,7 @@ class ExamService {
             .leftJoinAndSelect('exam.examSubjects', 'examSubjects')
             .leftJoinAndSelect('examSubjects.subject', 'subject')
             .leftJoinAndSelect('fr.payments', 'payments')
+            .leftJoinAndSelect('fr.application', 'application')
             .orderBy(`CASE WHEN fr.status = :pendingStatus THEN 0 ELSE 1 END`, 'ASC')
             .setParameter('pendingStatus', FeeStatus.PENDING)
             .addOrderBy('fr.studentName', 'ASC')
@@ -2844,6 +2845,7 @@ class ExamService {
             .createQueryBuilder('p')
             .leftJoinAndSelect('p.feeRecord', 'fr')
             .leftJoinAndSelect('fr.exam', 'exam')
+            .leftJoinAndSelect('fr.application', 'application')
             .orderBy('p.paidAt', 'DESC');
         if (feeRecordId) {
             qb.andWhere('p.feeRecordId = :feeRecordId', { feeRecordId });
