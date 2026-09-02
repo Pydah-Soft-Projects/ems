@@ -74,6 +74,18 @@ export const navigation: NavGroup[] = [
         privilege: 'exams:read',
       },
       {
+        href: '/dashboard/duplicate-hall-tickets',
+        label: 'Duplicate hall tickets',
+        description: 'Raise request, collect fee, and print duplicate hall tickets',
+        icon: 'exams',
+        privilege: [
+          'exams:duplicate_hall_tickets:raise',
+          'exams:duplicate_hall_tickets:print',
+          'exams:hall_tickets',
+          'fees:collect',
+        ],
+      },
+      {
         href: '/dashboard/exam-calendar',
         label: 'Exam Calendar',
         description: 'Admin view of exam + late-fee timeline',

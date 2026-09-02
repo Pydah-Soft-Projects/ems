@@ -81,7 +81,11 @@ function createExamRoutes(services) {
   );
   router.get(
     '/:id/hall-tickets',
-    requirePrivilege('exams:hall_tickets'),
+    requirePrivilege(
+      'exams:hall_tickets',
+      'exams:duplicate_hall_tickets:raise',
+      'exams:duplicate_hall_tickets:print',
+    ),
     asyncHandler(async (req, res) => {
       res.json(
         await services.exam.listHallTicketsForExam(parseId(req.params.id)),
@@ -268,10 +272,43 @@ function createFeesRoutes(services) {
     }),
   );
 
+  router.get(
+    '/duplicate-hall-ticket-fee',
+    requireStaff,
+    requirePrivilege(
+      'exams:duplicate_hall_tickets:raise',
+      'exams:duplicate_hall_tickets:print',
+      'fees:read',
+      'fees:collect',
+      'exams:hall_tickets',
+    ),
+    asyncHandler(async (req, res) => {
+      const statusRaw = req.query.status;
+      const status =
+        statusRaw === FeeStatus.PENDING || statusRaw === FeeStatus.PAID
+          ? statusRaw
+          : undefined;
+      const examIdRaw = req.query.examId
+        ? parseInt(String(req.query.examId), 10)
+        : undefined;
+      res.json(
+        await services.exam.listDuplicateHallTicketFeeRecords({
+          examId: Number.isFinite(examIdRaw) ? examIdRaw : undefined,
+          rollNumber: req.query.rollNumber,
+          status,
+        }),
+      );
+    }),
+  );
+
   router.post(
     '/duplicate-hall-ticket-fee',
     requireStaff,
-    requirePrivilege('fees:collect', 'exams:hall_tickets'),
+    requirePrivilege(
+      'exams:duplicate_hall_tickets:raise',
+      'fees:collect',
+      'exams:hall_tickets',
+    ),
     asyncHandler(async (req, res) => {
       const examId = parseInt(String(req.body.examId ?? ''), 10);
       const rollNumber = String(req.body.rollNumber ?? '').trim();

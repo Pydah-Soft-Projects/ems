@@ -17,6 +17,13 @@ const {
 } = require('./schemas/exam.enums');
 const log = operationLogger('examinations');
 
+function isDuplicateHallTicketBreakdown(feeBreakdown) {
+    return (feeBreakdown ?? []).some((item) => {
+        const code = String(item?.subjectCode ?? '').trim().toUpperCase();
+        return code === 'DHT' || code.includes('DUPLICATE');
+    });
+}
+
 class ExamService {
     constructor(examRepo, examSubjectRepo, feeRecordRepo, paymentRepo, examScopeRepo, applicationRepo, subjectResultRepo, subjectsService, regulationsService, sdms, settings, feeManagement) {
         this.examRepo = examRepo;
@@ -1825,10 +1832,7 @@ class ExamService {
         const records = await this.listFeeRecords(examId, roll);
         const pendingDuplicate = records.find((record) => (
             record.status === FeeStatus.PENDING &&
-            (record.feeBreakdown ?? []).some((item) => {
-                const code = String(item?.subjectCode ?? '').trim().toUpperCase();
-                return code === 'DHT' || code.includes('DUPLICATE');
-            })
+            isDuplicateHallTicketBreakdown(record.feeBreakdown)
         ));
         if (pendingDuplicate) {
             return pendingDuplicate;
@@ -1853,6 +1857,29 @@ class ExamService {
             dueDate: exam.applicationEndDate || null,
         });
         return this.feeRecordRepo.save(feeRecord);
+    }
+    async listDuplicateHallTicketFeeRecords({ examId, status, rollNumber } = {}) {
+        const qb = this.feeRecordRepo
+            .createQueryBuilder('fr')
+            .leftJoinAndSelect('fr.exam', 'exam')
+            .leftJoinAndSelect('fr.payments', 'payments')
+            .orderBy('fr.createdAt', 'DESC');
+        if (examId) {
+            qb.andWhere('fr.examId = :examId', { examId });
+        }
+        if (rollNumber?.trim()) {
+            qb.andWhere('LOWER(fr.studentRollNumber) = LOWER(:roll)', {
+                roll: rollNumber.trim(),
+            });
+        }
+        if (status) {
+            qb.andWhere('fr.status = :status', { status });
+        }
+        qb.andWhere('LOWER(CAST(fr.feeBreakdown AS CHAR)) LIKE :dht', {
+            dht: '%dht%',
+        });
+        const records = await qb.getMany();
+        return records.filter((record) => isDuplicateHallTicketBreakdown(record.feeBreakdown));
     }
     async getExamAnalytics(examId) {
         const eligible = await this.listEligibleStudents(examId);

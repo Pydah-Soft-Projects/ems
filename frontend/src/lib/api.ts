@@ -610,6 +610,21 @@ export const api = {
     });
   },
 
+  getDuplicateHallTicketFeeRecords(
+    filters: {
+      examId?: number;
+      rollNumber?: string;
+      status?: 'pending' | 'paid';
+    } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (filters.examId) params.set('examId', String(filters.examId));
+    if (filters.rollNumber) params.set('rollNumber', filters.rollNumber.trim());
+    if (filters.status) params.set('status', filters.status);
+    const query = params.toString() ? `?${params}` : '';
+    return request<ExamFeeRecord[]>(`/fees/duplicate-hall-ticket-fee${query}`);
+  },
+
   createDuplicateHallTicketFeeRecord(
     examId: number,
     rollNumber: string,

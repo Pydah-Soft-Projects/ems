@@ -135,6 +135,52 @@ test('duplicate hall ticket fee does not create a second pending record when one
   assert.equal(result.id, 7);
 });
 
+test('duplicate hall ticket fee list route is exposed on the fees router', async () => {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.user = {
+      role: 'staff',
+      isSuperAdmin: true,
+      privileges: ['fees:read', 'exams:hall_tickets'],
+      username: 'staff',
+    };
+    next();
+  });
+  app.use('/api/fees', createFeesRoutes({
+    exam: {
+      async listDuplicateHallTicketFeeRecords(filters) {
+        return [{
+          id: 9,
+          examId: filters.examId,
+          status: filters.status,
+          studentRollNumber: 'A-101',
+          feeBreakdown: [{ subjectCode: 'DHT', fee: 250 }],
+        }];
+      },
+    },
+    settings: {},
+  }));
+
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, () => resolve(instance));
+  });
+
+  try {
+    const port = server.address().port;
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/fees/duplicate-hall-ticket-fee?examId=12&status=paid`,
+    );
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body[0].id, 9);
+    assert.equal(body[0].examId, 12);
+    assert.equal(body[0].status, 'paid');
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+  }
+});
+
 test('duplicate hall ticket fee route is exposed on the fees router', async () => {
   const app = express();
   app.use(express.json());

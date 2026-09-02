@@ -102,8 +102,38 @@ export default function UserManagementPage() {
     });
   }, [roles, canAssignSuper]);
 
-  const filteredGroups = useMemo(() => {
+  const assignableCatalogGroups = useMemo(() => {
     const groups = catalog?.groups ?? [];
+    if (!me || me.isSuperAdmin || me.privileges?.includes('*')) {
+      return groups;
+    }
+    const actorPrivs = new Set(me.privileges ?? []);
+    return groups
+      .map((group) => ({
+        ...group,
+        privileges: group.privileges.filter((p) => actorPrivs.has(p.key)),
+      }))
+      .filter((group) => group.privileges.length > 0);
+  }, [catalog, me]);
+
+  const editCatalogGroups = useMemo(() => {
+    const groups = catalog?.groups ?? [];
+    if (!me || me.isSuperAdmin || me.privileges?.includes('*')) {
+      return groups;
+    }
+    const actorPrivs = new Set(me.privileges ?? []);
+    return groups
+      .map((group) => ({
+        ...group,
+        privileges: group.privileges.filter(
+          (p) => actorPrivs.has(p.key) || editPrivs.has(p.key),
+        ),
+      }))
+      .filter((group) => group.privileges.length > 0);
+  }, [catalog, editPrivs, me]);
+
+  const filteredGroups = useMemo(() => {
+    const groups = assignableCatalogGroups;
     const q = privSearch.trim().toLowerCase();
     if (!q) return groups;
     return groups
@@ -117,19 +147,19 @@ export default function UserManagementPage() {
         ),
       }))
       .filter((group) => group.privileges.length > 0);
-  }, [catalog, privSearch]);
+  }, [assignableCatalogGroups, privSearch]);
 
   const totalPrivileges = useMemo(
     () =>
-      (catalog?.groups ?? []).reduce(
+      assignableCatalogGroups.reduce(
         (sum, group) => sum + group.privileges.length,
         0,
       ),
-    [catalog],
+    [assignableCatalogGroups],
   );
 
   const filteredUserPrivilegeGroups = useMemo(() => {
-    const groups = catalog?.groups ?? [];
+    const groups = assignableCatalogGroups;
     const q = userPrivSearch.trim().toLowerCase();
     if (!q) return groups;
     return groups
@@ -143,10 +173,10 @@ export default function UserManagementPage() {
         ),
       }))
       .filter((group) => group.privileges.length > 0);
-  }, [catalog, userPrivSearch]);
+  }, [assignableCatalogGroups, userPrivSearch]);
 
   const filteredEditPrivilegeGroups = useMemo(() => {
-    const groups = catalog?.groups ?? [];
+    const groups = editCatalogGroups;
     const q = editPrivSearch.trim().toLowerCase();
     if (!q) return groups;
     return groups
@@ -160,7 +190,7 @@ export default function UserManagementPage() {
         ),
       }))
       .filter((group) => group.privileges.length > 0);
-  }, [catalog, editPrivSearch]);
+  }, [editCatalogGroups, editPrivSearch]);
 
   function openNewRole() {
     setRoleModal('new');

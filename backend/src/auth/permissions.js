@@ -57,6 +57,20 @@ const PRIVILEGE_GROUPS = [
     ],
   },
   {
+    id: 'duplicate_hall_tickets',
+    label: 'Duplicate hall tickets',
+    privileges: [
+      {
+        key: 'exams:duplicate_hall_tickets:raise',
+        label: 'Raise duplicate hall ticket request & collect fee',
+      },
+      {
+        key: 'exams:duplicate_hall_tickets:print',
+        label: 'Print paid duplicate hall tickets',
+      },
+    ],
+  },
+  {
     id: 'fees',
     label: 'Fees & payments',
     privileges: [

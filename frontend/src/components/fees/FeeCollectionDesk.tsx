@@ -126,7 +126,16 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       setRecords(lookup.records);
       setStudentName(lookup.studentName ?? '');
       const pending = lookup.records.filter((r) => r.status === 'pending');
-      setSelectedIds(new Set(pending.slice(0, 1).map((r) => r.id)));
+      const feeRecordIdRaw = searchParams.get('feeRecordId');
+      const feeRecordId = feeRecordIdRaw ? Number(feeRecordIdRaw) : null;
+      const preselected =
+        feeRecordId &&
+        pending.some((record) => record.id === feeRecordId)
+          ? feeRecordId
+          : pending[0]?.id ?? null;
+      setSelectedIds(
+        preselected != null ? new Set([preselected]) : new Set(),
+      );
 
       try {
         const pay = await api.getPayments(undefined, lookup.rollNumber);
@@ -324,7 +333,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         lastPaymentId = result.payment.id;
       }
       if (lastPaymentId) {
-        router.push(`/dashboard/fees/receipt/${lastPaymentId}`);
+        afterPaymentSuccess(lastPaymentId);
       } else {
         await load();
       }
@@ -340,6 +349,17 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     const parsed = Number(raw ?? '');
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   })();
+
+  const fromDuplicateHallTickets =
+    searchParams.get('from') === 'duplicate-hall-tickets';
+
+  function afterPaymentSuccess(paymentId: number) {
+    if (fromDuplicateHallTickets) {
+      router.push('/dashboard/duplicate-hall-tickets?tab=approve');
+      return;
+    }
+    router.push(`/dashboard/fees/receipt/${paymentId}`);
+  }
 
   const displayName = studentName || sdms?.studentName || rollNumber;
   const initials = displayName
@@ -388,7 +408,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         }}
         onSuccess={(paymentId) => {
           setRazorpayRecord(null);
-          router.push(`/dashboard/fees/receipt/${paymentId}`);
+          afterPaymentSuccess(paymentId);
         }}
       />
 
@@ -415,7 +435,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         }}
         onPaid={(paymentId) => {
           setCanaraRecord(null);
-          router.push(`/dashboard/fees/receipt/${paymentId}`);
+          afterPaymentSuccess(paymentId);
         }}
       />
 
@@ -435,7 +455,18 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          {returnToExamId && (
+          {fromDuplicateHallTickets ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mb-2 !px-2.5 !py-1 text-xs"
+              onClick={() =>
+                router.push('/dashboard/duplicate-hall-tickets')
+              }
+            >
+              ← Back to duplicate hall tickets
+            </Button>
+          ) : returnToExamId ? (
             <Button
               type="button"
               variant="ghost"
@@ -444,7 +475,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             >
               ← Back to hall tickets
             </Button>
-          )}
+          ) : null}
           <Link
             href="/dashboard/fees"
             className="text-xs font-medium text-[var(--primary)] hover:underline"
