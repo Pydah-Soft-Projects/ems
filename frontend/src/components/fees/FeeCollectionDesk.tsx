@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ApiError, api } from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
@@ -21,7 +21,12 @@ import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
 import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
-import { calcUpiConvenienceFee, paymentLineLabel } from '@/lib/upiConvenienceFee';
+import {
+  calcUpiConvenienceFee,
+  feeRecordDisplayName,
+  isDuplicateHallTicketFeeRecord,
+  paymentLineLabel,
+} from '@/lib/upiConvenienceFee';
 
 type CollectChannel =
   | PaymentMethod
@@ -35,6 +40,7 @@ interface FeeCollectionDeskProps {
 
 export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = getStoredUser();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -329,6 +335,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     }
   }
 
+  const returnToExamId = (() => {
+    const raw = searchParams.get('examId');
+    const parsed = Number(raw ?? '');
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  })();
+
   const displayName = studentName || sdms?.studentName || rollNumber;
   const initials = displayName
     .split(/\s+/)
@@ -423,6 +435,16 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
+          {returnToExamId && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mb-2 !px-2.5 !py-1 text-xs"
+              onClick={() => router.push(`/dashboard/exams/${returnToExamId}?tab=hall-tickets`)}
+            >
+              ← Back to hall tickets
+            </Button>
+          )}
           <Link
             href="/dashboard/fees"
             className="text-xs font-medium text-[var(--primary)] hover:underline"
@@ -710,6 +732,8 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     filteredRecords.map((r) => {
                       const balance =
                         r.status === 'pending' ? Number(r.totalAmount) : 0;
+                      const duplicate = isDuplicateHallTicketFeeRecord(r.feeBreakdown);
+                      const feeName = feeRecordDisplayName(r);
                       return (
                         <tr
                           key={r.id}
@@ -725,14 +749,12 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-slate-900">
-                              {r.exam?.name ?? `Exam #${r.examId}`}
+                              {duplicate ? 'Duplicate hall ticket fee' : r.exam?.name ?? `Exam #${r.examId}`}
                             </p>
                             <p className="text-xs text-[var(--muted)]">
-                              Y{r.exam?.yearOfStudy ?? '—'} / S
-                              {r.exam?.semester ?? '—'} ·{' '}
-                              {r.feeBreakdown
-                                ?.map((b) => b.subjectCode)
-                                .join(', ') || 'Exam fee'}
+                              {duplicate
+                                ? `Duplicate hall ticket fee · Y${r.exam?.yearOfStudy ?? '—'} / S${r.exam?.semester ?? '—'}`
+                                : `Y${r.exam?.yearOfStudy ?? '—'} / S${r.exam?.semester ?? '—'} · ${r.feeBreakdown?.map((b) => b.subjectCode).join(', ') || 'Exam fee'}`}
                             </p>
                           </td>
                           <td className="px-4 py-3 tabular-nums">

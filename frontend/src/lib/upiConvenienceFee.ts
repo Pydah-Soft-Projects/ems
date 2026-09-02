@@ -1,6 +1,29 @@
 /** UPI online convenience / bank charges — 2.2% of exam fee */
 export const UPI_CONVENIENCE_FEE_RATE = 0.022;
 
+export function isDuplicateHallTicketFeeRecord(
+  feeBreakdown?: Array<{ subjectCode?: string | null }> | null,
+) {
+  return (feeBreakdown ?? []).some((item) => {
+    const code = String(item?.subjectCode ?? '').trim().toUpperCase();
+    return code === 'DHT' || code.includes('DUPLICATE');
+  });
+}
+
+export function feeRecordDisplayName(
+  feeRecord?:
+    | {
+        feeBreakdown?: Array<{ subjectCode?: string | null }> | null;
+        exam?: { name?: string | null } | null;
+      }
+    | null,
+) {
+  if (isDuplicateHallTicketFeeRecord(feeRecord?.feeBreakdown)) {
+    return 'Duplicate hall ticket fee';
+  }
+  return feeRecord?.exam?.name ?? 'Exam fee';
+}
+
 export function calcUpiConvenienceFee(
   baseAmount: number | string,
   paymentMethod: string,
@@ -30,7 +53,10 @@ export function calcUpiConvenienceFee(
 export function paymentLineLabel(payment: {
   remarks?: string | null;
   gatewayResponse?: string | null;
-  feeRecord?: { exam?: { name?: string } };
+  feeRecord?: {
+    exam?: { name?: string } | null;
+    feeBreakdown?: Array<{ subjectCode?: string | null }> | null;
+  };
 }) {
   const gw = payment.gatewayResponse ?? '';
   if (
@@ -39,5 +65,5 @@ export function paymentLineLabel(payment: {
   ) {
     return 'UPI convenience / bank charges (2.2%)';
   }
-  return payment.feeRecord?.exam?.name ?? 'Exam fee';
+  return feeRecordDisplayName(payment.feeRecord);
 }

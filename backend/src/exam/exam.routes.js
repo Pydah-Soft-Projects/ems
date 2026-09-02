@@ -268,6 +268,27 @@ function createFeesRoutes(services) {
     }),
   );
 
+  router.post(
+    '/duplicate-hall-ticket-fee',
+    requireStaff,
+    requirePrivilege('fees:collect', 'exams:hall_tickets'),
+    asyncHandler(async (req, res) => {
+      const examId = parseInt(String(req.body.examId ?? ''), 10);
+      const rollNumber = String(req.body.rollNumber ?? '').trim();
+      if (!examId || !rollNumber) {
+        res.status(400).json({ message: 'examId and rollNumber are required' });
+        return;
+      }
+      res.status(201).json(
+        await services.exam.createDuplicateHallTicketFeeRecord(
+          examId,
+          rollNumber,
+          req.body.studentName,
+        ),
+      );
+    }),
+  );
+
   router.get(
     '/records',
     requireStaff,

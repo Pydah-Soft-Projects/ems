@@ -121,8 +121,16 @@ async function request<T>(
     }
     let message = 'Request failed';
     try {
-      const body = await res.json();
-      message = body.message || message;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const body = await res.json();
+        message = body.message || message;
+      } else {
+        const text = await res.text();
+        if (text && text.trim()) {
+          message = text.trim();
+        }
+      }
     } catch {
       // ignore
     }
@@ -602,6 +610,17 @@ export const api = {
     });
   },
 
+  createDuplicateHallTicketFeeRecord(
+    examId: number,
+    rollNumber: string,
+    studentName?: string,
+  ) {
+    return request<ExamFeeRecord>('/fees/duplicate-hall-ticket-fee', {
+      method: 'POST',
+      body: JSON.stringify({ examId, rollNumber, studentName }),
+    });
+  },
+
   getPayments(feeRecordId?: number, rollNumber?: string) {
     const params = new URLSearchParams();
     if (feeRecordId) params.set('feeRecordId', String(feeRecordId));
@@ -737,6 +756,7 @@ export const api = {
     selfOnlineMerchantName?: string;
     selfOnlinePaymentNote?: string;
     selfOnlineExpiryHours?: number;
+    duplicateHallTicketFee?: number;
     restrictExamApplyOnFeeDues?: boolean;
   }) {
     return request<import('./razorpayCheckout').PaymentGatewaySettings>(

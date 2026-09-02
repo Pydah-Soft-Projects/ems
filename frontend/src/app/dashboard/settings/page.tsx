@@ -22,6 +22,7 @@ function applySettingsToForms(
     setSelfOnlineMerchantName: (v: string) => void;
     setSelfOnlinePaymentNote: (v: string) => void;
     setSelfOnlineExpiryHours: (v: string) => void;
+    setDuplicateHallTicketFee: (v: string) => void;
     setRestrictExamApplyOnFeeDues: (v: boolean) => void;
   },
 ) {
@@ -34,6 +35,7 @@ function applySettingsToForms(
   setters.setSelfOnlineMerchantName(data.selfOnlineMerchantName ?? '');
   setters.setSelfOnlinePaymentNote(data.selfOnlinePaymentNote ?? 'Exam Fee');
   setters.setSelfOnlineExpiryHours(String(data.selfOnlineExpiryHours ?? 48));
+  setters.setDuplicateHallTicketFee(String(data.duplicateHallTicketFee ?? 250));
   setters.setRestrictExamApplyOnFeeDues(
     data.restrictExamApplyOnFeeDues !== false,
   );
@@ -96,6 +98,7 @@ export default function SettingsPage() {
   const [selfOnlineMerchantName, setSelfOnlineMerchantName] = useState('');
   const [selfOnlinePaymentNote, setSelfOnlinePaymentNote] = useState('Exam Fee');
   const [selfOnlineExpiryHours, setSelfOnlineExpiryHours] = useState('48');
+  const [duplicateHallTicketFee, setDuplicateHallTicketFee] = useState('250');
   const [restrictExamApplyOnFeeDues, setRestrictExamApplyOnFeeDues] =
     useState(true);
   const [savingDueRestrict, setSavingDueRestrict] = useState(false);
@@ -127,6 +130,7 @@ export default function SettingsPage() {
     setSelfOnlineMerchantName,
     setSelfOnlinePaymentNote,
     setSelfOnlineExpiryHours,
+    setDuplicateHallTicketFee,
     setRestrictExamApplyOnFeeDues,
   };
 
@@ -215,6 +219,7 @@ export default function SettingsPage() {
         selfOnlineMerchantName: selfOnlineMerchantName.trim(),
         selfOnlinePaymentNote: selfOnlinePaymentNote.trim() || 'Exam Fee',
         selfOnlineExpiryHours: parseInt(selfOnlineExpiryHours, 10) || 48,
+        duplicateHallTicketFee: Number(duplicateHallTicketFee) || 0,
       });
       applySettingsToForms(updated, formSetters);
       setSuccess('Self Online UPI settings saved.');
@@ -563,6 +568,52 @@ export default function SettingsPage() {
               </Button>
             </form>
           )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Duplicate hall ticket fee"
+          description="Global default charge applied when an exam-specific duplicate hall ticket fee is not set."
+        />
+        <CardBody>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void (async () => {
+                try {
+                  setError('');
+                  setSuccess('');
+                  const updated = await api.updatePaymentSettings({
+                    duplicateHallTicketFee: Number(duplicateHallTicketFee) || 0,
+                  });
+                  applySettingsToForms(updated, formSetters);
+                  setSuccess('Duplicate hall ticket fee saved.');
+                } catch (err) {
+                  setError(
+                    err instanceof ApiError
+                      ? err.message
+                      : 'Failed to save duplicate hall ticket fee.',
+                  );
+                }
+              })();
+            }}
+            className="space-y-5"
+          >
+            <Input
+              label="Default duplicate hall ticket fee"
+              type="number"
+              min={0}
+              value={duplicateHallTicketFee}
+              onChange={(e) => setDuplicateHallTicketFee(e.target.value)}
+              placeholder="250"
+              autoComplete="off"
+            />
+
+            <Button type="submit" disabled={savingSelf}>
+              Save duplicate fee
+            </Button>
+          </form>
         </CardBody>
       </Card>
 

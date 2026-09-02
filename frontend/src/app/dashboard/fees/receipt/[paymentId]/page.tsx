@@ -65,6 +65,14 @@ export default function FeeReceiptPage({
           >
             ← Back to collection
           </Link>
+          {payment.feeRecord?.examId ? (
+            <Link
+              href={`/dashboard/exams/${payment.feeRecord.examId}?tab=hall-tickets`}
+              className="mt-2 block text-xs font-medium text-[var(--primary)]"
+            >
+              ← Back to hall tickets
+            </Link>
+          ) : null}
           <h1 className="mt-1 text-xl font-bold text-slate-900">Fee receipt</h1>
           <p className="text-sm text-[var(--muted)]">
             Print = Student copy on top half of A4 (A5 landscape size) ·{' '}

@@ -566,6 +566,12 @@ class ExamService {
         const packageFee = dto.packageFee != null && dto.packageFee !== ''
             ? Number(dto.packageFee)
             : null;
+        const duplicateHallTicketFeeRaw = dto.duplicateHallTicketFee != null && dto.duplicateHallTicketFee !== ''
+            ? Number(dto.duplicateHallTicketFee)
+            : null;
+        if (duplicateHallTicketFeeRaw != null && (!Number.isFinite(duplicateHallTicketFeeRaw) || duplicateHallTicketFeeRaw < 0)) {
+            throw AppError.badRequest('Duplicate hall ticket fee must be a non-negative number');
+        }
         if (allowsRegular) {
             const hasDefault = packageFee != null && !Number.isNaN(packageFee) && packageFee >= 0;
             const hasScoped = Array.isArray(packageFees) && packageFees.length > 0;
@@ -602,6 +608,7 @@ class ExamService {
             yearOfStudy: dto.yearOfStudy,
             semester: dto.semester,
             packageFee,
+            duplicateHallTicketFee: duplicateHallTicketFeeRaw,
             packageFees,
             supplyFeeByCount,
             supplyFeesByBranch,
@@ -728,6 +735,14 @@ class ExamService {
                 ? Number(dto.packageFee)
                 : null)
             : exam.packageFee;
+        const nextDuplicateHallTicketFee = dto.duplicateHallTicketFee !== undefined
+            ? (dto.duplicateHallTicketFee != null && dto.duplicateHallTicketFee !== ''
+                ? Number(dto.duplicateHallTicketFee)
+                : null)
+            : exam.duplicateHallTicketFee;
+        if (nextDuplicateHallTicketFee != null && (!Number.isFinite(Number(nextDuplicateHallTicketFee)) || Number(nextDuplicateHallTicketFee) < 0)) {
+            throw AppError.badRequest('Duplicate hall ticket fee must be a non-negative number');
+        }
         if (nextAllowed.includes(ExamType.REGULAR)) {
             const hasDefault = nextPackageFee != null &&
                 !Number.isNaN(Number(nextPackageFee)) &&
@@ -771,6 +786,7 @@ class ExamService {
             yearOfStudy: dto.yearOfStudy ?? exam.yearOfStudy,
             semester: dto.semester ?? exam.semester,
             packageFee: nextPackageFee,
+            duplicateHallTicketFee: nextDuplicateHallTicketFee,
             packageFees: nextPackageFees,
             supplyFeeByCount: nextSupplyFeeByCount,
             supplyFeesByBranch: nextSupplyFeesByBranch,
@@ -1790,6 +1806,53 @@ class ExamService {
             throw AppError.badRequest('Hall ticket is available only after the examination fee is paid');
         }
         return this.buildHallTicketPayload(application.exam, application, application.feeRecord, student);
+    }
+    async resolveDuplicateHallTicketFee(exam) {
+        const fallback = await this.settings?.getPaymentSettingsPublic?.().then((row) => Number(row?.duplicateHallTicketFee ?? 250)).catch(() => 250);
+        const raw = exam?.duplicateHallTicketFee;
+        if (raw == null || raw === '' || Number.isNaN(Number(raw))) {
+            return Number(fallback) || 0;
+        }
+        const value = Number(raw);
+        return Number.isFinite(value) && value >= 0 ? value : Number(fallback) || 0;
+    }
+    async createDuplicateHallTicketFeeRecord(examId, rollNumber, studentName = null) {
+        const exam = await this.findOne(examId);
+        const roll = String(rollNumber ?? '').trim();
+        if (!roll) {
+            throw AppError.badRequest('Roll number is required');
+        }
+        const records = await this.listFeeRecords(examId, roll);
+        const pendingDuplicate = records.find((record) => (
+            record.status === FeeStatus.PENDING &&
+            (record.feeBreakdown ?? []).some((item) => {
+                const code = String(item?.subjectCode ?? '').trim().toUpperCase();
+                return code === 'DHT' || code.includes('DUPLICATE');
+            })
+        ));
+        if (pendingDuplicate) {
+            return pendingDuplicate;
+        }
+        const fallbackValue = await this.resolveDuplicateHallTicketFee(exam);
+        const displayName = (studentName ?? '').trim() || records[0]?.studentName || 'Student';
+        const feeRecord = this.feeRecordRepo.create({
+            examId,
+            examType: exam.type || ExamType.REGULAR,
+            studentRollNumber: roll,
+            studentName: displayName,
+            selectedSubjectIds: [],
+            feeBreakdown: [{
+                subjectId: 0,
+                subjectCode: 'DHT',
+                fee: fallbackValue,
+            }],
+            baseFee: fallbackValue,
+            lateFee: 0,
+            totalAmount: fallbackValue,
+            status: FeeStatus.PENDING,
+            dueDate: exam.applicationEndDate || null,
+        });
+        return this.feeRecordRepo.save(feeRecord);
     }
     async getExamAnalytics(examId) {
         const eligible = await this.listEligibleStudents(examId);

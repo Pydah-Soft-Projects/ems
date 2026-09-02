@@ -219,6 +219,7 @@ export function ExamForm({
     Record<string, SubjectRowState>
   >({});
   const [packageFee, setPackageFee] = useState('');
+  const [duplicateHallTicketFee, setDuplicateHallTicketFee] = useState('');
   /** Branch/section package fees keyed by `${branchName}|${section}` ('' section = whole branch) */
   const [packageFeeByScope, setPackageFeeByScope] = useState<
     Record<string, string>
@@ -386,6 +387,11 @@ export function ExamForm({
       setPackageFee(
         initial.packageFee != null ? String(initial.packageFee) : '',
       );
+      setDuplicateHallTicketFee(
+        initial.duplicateHallTicketFee != null
+          ? String(initial.duplicateHallTicketFee)
+          : '',
+      );
       setApplicationStartDate(
         initial.applicationStartDate ? String(initial.applicationStartDate).slice(0, 10) : '',
       );
@@ -478,6 +484,7 @@ export function ExamForm({
       setYearSem(null);
       setSelectedFees({});
       setPackageFee('');
+      setDuplicateHallTicketFee('');
       setPackageFeeByScope({});
       setBulkPackageFee('');
       setSupplyFeeByCount([]);
@@ -980,6 +987,16 @@ export function ExamForm({
       setError('Package fee must be valid.');
       return;
     }
+    const duplicateFee = duplicateHallTicketFee
+      ? parseFloat(duplicateHallTicketFee)
+      : undefined;
+    if (
+      duplicateHallTicketFee &&
+      (isNaN(duplicateFee!) || duplicateFee! < 0)
+    ) {
+      setError('Duplicate hall ticket fee must be a valid non-negative amount.');
+      return;
+    }
 
     const scopeKeys = new Set(
       packageScopes.map((s) => pkgKey(s.branch, s.section)),
@@ -1032,6 +1049,7 @@ export function ExamForm({
           scopes: scopesPayload,
           subjects,
           packageFee: pkg,
+          duplicateHallTicketFee: duplicateFee,
           packageFees,
           supplyFeeByCount: supplyFeesPayload,
           supplyFeesByBranch: supplyFeesByBranchPayload,
@@ -1058,6 +1076,7 @@ export function ExamForm({
           scopes: scopesPayload,
           subjects,
           packageFee: pkg,
+          duplicateHallTicketFee: duplicateFee,
           packageFees,
           supplyFeeByCount: supplyFeesPayload,
           supplyFeesByBranch: supplyFeesByBranchPayload,
@@ -1716,6 +1735,14 @@ export function ExamForm({
                 value={packageFee}
                 onChange={(e) => setPackageFee(e.target.value)}
                 placeholder="Used when no branch/section package fee is set"
+              />
+              <Input
+                label="Duplicate hall ticket fee"
+                type="number"
+                min={0}
+                value={duplicateHallTicketFee}
+                onChange={(e) => setDuplicateHallTicketFee(e.target.value)}
+                placeholder="Leave blank to use the default fee"
               />
               {packageScopes.length > 0 && (
                 <>

@@ -90,6 +90,7 @@ export interface Exam {
   applicationEndDate: string | null;
   lateFeeStartDate: string | null;
   packageFee: number | string | null;
+  duplicateHallTicketFee?: number | string | null;
   /** Branch/section-wise package fees; section null = whole branch */
   packageFees?: PackageFeeEntry[] | null;
   /** Default supply fee by subject count (index 0 = 1 subject) */
@@ -150,6 +151,7 @@ export interface CreateExamInput {
   scopes?: ExamScopeInput[];
   subjects: ExamSubjectFeeInput[];
   packageFee?: number;
+  duplicateHallTicketFee?: number;
   packageFees?: PackageFeeEntry[];
   supplyFeeByCount?: SupplyFeeByCount;
   supplyFeesByBranch?: SupplyFeeBranchEntry[];

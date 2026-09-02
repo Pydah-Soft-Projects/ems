@@ -26,6 +26,8 @@ const Exam = new EntitySchema({
     applicationEndDate: { type: 'date', nullable: true, transformer: dateTransformer },
     lateFeeStartDate: { type: 'date', nullable: true, transformer: dateTransformer },
     packageFee: { type: 'decimal', precision: 10, scale: 2, nullable: true },
+    /** Default duplicate hall-ticket fee, used if the exam-specific field is left blank. */
+    duplicateHallTicketFee: { type: 'decimal', precision: 10, scale: 2, nullable: true },
     /** Branch/section-wise package fees: [{ branch, section|null, amount }] */
     packageFees: { type: 'simple-json', nullable: true },
     /**

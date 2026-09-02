@@ -6,7 +6,10 @@ import { ExamFeeRecord } from '@/types/fee';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { money } from '@/components/fees/money';
-import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
+import {
+  calcUpiConvenienceFee,
+  isDuplicateHallTicketFeeRecord,
+} from '@/lib/upiConvenienceFee';
 
 export function AvailableExamCard({ exam }: { exam: StudentExamListItem }) {
   const router = useRouter();
@@ -106,6 +109,7 @@ export function ApplicationCard({ record }: { record: ExamFeeRecord }) {
   const router = useRouter();
   const upiTotal = calcUpiConvenienceFee(record.totalAmount, 'upi').total;
   const successPay = record.payments?.find((p) => p.status === 'success');
+  const isDuplicateFeeRecord = isDuplicateHallTicketFeeRecord(record.feeBreakdown);
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] transition hover:shadow-[var(--shadow-md)]">
@@ -120,7 +124,10 @@ export function ApplicationCard({ record }: { record: ExamFeeRecord }) {
               : '—'}
           </p>
           <div className="mt-2 flex flex-wrap gap-3 text-sm">
-            <span>Fee {money(record.totalAmount)}</span>
+            <span>
+              {isDuplicateFeeRecord ? 'Duplicate hall ticket fee' : 'Fee'}{' '}
+              {money(record.totalAmount)}
+            </span>
             {record.status === 'pending' ? (
               <span className="text-amber-800">
                 From {money(upiTotal)} with UPI (incl. 2.2%)

@@ -40,6 +40,7 @@ class SettingsService {
         selfOnlineMerchantName: null,
         selfOnlinePaymentNote: 'Exam Fee',
         selfOnlineExpiryHours: 48,
+        duplicateHallTicketFee: 250,
         restrictExamApplyOnFeeDues: true,
       });
       row = await this.settingsRepo.save(row);
@@ -101,6 +102,8 @@ class SettingsService {
       selfOnlineMerchantName: selfOnline.merchantName,
       selfOnlinePaymentNote: selfOnline.paymentNote,
       selfOnlineExpiryHours: selfOnline.expiryHours,
+      duplicateHallTicketFee:
+        Number(row.duplicateHallTicketFee ?? 250) || 0,
       restrictExamApplyOnFeeDues:
         row.restrictExamApplyOnFeeDues !== false &&
         row.restrictExamApplyOnFeeDues !== 0,
@@ -157,6 +160,13 @@ class SettingsService {
         );
       }
       patch.selfOnlineExpiryHours = h;
+    }
+    if (dto.duplicateHallTicketFee != null) {
+      const value = Number(dto.duplicateHallTicketFee);
+      if (!Number.isFinite(value) || value < 0) {
+        throw AppError.badRequest('duplicateHallTicketFee must be a non-negative number');
+      }
+      patch.duplicateHallTicketFee = value;
     }
     if (typeof dto.restrictExamApplyOnFeeDues === 'boolean') {
       patch.restrictExamApplyOnFeeDues = dto.restrictExamApplyOnFeeDues;

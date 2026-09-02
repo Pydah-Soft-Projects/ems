@@ -17,6 +17,8 @@ const PaymentGatewaySettings = new EntitySchema({
     selfOnlineMerchantName: { type: 'varchar', length: 150, nullable: true },
     selfOnlinePaymentNote: { type: 'varchar', length: 100, nullable: true },
     selfOnlineExpiryHours: { type: 'int', default: 48 },
+    /** Default duplicate hall-ticket fee charged when an exam-specific fee is not set. */
+    duplicateHallTicketFee: { type: 'decimal', precision: 10, scale: 2, nullable: true, default: 250 },
     /**
      * When true, students with overdue Fee Management dues cannot submit
      * exam applications or access hall tickets (unless staff override).

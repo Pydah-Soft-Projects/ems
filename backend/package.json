@@ -11,6 +11,7 @@
     "start:dev": "node --watch src/index.js",
     "db:setup": "node scripts/create-exam-portal-db.js",
     "db:clear-exam-portal": "node scripts/clear-exam-portal-data.js",
+    "cleanup:test-exam-2023": "node scripts/cleanup-test-exam-2023.js",
     "simulate": "node scripts/simulate-workflow.js",
     "seed:demo": "node scripts/reset-and-seed-demo.js",
     "seed:pydah-btech": "node scripts/seed-pydah-btech-exams.js",
