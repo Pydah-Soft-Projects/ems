@@ -163,6 +163,10 @@ async function bootstrap() {
       ensureLateFeeSlabDateColumns,
     } = require('./exam/ensure-late-fee-slab-dates');
     await ensureLateFeeSlabDateColumns(examPortalDataSource, logger);
+    const {
+      ensureSubjectTypesTable,
+    } = require('./subjects/ensure-subject-types');
+    await ensureSubjectTypesTable(examPortalDataSource, logger);
   }
 
   studentDataSource = createStudentDataSource();

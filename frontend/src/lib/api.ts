@@ -16,6 +16,12 @@ import {
   UpdateSubjectMappingInput,
   ReplaceScopeMappingInput,
   SubjectMappingFilters,
+  SubjectTypeOption,
+  CreateSubjectTypeInput,
+  UpdateSubjectTypeInput,
+  SubjectTypeUsage,
+  ReassignSubjectTypeInput,
+  ReassignSubjectTypeResult,
 } from '@/types/subject';
 import {
   Exam,
@@ -229,6 +235,40 @@ export const api = {
 
   deleteSubject(id: number) {
     return request<void>(`/subjects/${id}`, { method: 'DELETE' });
+  },
+
+  getSubjectTypes(activeOnly = false) {
+    const query = activeOnly ? '?activeOnly=true' : '';
+    return request<SubjectTypeOption[]>(`/subjects/types${query}`);
+  },
+
+  createSubjectType(data: CreateSubjectTypeInput) {
+    return request<SubjectTypeOption>('/subjects/types', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateSubjectType(id: number, data: UpdateSubjectTypeInput) {
+    return request<SubjectTypeOption>(`/subjects/types/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteSubjectType(id: number) {
+    return request<void>(`/subjects/types/${id}`, { method: 'DELETE' });
+  },
+
+  getSubjectTypeUsage(id: number) {
+    return request<SubjectTypeUsage>(`/subjects/types/${id}/usage`);
+  },
+
+  reassignSubjectType(id: number, data: ReassignSubjectTypeInput) {
+    return request<ReassignSubjectTypeResult>(`/subjects/types/${id}/reassign`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   getSubjectMappings(filters: SubjectMappingFilters = {}) {

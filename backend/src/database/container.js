@@ -13,6 +13,9 @@ const { Subject } = require('../subjects/schemas/subject.schema');
 const {
   SubjectMappingEntry,
 } = require('../subjects/schemas/subject-mapping-entry.schema');
+const {
+  SubjectTypeEntity,
+} = require('../subjects/schemas/subject-type.schema');
 const { Exam, ExamSubject, ExamScope } = require('../exam/schemas/exam.schema');
 const {
   ExamFeeRecord,
@@ -95,6 +98,7 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(Subject),
     dataSource.getRepository(SubjectMappingEntry),
     dataSource.getRepository(Regulation),
+    dataSource.getRepository(SubjectTypeEntity),
   );
 
   const settings = new SettingsService(

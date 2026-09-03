@@ -12,6 +12,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Tabs } from '@/components/ui/Tabs';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { SubjectTable } from '@/components/subjects/SubjectTable';
+import { SubjectTypesDialog } from '@/components/subjects/SubjectTypesDialog';
 import { useToast } from '@/components/ui/Toast';
 
 export default function SubjectsPage() {
@@ -23,6 +24,7 @@ export default function SubjectsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [typesOpen, setTypesOpen] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [actionError, setActionError] = useState('');
 
@@ -82,9 +84,14 @@ export default function SubjectsPage() {
         title="Subjects"
         description="Create subjects under a regulation, then map them to academic scopes using the Subject mappings tab."
         action={
-          <Button onClick={() => router.push('/dashboard/subjects/new')}>
-            New subject
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setTypesOpen(true)}>
+              Manage types
+            </Button>
+            <Button onClick={() => router.push('/dashboard/subjects/new')}>
+              New subject
+            </Button>
+          </div>
         }
       />
 
@@ -164,6 +171,11 @@ export default function SubjectsPage() {
           </Alert>
         ) : null}
       </ConfirmDialog>
+
+      <SubjectTypesDialog
+        open={typesOpen}
+        onClose={() => setTypesOpen(false)}
+      />
     </div>
   );
 }

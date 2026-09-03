@@ -4,11 +4,28 @@ const { In } = require('typeorm');
 const { AppError } = require('../common/errors');
 const { normalizeSectionFields } = require('./dto/subject.dto');
 const { SubjectType, SubjectStatus } = require('./schemas/subject.enums');
+
+const DEFAULT_SUBJECT_TYPES = [
+    { code: SubjectType.THEORY, name: 'Theory', sortOrder: 1 },
+    { code: SubjectType.PRACTICAL, name: 'Practical', sortOrder: 2 },
+    { code: SubjectType.LABORATORY, name: 'Laboratory', sortOrder: 3 },
+];
+
+function slugifyTypeCode(value) {
+    return String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50);
+}
+
 class SubjectsService {
-    constructor(subjectRepo, mappingRepo, regulationRepo) {
+    constructor(subjectRepo, mappingRepo, regulationRepo, subjectTypeRepo) {
         this.subjectRepo = subjectRepo;
         this.mappingRepo = mappingRepo;
         this.regulationRepo = regulationRepo;
+        this.subjectTypeRepo = subjectTypeRepo;
     }
     async assertRegulation(regulationId) {
         const regulation = await this.regulationRepo.findOne({
@@ -18,11 +35,169 @@ class SubjectsService {
             throw AppError.notFound('Regulation not found');
         return regulation;
     }
+    async ensureDefaultSubjectTypes() {
+        const count = await this.subjectTypeRepo.count();
+        if (count > 0) return;
+        await this.subjectTypeRepo.save(
+            DEFAULT_SUBJECT_TYPES.map((row) =>
+                this.subjectTypeRepo.create({
+                    ...row,
+                    status: SubjectStatus.ACTIVE,
+                }),
+            ),
+        );
+    }
+    async findAllSubjectTypes() {
+        await this.ensureDefaultSubjectTypes();
+        return this.subjectTypeRepo.find({
+            order: { sortOrder: 'ASC', name: 'ASC' },
+        });
+    }
+    async findActiveSubjectTypes() {
+        await this.ensureDefaultSubjectTypes();
+        return this.subjectTypeRepo.find({
+            where: { status: SubjectStatus.ACTIVE },
+            order: { sortOrder: 'ASC', name: 'ASC' },
+        });
+    }
+    async assertSubjectTypeCode(code) {
+        const normalized = slugifyTypeCode(code);
+        if (!normalized) {
+            throw AppError.badRequest('Subject type is required');
+        }
+        await this.ensureDefaultSubjectTypes();
+        const row = await this.subjectTypeRepo.findOne({
+            where: { code: normalized },
+        });
+        if (!row) {
+            throw AppError.badRequest(
+                `Unknown subject type '${normalized}'. Create it from Subjects → Manage types first.`,
+            );
+        }
+        if (row.status !== SubjectStatus.ACTIVE) {
+            throw AppError.badRequest(`Subject type '${row.name}' is inactive`);
+        }
+        return row;
+    }
+    async createSubjectType(dto) {
+        const name = String(dto?.name ?? '').trim();
+        if (!name) {
+            throw AppError.badRequest('Type name is required');
+        }
+        const code = slugifyTypeCode(dto?.code || name);
+        if (!code) {
+            throw AppError.badRequest('Type code is required');
+        }
+        const exists = await this.subjectTypeRepo.findOne({ where: { code } });
+        if (exists) {
+            throw AppError.badRequest(`Subject type '${code}' already exists`);
+        }
+        const maxSort = await this.subjectTypeRepo
+            .createQueryBuilder('t')
+            .select('MAX(t.sortOrder)', 'max')
+            .getRawOne();
+        const sortOrder =
+            dto?.sortOrder != null && Number.isFinite(Number(dto.sortOrder))
+                ? Number(dto.sortOrder)
+                : Number(maxSort?.max ?? 0) + 1;
+        const row = this.subjectTypeRepo.create({
+            code,
+            name,
+            status: dto?.status === SubjectStatus.INACTIVE
+                ? SubjectStatus.INACTIVE
+                : SubjectStatus.ACTIVE,
+            sortOrder,
+        });
+        return this.subjectTypeRepo.save(row);
+    }
+    async updateSubjectType(id, dto) {
+        const row = await this.subjectTypeRepo.findOne({ where: { id } });
+        if (!row) throw AppError.notFound('Subject type not found');
+        if (dto?.name != null) {
+            const name = String(dto.name).trim();
+            if (!name) throw AppError.badRequest('Type name is required');
+            row.name = name;
+        }
+        if (dto?.status != null) {
+            if (![SubjectStatus.ACTIVE, SubjectStatus.INACTIVE].includes(dto.status)) {
+                throw AppError.badRequest('Invalid status');
+            }
+            row.status = dto.status;
+        }
+        if (dto?.sortOrder != null && Number.isFinite(Number(dto.sortOrder))) {
+            row.sortOrder = Number(dto.sortOrder);
+        }
+        return this.subjectTypeRepo.save(row);
+    }
+    async findSubjectTypeUsage(id) {
+        const row = await this.subjectTypeRepo.findOne({ where: { id } });
+        if (!row) throw AppError.notFound('Subject type not found');
+        const subjects = await this.subjectRepo
+            .createQueryBuilder('s')
+            .leftJoinAndSelect('s.regulation', 'regulation')
+            .where('s.type = :type', { type: row.code })
+            .orderBy('regulation.code', 'ASC')
+            .addOrderBy('s.code', 'ASC')
+            .getMany();
+        return {
+            type: row,
+            total: subjects.length,
+            subjects: subjects.map((subject) => ({
+                id: subject.id,
+                code: subject.code,
+                name: subject.name,
+                type: subject.type,
+                status: subject.status,
+                regulationId: subject.regulationId,
+                regulationCode: subject.regulation?.code ?? null,
+                regulationName: subject.regulation?.name ?? null,
+            })),
+        };
+    }
+    async reassignSubjectType(id, dto = {}) {
+        const row = await this.subjectTypeRepo.findOne({ where: { id } });
+        if (!row) throw AppError.notFound('Subject type not found');
+        const toType = await this.assertSubjectTypeCode(dto.toTypeCode ?? dto.toType);
+        if (toType.code === row.code) {
+            throw AppError.badRequest('Choose a different subject type to swap to');
+        }
+        const subjectIds = Array.isArray(dto.subjectIds)
+            ? dto.subjectIds
+                .map((value) => Number(value))
+                .filter((value) => Number.isFinite(value))
+            : null;
+        if (subjectIds && subjectIds.length === 0) {
+            throw AppError.badRequest('Select at least one subject to reassign');
+        }
+        const where = subjectIds?.length
+            ? { id: In(subjectIds), type: row.code }
+            : { type: row.code };
+        const result = await this.subjectRepo.update(where, { type: toType.code });
+        const remaining = await this.subjectRepo.count({ where: { type: row.code } });
+        return {
+            fromType: row,
+            toType,
+            updated: result.affected ?? 0,
+            remaining,
+        };
+    }
+    async removeSubjectType(id) {
+        const row = await this.subjectTypeRepo.findOne({ where: { id } });
+        if (!row) throw AppError.notFound('Subject type not found');
+        const inUse = await this.subjectRepo.count({ where: { type: row.code } });
+        if (inUse > 0) {
+            throw AppError.badRequest(
+                `Cannot delete type '${row.name}' because ${inUse} subject(s) still use it. Reassign them first.`,
+            );
+        }
+        await this.subjectTypeRepo.remove(row);
+    }
     async create(dto) {
         await this.assertRegulation(dto.regulationId);
         if (!dto.code?.trim() || !dto.name?.trim()) {
             throw AppError.badRequest('Regulation, code, and name are required');
         }
+        const typeRow = await this.assertSubjectTypeCode(dto.type ?? SubjectType.THEORY);
         const exists = await this.subjectRepo.findOne({
             where: {
                 regulationId: dto.regulationId,
@@ -34,7 +209,7 @@ class SubjectsService {
         }
         const subject = this.subjectRepo.create({
             ...dto,
-            type: dto.type ?? SubjectType.THEORY,
+            type: typeRow.code,
             status: dto.status ?? SubjectStatus.ACTIVE,
             credits: dto.credits ?? 0,
             internalMarks: dto.internalMarks ?? 0,
@@ -76,6 +251,15 @@ class SubjectsService {
             });
             if (exists && exists.id !== subject.id) {
                 throw AppError.badRequest(`Subject code '${dto.code}' already exists for this regulation`);
+            }
+        }
+        if (dto.type != null) {
+            const nextType = String(dto.type).trim().toLowerCase();
+            if (nextType !== String(subject.type).toLowerCase()) {
+                const typeRow = await this.assertSubjectTypeCode(dto.type);
+                dto = { ...dto, type: typeRow.code };
+            } else {
+                dto = { ...dto, type: subject.type };
             }
         }
         Object.assign(subject, dto);

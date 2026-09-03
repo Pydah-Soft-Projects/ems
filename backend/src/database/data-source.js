@@ -13,6 +13,9 @@ const {
   SubjectMappingEntry,
 } = require('../subjects/schemas/subject-mapping-entry.schema');
 const {
+  SubjectTypeEntity,
+} = require('../subjects/schemas/subject-type.schema');
+const {
   Exam,
   ExamSubject,
   LateFeeSlab,
@@ -56,6 +59,7 @@ const entities = [
   RegulationScope,
   Subject,
   SubjectMappingEntry,
+  SubjectTypeEntity,
   Exam,
   ExamSubject,
   LateFeeSlab,

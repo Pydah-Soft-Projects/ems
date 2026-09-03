@@ -20,7 +20,7 @@ const Subject = new EntitySchema({
     name: { type: 'varchar', length: 200 },
     yearOfStudy: { type: 'int', default: 1 },
     semester: { type: 'int', nullable: true },
-    type: { type: 'varchar', length: 20, default: SubjectType.THEORY },
+    type: { type: 'varchar', length: 50, default: SubjectType.THEORY },
     credits: { type: 'decimal', precision: 4, scale: 1, default: 0 },
     internalMarks: { type: 'int', default: 0 },
     externalMarks: { type: 'int', default: 0 },

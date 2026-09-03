@@ -1,5 +1,56 @@
-export type SubjectType = 'theory' | 'practical' | 'laboratory';
+export type SubjectTypeCode = string;
+/** @deprecated Prefer SubjectTypeCode — kept for older call sites */
+export type SubjectType = SubjectTypeCode;
 export type SubjectStatus = 'active' | 'inactive';
+
+export interface SubjectTypeOption {
+  id: number;
+  code: string;
+  name: string;
+  status: SubjectStatus;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSubjectTypeInput {
+  name: string;
+  code?: string;
+  status?: SubjectStatus;
+  sortOrder?: number;
+}
+
+export type UpdateSubjectTypeInput = Partial<CreateSubjectTypeInput>;
+
+export interface SubjectTypeUsageSubject {
+  id: number;
+  code: string;
+  name: string;
+  type: SubjectTypeCode;
+  status: SubjectStatus;
+  regulationId: number;
+  regulationCode: string | null;
+  regulationName: string | null;
+}
+
+export interface SubjectTypeUsage {
+  type: SubjectTypeOption;
+  total: number;
+  subjects: SubjectTypeUsageSubject[];
+}
+
+export interface ReassignSubjectTypeInput {
+  toTypeCode: string;
+  /** Omit to reassign every subject currently using this type */
+  subjectIds?: number[];
+}
+
+export interface ReassignSubjectTypeResult {
+  fromType: SubjectTypeOption;
+  toType: SubjectTypeOption;
+  updated: number;
+  remaining: number;
+}
 
 export interface Subject {
   id: number;
@@ -13,7 +64,7 @@ export interface Subject {
   code: string;
   name: string;
   semester: number | null;
-  type: SubjectType;
+  type: SubjectTypeCode;
   credits: number | string;
   internalMarks: number;
   externalMarks: number;
@@ -27,7 +78,7 @@ export interface CreateSubjectInput {
   regulationId: number;
   code: string;
   name: string;
-  type?: SubjectType;
+  type?: SubjectTypeCode;
   credits?: number;
   internalMarks?: number;
   externalMarks?: number;

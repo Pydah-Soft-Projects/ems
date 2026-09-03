@@ -29,18 +29,28 @@ export default function NewSubjectPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleSave(data: CreateSubjectInput) {
+  async function handleSave(data: CreateSubjectInput | CreateSubjectInput[]) {
+    const items = Array.isArray(data) ? data : [data];
     setSaving(true);
     setError('');
     try {
-      await api.createSubject(data);
-      toast.push('Subject created.', 'success');
+      let created = 0;
+      for (const item of items) {
+        await api.createSubject(item);
+        created += 1;
+      }
+      toast.push(
+        created === 1
+          ? 'Subject created.'
+          : `${created} subjects created.`,
+        'success',
+      );
       router.push('/dashboard/subjects');
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Failed to create subject.',
-      );
-      throw err;
+      const message =
+        err instanceof ApiError ? err.message : 'Failed to create subjects.';
+      setError(message);
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setSaving(false);
     }
@@ -49,10 +59,13 @@ export default function NewSubjectPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Create subject"
-        description="Add a subject under a regulation. College, branch, and batch mapping is done separately."
+        title="Create subjects"
+        description="Add one or more subjects under a single regulation. College, branch, and batch mapping is done separately."
         action={
-          <Button variant="secondary" onClick={() => router.push('/dashboard/subjects')}>
+          <Button
+            variant="secondary"
+            onClick={() => router.push('/dashboard/subjects')}
+          >
             Back
           </Button>
         }

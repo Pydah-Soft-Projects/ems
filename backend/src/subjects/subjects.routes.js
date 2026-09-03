@@ -12,6 +12,59 @@ function createSubjectsRoutes(services) {
   const router = Router();
   router.use(requireStaff);
 
+  router.get(
+    '/types',
+    requirePrivilege('subjects:read'),
+    asyncHandler(async (req, res) => {
+      const activeOnly = String(req.query.activeOnly ?? '') === 'true';
+      res.json(
+        activeOnly
+          ? await services.subjects.findActiveSubjectTypes()
+          : await services.subjects.findAllSubjectTypes(),
+      );
+    }),
+  );
+  router.post(
+    '/types',
+    requirePrivilege('subjects:write'),
+    asyncHandler(async (req, res) => {
+      res.status(201).json(await services.subjects.createSubjectType(req.body));
+    }),
+  );
+  router.patch(
+    '/types/:id',
+    requirePrivilege('subjects:write'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.subjects.updateSubjectType(parseId(req.params.id), req.body),
+      );
+    }),
+  );
+  router.get(
+    '/types/:id/usage',
+    requirePrivilege('subjects:read'),
+    asyncHandler(async (req, res) => {
+      res.json(await services.subjects.findSubjectTypeUsage(parseId(req.params.id)));
+    }),
+  );
+  router.post(
+    '/types/:id/reassign',
+    requirePrivilege('subjects:write'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.subjects.reassignSubjectType(parseId(req.params.id), req.body),
+      );
+    }),
+  );
+  router.delete(
+    '/types/:id',
+    requirePrivilege('subjects:delete'),
+    asyncHandler(async (req, res) => {
+      await services.subjects.removeSubjectType(parseId(req.params.id));
+      res.status(204).send();
+    }),
+  );
+
   router.post(
     '/',
     requirePrivilege('subjects:write'),
