@@ -51,12 +51,14 @@ export default function EditSubjectPage() {
     };
   }, [subjectId]);
 
-  async function handleSave(data: CreateSubjectInput) {
+  async function handleSave(data: CreateSubjectInput | CreateSubjectInput[]) {
     if (!subject) return;
+    const payload = Array.isArray(data) ? data[0] : data;
+    if (!payload) return;
     setSaving(true);
     setError('');
     try {
-      await api.updateSubject(subject.id, data);
+      await api.updateSubject(subject.id, payload);
       toast.push('Subject updated.', 'success');
       router.push('/dashboard/subjects');
     } catch (err) {
