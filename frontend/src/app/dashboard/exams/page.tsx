@@ -15,6 +15,8 @@ import { ExamTable } from '@/components/exams/ExamTable';
 import { PublishExamModal } from '@/components/exams/PublishExamModal';
 import { useToast } from '@/components/ui/Toast';
 import { StatusFilter as StatusFilterBar } from '@/components/ui/SoftSearch';
+import { getStoredUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 
 type ExamStatusFilter = 'all' | ExamStatus;
 
@@ -30,6 +32,8 @@ const statusTabs: { id: ExamStatusFilter; label: string }[] = [
 export default function ExamsPage() {
   const router = useRouter();
   const toast = useToast();
+  const user = getStoredUser();
+  const canWrite = can(user, 'exams:write');
   const [regulations, setRegulations] = useState<Regulation[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [statusFilter, setStatusFilter] = useState<ExamStatusFilter>('all');
@@ -184,22 +188,24 @@ export default function ExamsPage() {
         title="Examinations"
         description="Create examinations from mapped subjects, submit for approval, and publish for student enrollment."
         action={
-          <Button onClick={() => router.push('/dashboard/exams/new')}>
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4.5v15m7.5-7.5h-15"
-              />
-            </svg>
-            New examination
-          </Button>
+          canWrite ? (
+            <Button onClick={() => router.push('/dashboard/exams/new')}>
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 4.5v15m7.5-7.5h-15"
+                />
+              </svg>
+              New examination
+            </Button>
+          ) : undefined
         }
       />
 
@@ -223,6 +229,7 @@ export default function ExamsPage() {
             exams={exams}
             regulations={regulations}
             loading={loading}
+            user={user}
             onEdit={(exam) => router.push(`/dashboard/exams/${exam.id}/edit`)}
             onView={(exam) => router.push(`/dashboard/exams/${exam.id}`)}
             onSubmit={(exam) => void handleSubmit(exam)}

@@ -86,6 +86,7 @@ export default function ExamDetailPage() {
 
   useEffect(() => {
     if (!exam || tabParam !== 'analytics') return;
+    if (!can(getStoredUser(), 'exams:analytics')) return;
     let cancelled = false;
     const run = async () => {
       setAnalyticsLoading(true);
@@ -211,9 +212,52 @@ export default function ExamDetailPage() {
     );
   }
 
-  const canEdit = true;
   const staff = getStoredUser();
+  const canEdit =
+    (exam.status === 'draft' || exam.status === 'rejected') &&
+    can(staff, 'exams:write');
   const types = exam.allowedTypes?.length ? exam.allowedTypes : [exam.type];
+
+  const tabs = [
+    {
+      id: 'overview' as const,
+      label: 'Overview',
+      href: `/dashboard/exams/${exam.id}?tab=overview`,
+    },
+    {
+      id: 'subjects' as const,
+      label: 'Subjects',
+      href: `/dashboard/exams/${exam.id}?tab=subjects`,
+      count: exam.examSubjects?.length,
+    },
+    ...(can(staff, 'exams:analytics')
+      ? [
+          {
+            id: 'analytics' as const,
+            label: 'Analytics',
+            href: `/dashboard/exams/${exam.id}?tab=analytics`,
+          },
+        ]
+      : []),
+    ...(can(staff, 'exams:hall_tickets')
+      ? [
+          {
+            id: 'hall-tickets' as const,
+            label: 'Hall tickets',
+            href: `/dashboard/exams/${exam.id}?tab=hall-tickets`,
+          },
+        ]
+      : []),
+    ...(can(staff, 'exams:results')
+      ? [
+          {
+            id: 'results' as const,
+            label: 'Results',
+            href: `/dashboard/exams/${exam.id}?tab=results`,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="space-y-6">
@@ -238,7 +282,7 @@ export default function ExamDetailPage() {
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
               Back
             </Button>
-            {canEdit && can(staff, 'exams:write') ? (
+            {canEdit ? (
               <Button
                 variant="secondary"
                 onClick={() => router.push(`/dashboard/exams/${exam.id}/edit`)}
@@ -286,58 +330,30 @@ export default function ExamDetailPage() {
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      <Tabs
-        activeId={tabParam}
-        items={[
-          {
-            id: 'overview',
-            label: 'Overview',
-            href: `/dashboard/exams/${exam.id}?tab=overview`,
-          },
-          {
-            id: 'subjects',
-            label: 'Subjects',
-            href: `/dashboard/exams/${exam.id}?tab=subjects`,
-            count: exam.examSubjects?.length,
-          },
-          {
-            id: 'analytics',
-            label: 'Analytics',
-            href: `/dashboard/exams/${exam.id}?tab=analytics`,
-          },
-          {
-            id: 'hall-tickets',
-            label: 'Hall tickets',
-            href: `/dashboard/exams/${exam.id}?tab=hall-tickets`,
-          },
-          {
-            id: 'results',
-            label: 'Results',
-            href: `/dashboard/exams/${exam.id}?tab=results`,
-          },
-        ]}
-      />
+      <Tabs activeId={tabParam} items={tabs} />
 
       <div className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] sm:p-6">
           {tabParam === 'overview' ? (
             <ExamOverviewPanel
               exam={exam}
-              canEditSlabs={canEdit && can(staff, 'exams:write')}
+              canEditSlabs={canEdit}
               onEditSlabs={() => router.push(`/dashboard/exams/${exam.id}/edit?step=3#late-fee-slabs`)}
             />
           ) : null}
           {tabParam === 'subjects' ? <ExamSubjectsPanel exam={exam} /> : null}
-          {tabParam === 'analytics' ? (
+          {tabParam === 'analytics' && can(staff, 'exams:analytics') ? (
             <ExamAnalyticsPanel
               analytics={analytics}
               loading={analyticsLoading}
               error={analyticsError}
             />
           ) : null}
-          {tabParam === 'hall-tickets' ? (
+          {tabParam === 'hall-tickets' && can(staff, 'exams:hall_tickets') ? (
             <ExamHallTicketsTab exam={exam} />
           ) : null}
-          {tabParam === 'results' ? <ExamResultsPanel exam={exam} /> : null}
+          {tabParam === 'results' && can(staff, 'exams:results') ? (
+            <ExamResultsPanel exam={exam} />
+          ) : null}
       </div>
 
       <ConfirmDialog

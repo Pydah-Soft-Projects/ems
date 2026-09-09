@@ -12,10 +12,14 @@ import { Button } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { ExamForm } from '@/components/exams/ExamForm';
 import { useToast } from '@/components/ui/Toast';
+import { PermissionGate } from '@/components/auth/PermissionGate';
+import { AccessDenied } from '@/components/auth/AccessDenied';
+import { getStoredUser } from '@/lib/auth';
 
 export default function NewExamPage() {
   const router = useRouter();
   const toast = useToast();
+  const user = getStoredUser();
   const [regulations, setRegulations] = useState<Regulation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,31 +51,39 @@ export default function NewExamPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Create examination"
-        description="Scope → mapped subjects & fees → dates → review."
-        action={
-          <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
-            Back to list
-          </Button>
-        }
-      />
-      {error ? <Alert tone="danger">{error}</Alert> : null}
-      <Card>
-        <CardBody>
-          {loading ? (
-            <LoadingBlock />
-          ) : (
-            <ExamForm
-              regulations={regulations}
-              onSubmit={handleSave}
-              onCancel={() => router.push('/dashboard/exams')}
-              loading={saving}
-            />
-          )}
-        </CardBody>
-      </Card>
-    </div>
+    <PermissionGate
+      user={user}
+      privilege="exams:write"
+      fallback={
+        <AccessDenied description="You need Create / edit examinations privilege to create examinations." />
+      }
+    >
+      <div className="space-y-6">
+        <PageHeader
+          title="Create examination"
+          description="Scope → mapped subjects & fees → dates → review."
+          action={
+            <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
+              Back to list
+            </Button>
+          }
+        />
+        {error ? <Alert tone="danger">{error}</Alert> : null}
+        <Card>
+          <CardBody>
+            {loading ? (
+              <LoadingBlock />
+            ) : (
+              <ExamForm
+                regulations={regulations}
+                onSubmit={handleSave}
+                onCancel={() => router.push('/dashboard/exams')}
+                loading={saving}
+              />
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </PermissionGate>
   );
 }

@@ -12,6 +12,9 @@ import { Button } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { ExamForm } from '@/components/exams/ExamForm';
 import { useToast } from '@/components/ui/Toast';
+import { PermissionGate } from '@/components/auth/PermissionGate';
+import { AccessDenied } from '@/components/auth/AccessDenied';
+import { getStoredUser } from '@/lib/auth';
 
 export default function EditExamPage() {
   const params = useParams<{ examId: string }>();
@@ -19,6 +22,7 @@ export default function EditExamPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
+  const user = getStoredUser();
   const requestedStep = searchParams.get('step');
   const defaultStep = requestedStep === '2' || requestedStep === '3' || requestedStep === '4'
     ? (Number(requestedStep) as 2 | 3 | 4)
@@ -80,42 +84,50 @@ export default function EditExamPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={exam ? `Edit ${exam.name}` : 'Edit examination'}
-        description="Only draft or rejected examinations can be edited."
-        action={
-          <Button
-            variant="secondary"
-            onClick={() =>
-              router.push(
-                Number.isFinite(examId)
-                  ? `/dashboard/exams/${examId}`
-                  : '/dashboard/exams',
-              )
-            }
-          >
-            Cancel
-          </Button>
-        }
-      />
-      {error ? <Alert tone="danger">{error}</Alert> : null}
-      <Card>
-        <CardBody>
-          {loading || !exam ? (
-            <LoadingBlock />
-          ) : (
-            <ExamForm
-              regulations={regulations}
-              initial={exam}
-              defaultStep={defaultStep}
-              onSubmit={handleSave}
-              onCancel={() => router.push(`/dashboard/exams/${exam.id}`)}
-              loading={saving}
-            />
-          )}
-        </CardBody>
-      </Card>
-    </div>
+    <PermissionGate
+      user={user}
+      privilege="exams:write"
+      fallback={
+        <AccessDenied description="You need Create / edit examinations privilege to edit examinations." />
+      }
+    >
+      <div className="space-y-6">
+        <PageHeader
+          title={exam ? `Edit ${exam.name}` : 'Edit examination'}
+          description="Only draft or rejected examinations can be edited."
+          action={
+            <Button
+              variant="secondary"
+              onClick={() =>
+                router.push(
+                  Number.isFinite(examId)
+                    ? `/dashboard/exams/${examId}`
+                    : '/dashboard/exams',
+                )
+              }
+            >
+              Cancel
+            </Button>
+          }
+        />
+        {error ? <Alert tone="danger">{error}</Alert> : null}
+        <Card>
+          <CardBody>
+            {loading || !exam ? (
+              <LoadingBlock />
+            ) : (
+              <ExamForm
+                regulations={regulations}
+                initial={exam}
+                defaultStep={defaultStep}
+                onSubmit={handleSave}
+                onCancel={() => router.push(`/dashboard/exams/${exam.id}`)}
+                loading={saving}
+              />
+            )}
+          </CardBody>
+        </Card>
+      </div>
+    </PermissionGate>
   );
 }
