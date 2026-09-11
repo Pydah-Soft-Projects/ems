@@ -138,6 +138,8 @@ function createApp(services) {
     }),
   );
 
+  api.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
   api.use(auth);
 
   api.get(

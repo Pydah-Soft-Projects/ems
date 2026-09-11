@@ -212,11 +212,11 @@ class UsersService {
     const normalizedSource = this.normalizeHrmsSource(source);
     if (normalizedSource === 'employee') {
       let query = HrmsEmployeeModel.findById(id);
-      if (withPassword) query = query.select('+plain_password');
+      if (withPassword) query = query.select('+password +plain_password');
       return query.exec();
     }
     let query = HrmsUserModel.findById(id);
-    if (withPassword) query = query.select('+password');
+    if (withPassword) query = query.select('+password +plain_password');
     return query.exec();
   }
 

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Poppins, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
@@ -14,14 +14,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: 'Examination Management System',
-  description: 'Super Admin portal for examination management',
-  manifest: '/manifest.webmanifest',
+export const viewport: Viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#0d1b3d' },
     { media: '(prefers-color-scheme: dark)', color: '#000000' },
   ],
+};
+
+export const metadata: Metadata = {
+  title: 'Examination Management System',
+  description: 'Super Admin portal for examination management',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: [
       { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },

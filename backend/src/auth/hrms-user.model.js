@@ -21,6 +21,7 @@ const hrmsEmployeeSchema = new mongoose.Schema(
     emp_no: String,
     employee_name: String,
     email: { type: String, lowercase: true, trim: true },
+    password: { type: String, select: false },
     plain_password: { type: String, select: false },
     is_active: Boolean,
     role: String,

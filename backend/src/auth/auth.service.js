@@ -145,8 +145,15 @@ class AuthService {
     const identity = String(dto.username ?? '').trim();
     const email = this.normalizeEmail(identity);
     let hrmsSource = 'user';
-    let user = await HrmsUserModel.findOne({ email })
-      .select('+password')
+    let user = await HrmsUserModel.findOne({
+      $or: [
+        { email },
+        { employeeId: identity },
+        { emp_no: identity },
+        { username: identity },
+      ],
+    })
+      .select('+password +plain_password')
       .exec();
 
     // Employee-only HRMS records are valid EMS identities too. A users
@@ -155,7 +162,7 @@ class AuthService {
       user = await HrmsEmployeeModel.findOne({
         $or: [{ email }, { emp_no: identity }],
       })
-        .select('+plain_password')
+        .select('+password +plain_password')
         .exec();
       hrmsSource = 'employee';
     }
@@ -167,15 +174,31 @@ class AuthService {
       );
       throw AppError.unauthorized('Invalid credentials');
     }
-    const storedPassword =
-      hrmsSource === 'employee' ? user.plain_password : user.password;
-    if (!storedPassword) {
+
+    const candidatePasswords = [
+      user.password,
+      user.plain_password,
+    ].filter((p) => typeof p === 'string' && p.trim().length > 0);
+
+    if (candidatePasswords.length === 0) {
+      log.warn(
+        { event: 'auth.staff.failed', email, reason: 'no_password_set' },
+        'Staff login failed',
+      );
       throw AppError.unauthorized('Invalid credentials');
     }
 
-    const valid = String(storedPassword).startsWith('$2')
-      ? await bcrypt.compare(dto.password, storedPassword)
-      : String(dto.password) === String(storedPassword);
+    let valid = false;
+    for (const stored of candidatePasswords) {
+      const isMatch = String(stored).startsWith('$2')
+        ? await bcrypt.compare(dto.password, String(stored))
+        : String(dto.password) === String(stored);
+      if (isMatch) {
+        valid = true;
+        break;
+      }
+    }
+
     if (!valid) {
       log.warn(
         { event: 'auth.staff.failed', email, reason: 'invalid_password' },
