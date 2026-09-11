@@ -76,7 +76,7 @@ export function ExamTable({
     );
   }
 
-  const canWrite = can(user, 'exams:write');
+  const canEdit = can(user, 'exams:edit');
   const canSubmit = can(user, 'exams:submit');
   const canApprove = can(user, 'exams:approve');
   const canPublish = can(user, 'exams:publish');
@@ -102,8 +102,7 @@ export function ExamTable({
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
           {exams.map((exam) => {
-            const editable =
-              exam.status === 'draft' || exam.status === 'rejected';
+            const editable = true;
 
             return (
               <tr key={exam.id} className="transition hover:bg-slate-50/50">
@@ -167,7 +166,7 @@ export function ExamTable({
                     >
                       View
                     </Button>
-                    {editable && canWrite ? (
+                    {editable && canEdit ? (
                       <Button
                         variant="ghost"
                         className="!px-2.5 !py-1.5 text-xs"
@@ -176,7 +175,7 @@ export function ExamTable({
                         Edit
                       </Button>
                     ) : null}
-                    {editable && canSubmit ? (
+                    {(exam.status === 'draft' || exam.status === 'rejected') && canSubmit ? (
                       <Button
                         variant="ghost"
                         className="!px-2.5 !py-1.5 text-xs"

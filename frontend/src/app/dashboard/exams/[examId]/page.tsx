@@ -213,9 +213,7 @@ export default function ExamDetailPage() {
   }
 
   const staff = getStoredUser();
-  const canEdit =
-    (exam.status === 'draft' || exam.status === 'rejected') &&
-    can(staff, 'exams:write');
+  const canEdit = can(staff, 'exams:edit');
   const types = exam.allowedTypes?.length ? exam.allowedTypes : [exam.type];
 
   const tabs = [

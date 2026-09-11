@@ -47,7 +47,8 @@ const PRIVILEGE_GROUPS = [
     label: 'Examinations',
     privileges: [
       { key: 'exams:read', label: 'View examinations' },
-      { key: 'exams:write', label: 'Create / edit examinations' },
+      { key: 'exams:write', label: 'Create examinations' },
+      { key: 'exams:edit', label: 'Edit examinations' },
       { key: 'exams:submit', label: 'Submit examinations for approval' },
       { key: 'exams:approve', label: 'Approve / reject examinations' },
       { key: 'exams:publish', label: 'Publish examinations' },

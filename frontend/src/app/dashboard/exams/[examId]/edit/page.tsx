@@ -86,7 +86,7 @@ export default function EditExamPage() {
   return (
     <PermissionGate
       user={user}
-      privilege="exams:write"
+      privilege="exams:edit"
       fallback={
         <AccessDenied description="You need Create / edit examinations privilege to edit examinations." />
       }
@@ -94,7 +94,7 @@ export default function EditExamPage() {
       <div className="space-y-6">
         <PageHeader
           title={exam ? `Edit ${exam.name}` : 'Edit examination'}
-          description="Only draft or rejected examinations can be edited."
+          description="Update examination details, subjects, fee structures, and timetable."
           action={
             <Button
               variant="secondary"

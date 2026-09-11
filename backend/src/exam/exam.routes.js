@@ -37,7 +37,7 @@ function createExamRoutes(services) {
   );
   router.patch(
     '/:id',
-    requirePrivilege('exams:write'),
+    requirePrivilege('exams:edit'),
     asyncHandler(async (req, res) => {
       res.json(await services.exam.update(parseId(req.params.id), req.body));
     }),
