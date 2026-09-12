@@ -2286,8 +2286,7 @@ class ExamService {
             .leftJoinAndSelect('examSubjects.subject', 'subject')
             .leftJoinAndSelect('fr.payments', 'payments')
             .leftJoinAndSelect('fr.application', 'application')
-            .orderBy(`CASE WHEN fr.status = :pendingStatus THEN 0 ELSE 1 END`, 'ASC')
-            .setParameter('pendingStatus', FeeStatus.PENDING)
+            .orderBy('fr.status', 'DESC')
             .addOrderBy('fr.studentName', 'ASC')
             .addOrderBy('fr.createdAt', 'DESC');
         if (examId)
@@ -2306,10 +2305,28 @@ class ExamService {
             qb.skip(skip).take(take);
         }
         const records = await qb.getMany();
+        const updatePromises = [];
         for (const record of records) {
             if (record.status !== FeeStatus.PAID) {
-                await this.refreshLateFee(record);
+                if (record.exam) {
+                    const { lateFee } = this.calculateLateFee(record.exam);
+                    const nextLate = Number(lateFee);
+                    const nextTotal = Number(record.baseFee) + nextLate;
+                    if (Number(record.lateFee) !== nextLate || Number(record.totalAmount) !== nextTotal) {
+                        record.lateFee = nextLate;
+                        record.totalAmount = nextTotal;
+                        updatePromises.push(this.feeRecordRepo.update(record.id, {
+                            lateFee: nextLate,
+                            totalAmount: nextTotal,
+                        }));
+                    }
+                } else {
+                    updatePromises.push(this.refreshLateFee(record));
+                }
             }
+        }
+        if (updatePromises.length > 0) {
+            await Promise.all(updatePromises);
         }
         return records;
     }

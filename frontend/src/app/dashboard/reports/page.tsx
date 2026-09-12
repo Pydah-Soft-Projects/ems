@@ -44,6 +44,11 @@ function isPaidPayment(payment: Payment) {
   return ['success', 'paid'].includes(paymentStatus) || feeStatus === 'paid';
 }
 
+function isSupplyExamType(type?: string | null) {
+  const t = String(type || '').toLowerCase();
+  return t === 'supply' || t === 'special_supply' || t === 'improvement';
+}
+
 function formatReportDate(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) {
@@ -130,13 +135,49 @@ function getConfiguredLateFee(exam?: Exam | null) {
 function getConfiguredBaseFee(exam?: Exam | null, branch?: string | null) {
   if (!exam) return null;
   const branchMatch = String(branch || exam.branch || '').trim().toLowerCase();
+
+  // 1. Branch-specific package fee
   if (exam.packageFees?.length) {
     const scoped = exam.packageFees.find(
       (entry) => String(entry.branch ?? '').trim().toLowerCase() === branchMatch,
     );
-    if (scoped?.amount != null) return parseNumber(scoped.amount) ?? null;
+    if (scoped?.amount != null && parseNumber(scoped.amount)! > 0) {
+      return parseNumber(scoped.amount);
+    }
   }
-  return parseNumber(exam.packageFee) ?? null;
+
+  // 2. Global package fee
+  const pkgFee = parseNumber(exam.packageFee);
+  if (pkgFee != null && pkgFee > 0) {
+    return pkgFee;
+  }
+
+  // 3. Per-branch supply fee schedule (index 0 = 1 subject fee)
+  if (exam.supplyFeesByBranch?.length) {
+    const branchSupply = exam.supplyFeesByBranch.find(
+      (entry) => String(entry.branch ?? '').trim().toLowerCase() === branchMatch,
+    );
+    if (branchSupply?.feesByCount?.length) {
+      const firstTier = branchSupply.feesByCount.find((fee) => fee != null && Number(fee) > 0);
+      if (firstTier != null && Number(firstTier) > 0) return Number(firstTier);
+    }
+  }
+
+  // 4. Default supply fee tiers (index 0 = 1 subject fee)
+  if (exam.supplyFeeByCount?.length) {
+    const firstTier = exam.supplyFeeByCount.find((fee) => fee != null && Number(fee) > 0);
+    if (firstTier != null && Number(firstTier) > 0) return Number(firstTier);
+  }
+
+  // 5. Exam subject paper fees
+  if (exam.examSubjects?.length) {
+    const validSubject = exam.examSubjects.find(
+      (es) => es.fee != null && Number(es.fee) > 0,
+    );
+    if (validSubject) return Number(validSubject.fee);
+  }
+
+  return pkgFee ?? 0;
 }
 
 function getConfiguredFeeValues(exam?: Exam | null, branch?: string | null) {
@@ -262,7 +303,7 @@ function resolveReportBatch(options: {
   if (fromEligible) return fromEligible;
   const fromExam = options.exam?.batch?.trim();
   if (fromExam) return fromExam;
-  return '-';
+  return 'Unassigned';
 }
 
 function paymentReportBatch(
@@ -302,10 +343,16 @@ function getFeeRecordDisplayValues(record: ExamFeeRecord, fallbackExam: Exam | n
   const exam = record.exam ?? fallbackExam ?? null;
   const branch = record.exam?.branch ?? fallbackExam?.branch ?? null;
   const configured = getConfiguredFeeValues(exam, branch);
-  const baseFee = parseNumber(record.baseFee) ?? configured.baseFee ?? 0;
-  const lateFee = parseNumber(record.lateFee) ?? configured.lateFee ?? 0;
-  const totalAmount = parseNumber(record.totalAmount) ?? (baseFee + lateFee);
-  const actualAmount = baseFee != null ? baseFee : totalAmount - lateFee;
+
+  const rawBase = parseNumber(record.baseFee);
+  const rawTotal = parseNumber(record.totalAmount);
+  const rawLate = parseNumber(record.lateFee);
+
+  const lateFee = rawLate ?? configured.lateFee ?? 0;
+  const baseFee = (rawBase != null && rawBase > 0) ? rawBase : (configured.baseFee ?? 0);
+  const totalAmount = (rawTotal != null && rawTotal > 0) ? rawTotal : (baseFee + lateFee);
+  const actualAmount = baseFee;
+
   return {
     baseFee,
     lateFee,
@@ -364,10 +411,11 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let mounted = true;
+    if (tab !== 'due') return;
     setDueLoading(true);
 
     const fetchPage = async (page: number) => {
-      return api.getFeeRecords({ status: 'pending', page, limit: 50, examId: selectedExam ?? undefined });
+      return api.getFeeRecords({ status: 'pending', page, limit: 500, examId: selectedExam ?? undefined });
     };
 
     const loadDueRecords = async () => {
@@ -376,7 +424,7 @@ export default function ReportsPage() {
         if (!mounted) return;
         setDueRecords(firstPage || []);
 
-        if ((firstPage?.length ?? 0) < 50) {
+        if ((firstPage?.length ?? 0) < 500) {
           return;
         }
 
@@ -390,7 +438,7 @@ export default function ReportsPage() {
             const existingIds = new Set(prev.map((record) => record.id));
             return [...prev, ...nextPageRows.filter((record) => !existingIds.has(record.id))];
           });
-          if (nextPageRows.length < 50) break;
+          if (nextPageRows.length < 500) break;
           nextPage += 1;
         }
       } catch {
@@ -407,7 +455,7 @@ export default function ReportsPage() {
     return () => {
       mounted = false;
     };
-  }, [selectedExam]);
+  }, [selectedExam, tab]);
 
   useEffect(() => {
     setDuePage(1);
@@ -426,14 +474,26 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let mounted = true;
+    if (tab !== 'due') return;
     const loadEligibleStudents = async () => {
       if (!exams.length) {
+        setEligibleStudents([]);
+        return;
+      }
+      const regularExams = exams.filter((ex) => !isSupplyExamType(ex.type));
+      if (!regularExams.length) {
         setEligibleStudents([]);
         return;
       }
       setEligibleLoading(true);
       try {
         if (selectedExam) {
+          const selectedExamObj = exams.find((e) => e.id === selectedExam);
+          if (isSupplyExamType(selectedExamObj?.type)) {
+            setEligibleStudents([]);
+            setEligibleLoading(false);
+            return;
+          }
           const res = await api.getExamEligibleStudents(selectedExam);
           if (!mounted) return;
           setEligibleStudents(
@@ -446,7 +506,7 @@ export default function ReportsPage() {
         }
 
         const allStudents = await Promise.all(
-          exams.map(async (exam) => {
+          regularExams.map(async (exam) => {
             const res = await api.getExamEligibleStudents(exam.id);
             return (res.students || []).map((student) => ({
               ...student,
@@ -467,7 +527,7 @@ export default function ReportsPage() {
     return () => {
       mounted = false;
     };
-  }, [selectedExam, exams]);
+  }, [selectedExam, exams, tab]);
 
   useEffect(() => {
     let mounted = true;
@@ -521,6 +581,8 @@ export default function ReportsPage() {
         .filter((roll): roll is string => Boolean(roll)),
     );
     const unpaidRecords = dueRecords.filter((record) => {
+      const exam = record.exam ?? exams.find((ex) => ex.id === record.examId) ?? null;
+      if (isSupplyExamType(exam?.type || record.examType)) return false;
       if (paidRolls.has(record.studentRollNumber.trim().toLowerCase())) return false;
       if (selectedExam && record.examId !== selectedExam) return false;
       if (branchFilter) {
@@ -536,6 +598,8 @@ export default function ReportsPage() {
 
     const unpaidRolls = new Set(unpaidRecords.map((record) => record.studentRollNumber.toLowerCase()));
     const eligibleUnpaid = eligibleStudents.filter((student) => {
+      const exam = exams.find((ex) => ex.id === student.examId);
+      if (isSupplyExamType(exam?.type)) return false;
       const roll = student.rollNumber.trim().toLowerCase();
       if (unpaidRolls.has(roll) || paidRolls.has(roll)) return false;
       if (selectedExam && student.examId !== selectedExam) return false;
@@ -573,6 +637,72 @@ export default function ReportsPage() {
 
     return [...unpaidRecords, ...eligibleUnpaidRecords];
   }, [dueRecords, branchFilter, batchFilter, eligibleStudents, exams, payments, selectedExam]);
+
+  const dueSectionsByExam = useMemo(() => {
+    const map = new Map<
+      number,
+      {
+        examId: number;
+        exam: Exam | null;
+        records: ExamFeeRecord[];
+        totalActual: number;
+        totalLate: number;
+        totalAmount: number;
+      }
+    >();
+
+    for (const record of filteredDueRecords) {
+      const examId = record.examId;
+      const exam = record.exam ?? exams.find((e) => e.id === examId) ?? null;
+      const display = getFeeRecordDisplayValues(record, exam);
+
+      let section = map.get(examId);
+      if (!section) {
+        section = {
+          examId,
+          exam,
+          records: [],
+          totalActual: 0,
+          totalLate: 0,
+          totalAmount: 0,
+        };
+        map.set(examId, section);
+      }
+
+      section.records.push(record);
+      section.totalActual += display.actualAmount;
+      section.totalLate += display.lateFee;
+      section.totalAmount += display.totalAmount;
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const nameA = a.exam?.name || `Exam ${a.examId}`;
+      const nameB = b.exam?.name || `Exam ${b.examId}`;
+      return nameA.localeCompare(nameB);
+    });
+  }, [filteredDueRecords, exams]);
+
+  const dueOverallSummary = useMemo(() => {
+    let totalUnpaidStudents = 0;
+    let totalActualFee = 0;
+    let totalLateFee = 0;
+    let totalPayable = 0;
+
+    for (const section of dueSectionsByExam) {
+      totalUnpaidStudents += section.records.length;
+      totalActualFee += section.totalActual;
+      totalLateFee += section.totalLate;
+      totalPayable += section.totalAmount;
+    }
+
+    return {
+      totalUnpaidStudents,
+      totalActualFee,
+      totalLateFee,
+      totalPayable,
+      examCount: dueSectionsByExam.length,
+    };
+  }, [dueSectionsByExam]);
 
   const paymentColumns = useMemo(
     () => [
@@ -700,7 +830,7 @@ export default function ReportsPage() {
     }
   }, [duePage, pageCount]);
 
-  const isDueInitialLoading = dueLoading || dueFilterLoading || eligibleLoading;
+  const isDueInitialLoading = dueLoading && dueRecords.length === 0;
 
   const displayedPayments = filteredPayments;
 
@@ -737,10 +867,10 @@ export default function ReportsPage() {
     }
 
     const includeExamColumn = !selectedExam;
-    const sortBranchKeys = (a: string, b: string) => {
+    const sortBatchKeys = (a: string, b: string) => {
       if (a === 'Unassigned') return 1;
       if (b === 'Unassigned') return -1;
-      return a.localeCompare(b);
+      return b.localeCompare(a);
     };
 
     if (isDue) {
@@ -756,34 +886,45 @@ export default function ReportsPage() {
         (record) => getFeeRecordDisplayValues(record).lateFee > 0,
       ).length;
 
-      const examTotals = new Map<string, { count: number; amount: number; lateFee: number }>();
+      const examTotals = new Map<
+        string,
+        { count: number; amount: number; lateFee: number; batchCounts: Map<string, number> }
+      >();
       for (const record of filteredDueRecords) {
         const examName = record.exam?.name || 'Unspecified examination';
-        const current = examTotals.get(examName) || { count: 0, amount: 0, lateFee: 0 };
+        const batch = dueReportBatch(record, eligibleStudents);
+        const current = examTotals.get(examName) || {
+          count: 0,
+          amount: 0,
+          lateFee: 0,
+          batchCounts: new Map<string, number>(),
+        };
         const display = getFeeRecordDisplayValues(record);
         current.count += 1;
         current.amount += display.actualAmount + display.lateFee;
         current.lateFee += display.lateFee;
+        current.batchCounts.set(batch, (current.batchCounts.get(batch) || 0) + 1);
         examTotals.set(examName, current);
       }
 
-      const branchGroups = new Map<string, ExamFeeRecord[]>();
+      const batchGroups = new Map<string, ExamFeeRecord[]>();
       for (const record of filteredDueRecords) {
-        const branch = dueReportBranch(record, eligibleStudents);
-        const rows = branchGroups.get(branch) || [];
+        const batch = dueReportBatch(record, eligibleStudents);
+        const rows = batchGroups.get(batch) || [];
         rows.push(record);
-        branchGroups.set(branch, rows);
+        batchGroups.set(batch, rows);
       }
 
       const dueDetailColumns = [
-        { key: 'sno', label: 'S.No', width: 32 },
-        { key: 'student', label: 'Student', width: includeExamColumn ? 90 : 120 },
-        { key: 'roll', label: 'Roll', width: 68 },
-        ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 90 }] : []),
-        { key: 'amount', label: 'Actual amount', width: 62 },
-        { key: 'lateFee', label: 'Late fee', width: 50 },
-        { key: 'status', label: 'Status', width: 50 },
-        { key: 'dueDate', label: 'Due date', width: 68 },
+        { key: 'sno', label: 'S.No', width: 28 },
+        { key: 'student', label: 'Student', width: includeExamColumn ? 80 : 105 },
+        { key: 'roll', label: 'Roll', width: 62 },
+        { key: 'branch', label: 'Branch', width: 55 },
+        ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 80 }] : []),
+        { key: 'amount', label: 'Actual amount', width: 58 },
+        { key: 'lateFee', label: 'Late fee', width: 48 },
+        { key: 'status', label: 'Status', width: 46 },
+        { key: 'dueDate', label: 'Due date', width: 62 },
       ];
 
       downloadPaymentReportPdf({
@@ -810,45 +951,53 @@ export default function ReportsPage() {
             amount: formatReportMoney(totalActual + totalLate),
           },
         ],
-        examSummary: selectedExam
-          ? null
-          : [
-              ...[...examTotals.entries()]
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([exam, totals]) => ({
-                  exam,
-                  count: String(totals.count),
-                  amount: formatReportMoney(totals.amount),
-                  lateFee: formatReportMoney(totals.lateFee),
-                })),
-              {
-                exam: 'Total',
-                count: String(filteredDueRecords.length),
-                amount: formatReportMoney(totalActual + totalLate),
-                lateFee: formatReportMoney(totalLate),
-              },
-            ],
-        branchSections: [...branchGroups.entries()]
-          .sort(([a], [b]) => sortBranchKeys(a, b))
-          .map(([branch, records]) => {
+        examSummary: [
+          ...[...examTotals.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([exam, totals]) => {
+              const batchBreakdown = [...totals.batchCounts.keys()]
+                .filter(Boolean)
+                .sort((a, b) => (a === 'Unassigned' ? 1 : b === 'Unassigned' ? -1 : b.localeCompare(a)))
+                .join(', ');
+              return {
+                exam,
+                batchBreakdown: batchBreakdown || '-',
+                count: String(totals.count),
+                amount: formatReportMoney(totals.amount),
+                lateFee: formatReportMoney(totals.lateFee),
+              };
+            }),
+          {
+            exam: 'Total',
+            batchBreakdown: '',
+            count: String(filteredDueRecords.length),
+            amount: formatReportMoney(totalActual + totalLate),
+            lateFee: formatReportMoney(totalLate),
+          },
+        ],
+        detailedSectionTitle: 'Detailed statement - batch wise',
+        sections: [...batchGroups.entries()]
+          .sort(([a], [b]) => sortBatchKeys(a, b))
+          .map(([batch, records]) => {
             const sorted = [...records].sort((a, b) =>
               `${a.studentRollNumber} ${a.studentName}`.localeCompare(
                 `${b.studentRollNumber} ${b.studentName}`,
               ),
             );
-            const branchActual = sorted.reduce(
+            const batchActual = sorted.reduce(
               (sum, record) => sum + getFeeRecordDisplayValues(record).actualAmount,
               0,
             );
-            const branchLate = sorted.reduce(
+            const batchLate = sorted.reduce(
               (sum, record) => sum + getFeeRecordDisplayValues(record).lateFee,
               0,
             );
             return {
-              branch,
+              sectionTitle: `Batch: ${batch}`,
               columns: dueDetailColumns,
               rows: sorted.map((record, index) => {
                 const display = getFeeRecordDisplayValues(record);
+                const branch = dueReportBranch(record, eligibleStudents);
                 const dueDate = record.dueDate
                   ? (() => {
                       const match = String(record.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -870,6 +1019,7 @@ export default function ReportsPage() {
                   sno: String(index + 1),
                   student: record.studentName || '-',
                   roll: record.studentRollNumber || '-',
+                  branch,
                   exam: record.exam?.name || '-',
                   amount: formatReportMoney(display.actualAmount),
                   lateFee: formatReportMoney(display.lateFee),
@@ -877,7 +1027,7 @@ export default function ReportsPage() {
                   dueDate,
                 };
               }),
-              footer: `Branch total: ${sorted.length} dues    Rs. ${formatReportMoney(branchActual + branchLate)}`,
+              footer: `Batch total: ${sorted.length} dues    Rs. ${formatReportMoney(batchActual + batchLate)}`,
             };
           }),
         grandTotal: `Grand total: ${filteredDueRecords.length} dues    Rs. ${formatReportMoney(totalActual + totalLate)}`,
@@ -903,33 +1053,44 @@ export default function ReportsPage() {
       if (lateFee > 0) lateCount += 1;
     }
 
-    const examTotals = new Map<string, { count: number; amount: number; lateFee: number }>();
+    const examTotals = new Map<
+      string,
+      { count: number; amount: number; lateFee: number; batchCounts: Map<string, number> }
+    >();
     for (const payment of filteredPayments) {
       const examName = payment.feeRecord?.exam?.name || 'Unspecified examination';
-      const current = examTotals.get(examName) || { count: 0, amount: 0, lateFee: 0 };
+      const batch = paymentReportBatch(payment, eligibleStudents);
+      const current = examTotals.get(examName) || {
+        count: 0,
+        amount: 0,
+        lateFee: 0,
+        batchCounts: new Map<string, number>(),
+      };
       current.count += 1;
       current.amount += getCollectedAmount(payment);
       current.lateFee += Number(payment.feeRecord?.lateFee || 0);
+      current.batchCounts.set(batch, (current.batchCounts.get(batch) || 0) + 1);
       examTotals.set(examName, current);
     }
 
-    const branchGroups = new Map<string, Payment[]>();
+    const batchGroups = new Map<string, Payment[]>();
     for (const payment of filteredPayments) {
-      const branch = paymentReportBranch(payment, eligibleStudents);
-      const rows = branchGroups.get(branch) || [];
+      const batch = paymentReportBatch(payment, eligibleStudents);
+      const rows = batchGroups.get(batch) || [];
       rows.push(payment);
-      branchGroups.set(branch, rows);
+      batchGroups.set(batch, rows);
     }
 
     const paidDetailColumns = [
-      { key: 'sno', label: 'S.No', width: 28 },
-      { key: 'student', label: 'Student', width: includeExamColumn ? 88 : 118 },
-      { key: 'roll', label: 'Roll', width: 68 },
-      ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 86 }] : []),
-      { key: 'amount', label: 'Amount', width: 58 },
-      { key: 'lateFee', label: 'Late fee', width: 48 },
-      { key: 'method', label: 'Method', width: 50 },
-      { key: 'paidAt', label: 'Paid at', width: 92 },
+      { key: 'sno', label: 'S.No', width: 26 },
+      { key: 'student', label: 'Student', width: includeExamColumn ? 78 : 102 },
+      { key: 'roll', label: 'Roll', width: 62 },
+      { key: 'branch', label: 'Branch', width: 52 },
+      ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 78 }] : []),
+      { key: 'amount', label: 'Amount', width: 52 },
+      { key: 'lateFee', label: 'Late fee', width: 44 },
+      { key: 'method', label: 'Method', width: 46 },
+      { key: 'paidAt', label: 'Paid at', width: 85 },
     ];
 
     downloadPaymentReportPdf({
@@ -958,49 +1119,60 @@ export default function ReportsPage() {
           amount: formatReportMoney(totalCollected),
         },
       ],
-      examSummary: selectedExam
-        ? null
-        : [
-            ...[...examTotals.entries()]
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([exam, totals]) => ({
-                exam,
-                count: String(totals.count),
-                amount: formatReportMoney(totals.amount),
-                lateFee: formatReportMoney(totals.lateFee),
-              })),
-            {
-              exam: 'Total',
-              count: String(filteredPayments.length),
-              amount: formatReportMoney(totalCollected),
-              lateFee: formatReportMoney(totalLate),
-            },
-          ],
-      branchSections: [...branchGroups.entries()]
-        .sort(([a], [b]) => sortBranchKeys(a, b))
-        .map(([branch, records]) => {
+      examSummary: [
+        ...[...examTotals.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([exam, totals]) => {
+            const batchBreakdown = [...totals.batchCounts.keys()]
+              .filter(Boolean)
+              .sort((a, b) => (a === 'Unassigned' ? 1 : b === 'Unassigned' ? -1 : b.localeCompare(a)))
+              .join(', ');
+            return {
+              exam,
+              batchBreakdown: batchBreakdown || '-',
+              count: String(totals.count),
+              amount: formatReportMoney(totals.amount),
+              lateFee: formatReportMoney(totals.lateFee),
+            };
+          }),
+        {
+          exam: 'Total',
+          batchBreakdown: '',
+          count: String(filteredPayments.length),
+          amount: formatReportMoney(totalCollected),
+          lateFee: formatReportMoney(totalLate),
+        },
+      ],
+      detailedSectionTitle: 'Detailed statement - batch wise',
+      sections: [...batchGroups.entries()]
+        .sort(([a], [b]) => sortBatchKeys(a, b))
+        .map(([batch, records]) => {
           const sorted = [...records].sort((a, b) =>
             `${a.feeRecord?.studentRollNumber || ''} ${a.feeRecord?.studentName || ''}`.localeCompare(
               `${b.feeRecord?.studentRollNumber || ''} ${b.feeRecord?.studentName || ''}`,
             ),
           );
-          const branchTotal = sorted.reduce((sum, payment) => sum + getCollectedAmount(payment), 0);
+          const batchTotal = sorted.reduce((sum, payment) => sum + getCollectedAmount(payment), 0);
           return {
-            branch,
+            sectionTitle: `Batch: ${batch}`,
             columns: paidDetailColumns,
-            rows: sorted.map((payment, index) => ({
-              sno: String(index + 1),
-              student: payment.feeRecord?.studentName || '-',
-              roll: payment.feeRecord?.studentRollNumber || '-',
-              exam: payment.feeRecord?.exam?.name || '-',
-              amount: formatReportMoney(getActualAmountValue(payment)),
-              lateFee: formatReportMoney(Number(payment.feeRecord?.lateFee || 0)),
-              method: paymentMethodLabel(payment.paymentMethod),
-              paidAt: paymentTimestamp(payment)
-                ? formatPaymentIST(paymentTimestamp(payment) as string)
-                : '-',
-            })),
-            footer: `Branch total: ${sorted.length} payments    Rs. ${formatReportMoney(branchTotal)}`,
+            rows: sorted.map((payment, index) => {
+              const branch = paymentReportBranch(payment, eligibleStudents);
+              return {
+                sno: String(index + 1),
+                student: payment.feeRecord?.studentName || '-',
+                roll: payment.feeRecord?.studentRollNumber || '-',
+                branch,
+                exam: payment.feeRecord?.exam?.name || '-',
+                amount: formatReportMoney(getActualAmountValue(payment)),
+                lateFee: formatReportMoney(Number(payment.feeRecord?.lateFee || 0)),
+                method: paymentMethodLabel(payment.paymentMethod),
+                paidAt: paymentTimestamp(payment)
+                  ? formatPaymentIST(paymentTimestamp(payment) as string)
+                  : '-',
+              };
+            }),
+            footer: `Batch total: ${sorted.length} payments    Rs. ${formatReportMoney(batchTotal)}`,
           };
         }),
       grandTotal: `Grand total: ${filteredPayments.length} payments    Rs. ${formatReportMoney(totalCollected)}`,
@@ -1038,10 +1210,10 @@ export default function ReportsPage() {
         action={<div />}
       />
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex w-full items-center justify-between gap-3 overflow-x-auto pb-1 pt-0.5">
+        <div className="flex shrink-0 items-center gap-2.5">
           <select
-            className="rounded border px-3 py-2 text-sm"
+            className="h-10 max-w-[260px] truncate rounded border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none shrink-0"
             value={selectedExam ?? ''}
             onChange={(e) => setSelectedExam(e.target.value ? Number(e.target.value) : null)}
           >
@@ -1058,7 +1230,7 @@ export default function ReportsPage() {
           </select>
 
           <select
-            className="rounded border px-3 py-2 text-sm"
+            className="h-10 rounded border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none shrink-0"
             value={batchFilter}
             onChange={(e) => setBatchFilter(e.target.value)}
           >
@@ -1071,7 +1243,7 @@ export default function ReportsPage() {
           </select>
 
           <select
-            className="rounded border px-3 py-2 text-sm"
+            className="h-10 rounded border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none shrink-0"
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
           >
@@ -1085,7 +1257,7 @@ export default function ReportsPage() {
 
           {tab !== 'due' ? (
             <select
-              className="rounded border px-3 py-2 text-sm"
+              className="h-10 rounded border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none shrink-0"
               value={paymentMethodFilter}
               onChange={(e) => setPaymentMethodFilter(e.target.value as 'all' | 'cash' | 'upi')}
             >
@@ -1096,11 +1268,11 @@ export default function ReportsPage() {
           ) : null}
 
           {tab === 'day' ? (
-            <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
-              Date
+            <label className="flex h-10 shrink-0 items-center gap-2 text-sm text-[var(--muted)] whitespace-nowrap">
+              <span>Date</span>
               <input
                 type="date"
-                className="rounded border px-3 py-2 text-sm text-[var(--foreground)]"
+                className="h-10 rounded border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none shrink-0"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
@@ -1108,20 +1280,19 @@ export default function ReportsPage() {
           ) : null}
 
           {tab === 'month' ? (
-            <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
-              Month
+            <label className="flex h-10 shrink-0 items-center gap-2 text-sm text-[var(--muted)] whitespace-nowrap">
+              <span>Month</span>
               <input
                 type="month"
-                className="rounded border px-3 py-2 text-sm text-[var(--foreground)]"
+                className="h-10 rounded border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--foreground)] outline-none shrink-0"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
               />
             </label>
           ) : null}
-
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Tabs
             items={[
               { id: 'day', label: 'Day wise' },
@@ -1131,7 +1302,7 @@ export default function ReportsPage() {
             activeId={tab}
             onChange={(id) => setTab(id as any)}
           />
-          <Button variant="secondary" onClick={handleDownloadPdf}>
+          <Button variant="secondary" onClick={handleDownloadPdf} className="shrink-0">
             Download PDF
           </Button>
         </div>
@@ -1150,19 +1321,146 @@ export default function ReportsPage() {
               {tab === 'due' ? 'dues' : 'payments'}
             </h3>
             <div className="text-sm text-[var(--muted)]">
-              Total amount: {tab === 'due'
+              Total amount: ₹{formatReportMoney(tab === 'due'
                 ? filteredDueRecords.reduce((s, r) => s + getActualAmountValueFromRecord(r), 0)
-                : displayedPayments.reduce((s, p) => s + Number(getActualAmountValue(p) || 0), 0)}
+                : displayedPayments.reduce((s, p) => s + Number(getActualAmountValue(p) || 0), 0))}
             </div>
           </div>
           {tab === 'due' ? (
-            <DataTable<ExamFeeRecord>
-              columns={dueColumns}
-              rows={displayedDueRecords}
-              rowKey={(r) => String(r.id)}
-              loading={dueLoading || dueFilterLoading || eligibleLoading}
-              monochrome
-            />
+            <div className="space-y-6">
+              {/* Overall Due Summary Header */}
+              <div className="grid gap-4 sm:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Examinations</p>
+                  <p className="mt-1 text-2xl font-extrabold text-slate-900">{dueOverallSummary.examCount}</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-amber-700">Unpaid Students</p>
+                  <p className="mt-1 text-2xl font-extrabold text-amber-900">{dueOverallSummary.totalUnpaidStudents}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Total Actual Fee</p>
+                  <p className="mt-1 text-2xl font-extrabold text-slate-800">₹{formatReportMoney(dueOverallSummary.totalActualFee)}</p>
+                </div>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-indigo-700">Total Amount to Pay</p>
+                  <p className="mt-1 text-2xl font-extrabold text-indigo-950">₹{formatReportMoney(dueOverallSummary.totalPayable)}</p>
+                </div>
+              </div>
+
+              {(eligibleLoading || dueBackgroundLoading) && dueSectionsByExam.length > 0 ? (
+                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 px-3.5 py-2 rounded-lg">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                  Checking additional student eligibility in the background…
+                </div>
+              ) : null}
+
+              {isDueInitialLoading ? (
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-500 shadow-sm">
+                  Loading pending due reports by examination…
+                </div>
+              ) : dueSectionsByExam.length === 0 ? (
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-center text-sm text-slate-500 shadow-sm">
+                  No pending dues found for the selected examination or branch filters.
+                </div>
+              ) : (
+                dueSectionsByExam.map((section) => {
+                  const examName = section.exam?.name || `Examination #${section.examId}`;
+                  const examTypeTag = section.exam?.type ? `(${section.exam.type.toUpperCase()})` : '';
+                  const details = [section.exam?.course, section.exam?.branch, section.exam?.batch ? `Batch ${section.exam.batch}` : null]
+                    .filter(Boolean)
+                    .join(' • ');
+
+                  return (
+                    <div key={section.examId} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      {/* Exam Section Header Bar */}
+                      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/90 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />
+                            <h4 className="text-base font-bold text-slate-900">{examName} {examTypeTag}</h4>
+                          </div>
+                          {details ? (
+                            <p className="mt-1 text-xs text-slate-500">{details}</p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-800">
+                            {section.records.length} Unpaid Students
+                          </span>
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">
+                            Actual: ₹{formatReportMoney(section.totalActual)}
+                          </span>
+                          {section.totalLate > 0 ? (
+                            <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 font-semibold text-orange-800">
+                              Late Fee: ₹{formatReportMoney(section.totalLate)}
+                            </span>
+                          ) : null}
+                          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-bold text-indigo-950">
+                            Total Payable: ₹{formatReportMoney(section.totalAmount)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Section Table for this Exam */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200 bg-slate-100/60 text-[0.6875rem] uppercase tracking-wide text-slate-500">
+                              <th className="px-5 py-3 font-semibold">#</th>
+                              <th className="px-5 py-3 font-semibold">Student Name</th>
+                              <th className="px-5 py-3 font-semibold">Roll Number (PIN)</th>
+                              <th className="px-5 py-3 font-semibold">Branch</th>
+                              <th className="px-5 py-3 font-semibold">Actual Fee</th>
+                              <th className="px-5 py-3 font-semibold">Late Fee</th>
+                              <th className="px-5 py-3 font-semibold">Total Amount to Pay</th>
+                              <th className="px-5 py-3 font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {section.records.map((record, index) => {
+                              const display = getFeeRecordDisplayValues(record, section.exam);
+                              const branch = dueReportBranch(record, eligibleStudents);
+
+                              return (
+                                <tr key={record.id || index} className="hover:bg-slate-50/50 transition">
+                                  <td className="px-5 py-3.5 text-xs font-mono text-slate-400">{index + 1}</td>
+                                  <td className="px-5 py-3.5 font-semibold text-slate-900">{record.studentName || '-'}</td>
+                                  <td className="px-5 py-3.5 font-mono text-xs font-semibold text-slate-700">{record.studentRollNumber || '-'}</td>
+                                  <td className="px-5 py-3.5 text-xs text-slate-600">{branch}</td>
+                                  <td className="px-5 py-3.5 text-xs font-medium text-slate-800">₹{formatReportMoney(display.actualAmount)}</td>
+                                  <td className="px-5 py-3.5 text-xs font-medium text-amber-700">
+                                    {display.lateFee > 0 ? `₹${formatReportMoney(display.lateFee)}` : '-'}
+                                  </td>
+                                  <td className="px-5 py-3.5 font-bold text-slate-900">₹{formatReportMoney(display.totalAmount)}</td>
+                                  <td className="px-5 py-3.5">
+                                    <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-amber-800">
+                                      Unpaid
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-800">
+                              <td colSpan={4} className="px-5 py-3 text-right">
+                                Subtotal for {examName}:
+                              </td>
+                              <td className="px-5 py-3 text-slate-900">₹{formatReportMoney(section.totalActual)}</td>
+                              <td className="px-5 py-3 text-amber-800">₹{formatReportMoney(section.totalLate)}</td>
+                              <td className="px-5 py-3 text-indigo-950 text-sm font-extrabold">₹{formatReportMoney(section.totalAmount)}</td>
+                              <td className="px-5 py-3 text-slate-500 font-normal">{section.records.length} unpaid students</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           ) : (
             <DataTable<Payment>
               columns={paymentColumns}
@@ -1176,68 +1474,17 @@ export default function ReportsPage() {
                     Total fee collected
                   </td>
                   <td className="px-4 py-3 text-slate-700">
-                    ₹{displayedPayments.reduce(
+                    ₹{formatReportMoney(displayedPayments.reduce(
                       (total, payment) => total + Number(getActualAmountValue(payment) || 0),
                       0,
-                    )}
+                    ))}
                   </td>
                   <td colSpan={paymentColumns.length - 5} className="px-4 py-3" />
                 </tr>
               }
             />
           )}
-
-          {tab === 'due' && dueBackgroundLoading ? (
-            <div className="mt-3 text-sm text-[var(--muted)]">
-              Loading more due records in the background...
-            </div>
-          ) : null}
-
-          {tab === 'due' && !isDueInitialLoading && !dueBackgroundLoading && totalDueCount > 0 ? (
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-[var(--muted)]">
-                Showing {Math.min((duePage - 1) * duePageSize + 1, totalDueCount)} -{' '}
-                {Math.min(duePage * duePageSize, totalDueCount)} of {totalDueCount} dues
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <label className="text-sm text-[var(--muted)]">
-                  Page size:{' '}
-                  <select
-                    className="ml-2 rounded border px-2 py-1 text-sm"
-                    value={duePageSize}
-                    onChange={(e) => setDuePageSize(Number(e.target.value))}
-                  >
-                    {DUE_PAGE_SIZE_OPTIONS.map((size) => (
-                      <option key={size} value={size}>
-                        {size}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    disabled={duePage <= 1 || dueLoading || dueFilterLoading}
-                    onClick={() => setDuePage((prev) => Math.max(prev - 1, 1))}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-[var(--muted)]">
-                    Page {duePage} of {pageCount}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    disabled={duePage >= pageCount || dueLoading || dueFilterLoading}
-                    onClick={() => setDuePage((prev) => Math.min(prev + 1, pageCount))}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </div>
-
       </div>
 
     </div>

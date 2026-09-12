@@ -10,17 +10,21 @@ export type PaymentReportSummaryRow = {
 
 export type PaymentReportExamSummaryRow = {
   exam: string;
+  batchBreakdown?: string;
   count: string;
   amount: string;
   lateFee: string;
 };
 
-export type PaymentReportBranchSection = {
-  branch: string;
+export type PaymentReportSection = {
+  sectionTitle?: string;
+  branch?: string;
   columns: Column[];
   rows: Array<Record<string, string>>;
   footer: string;
 };
+
+export type PaymentReportBranchSection = PaymentReportSection;
 
 export type PaymentReportPdfInput = {
   collegeName: string;
@@ -31,7 +35,9 @@ export type PaymentReportPdfInput = {
   transactionSummaryTitle: string;
   transactionSummary: PaymentReportSummaryRow[];
   examSummary?: PaymentReportExamSummaryRow[] | null;
-  branchSections: PaymentReportBranchSection[];
+  detailedSectionTitle?: string;
+  sections?: PaymentReportSection[];
+  branchSections?: PaymentReportSection[];
   grandTotal: string;
   fileName: string;
 };
@@ -237,13 +243,15 @@ export function downloadPaymentReportPdf(input: PaymentReportPdfInput) {
     drawSectionTitle('Exam-wise summary');
     drawSimpleTable(
       [
-        { key: 'exam', label: 'Examination', width: 240 },
-        { key: 'count', label: 'Count', width: 60 },
-        { key: 'amount', label: 'Amount (Rs.)', width: 100 },
-        { key: 'lateFee', label: 'Late fee (Rs.)', width: 100 },
+        { key: 'exam', label: 'Examination', width: 200 },
+        { key: 'batchBreakdown', label: 'Batch', width: 100 },
+        { key: 'count', label: 'Count', width: 45 },
+        { key: 'amount', label: 'Amount (Rs.)', width: 75 },
+        { key: 'lateFee', label: 'Late fee (Rs.)', width: 75 },
       ],
       input.examSummary.map((row) => ({
         exam: row.exam,
+        batchBreakdown: row.batchBreakdown || '-',
         count: row.count,
         amount: row.amount,
         lateFee: row.lateFee,
@@ -252,21 +260,27 @@ export function downloadPaymentReportPdf(input: PaymentReportPdfInput) {
     );
   }
 
-  drawSectionTitle('Detailed statement - branch wise');
+  const detailedTitle = input.detailedSectionTitle || 'Detailed statement - batch wise';
+  drawSectionTitle(detailedTitle);
 
-  if (!input.branchSections.length) {
+  const sections = input.sections || input.branchSections || [];
+
+  if (!sections.length) {
     doc.setFont('times', 'italic');
     doc.setFontSize(10);
     doc.text('No records for the selected filters.', xStart, y);
     y += 20;
   }
 
-  input.branchSections.forEach((section) => {
+  sections.forEach((section) => {
     ensureSpace(72);
     y += 8;
     doc.setFont('times', 'bold');
     doc.setFontSize(10);
-    doc.text(`Branch: ${section.branch}`, xStart, y);
+    const titleText =
+      section.sectionTitle ||
+      (section.branch ? `Branch: ${section.branch}` : 'Batch: Unassigned');
+    doc.text(titleText, xStart, y);
     y += 8;
     hLine(0.6);
     y += 10;
