@@ -227,6 +227,73 @@ function dueReportBranch(
   });
 }
 
+function getExamBatches(exam?: Exam | null): string[] {
+  if (!exam) return [];
+  const set = new Set<string>();
+  if (exam.batch?.trim()) set.add(exam.batch.trim());
+  for (const scope of exam.scopes || []) {
+    if (scope.batch?.trim()) set.add(scope.batch.trim());
+  }
+  return Array.from(set).sort((a, b) => b.localeCompare(a));
+}
+
+function findEligibleBatch(
+  eligibleStudents: (EligibleExamStudent & { examId: number })[],
+  examId: number | undefined,
+  rollNumber: string | null | undefined,
+) {
+  if (!examId || !rollNumber) return null;
+  const roll = rollNumber.trim().toLowerCase();
+  return (
+    eligibleStudents.find(
+      (student) =>
+        student.examId === examId && student.rollNumber.trim().toLowerCase() === roll,
+    )?.batch ?? null
+  );
+}
+
+function resolveReportBatch(options: {
+  exam?: Exam | null;
+  examId?: number;
+  rollNumber?: string | null;
+  eligibleBatch?: string | null;
+}) {
+  const fromEligible = options.eligibleBatch?.trim();
+  if (fromEligible) return fromEligible;
+  const fromExam = options.exam?.batch?.trim();
+  if (fromExam) return fromExam;
+  return '-';
+}
+
+function paymentReportBatch(
+  payment: Payment,
+  eligibleStudents: (EligibleExamStudent & { examId: number })[],
+) {
+  const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId;
+  return resolveReportBatch({
+    exam: payment.feeRecord?.exam,
+    examId,
+    rollNumber: payment.feeRecord?.studentRollNumber,
+    eligibleBatch: findEligibleBatch(
+      eligibleStudents,
+      examId,
+      payment.feeRecord?.studentRollNumber,
+    ),
+  });
+}
+
+function dueReportBatch(
+  record: ExamFeeRecord,
+  eligibleStudents: (EligibleExamStudent & { examId: number })[],
+) {
+  return resolveReportBatch({
+    exam: record.exam,
+    examId: record.examId,
+    rollNumber: record.studentRollNumber,
+    eligibleBatch: findEligibleBatch(eligibleStudents, record.examId, record.studentRollNumber),
+  });
+}
+
 function getCollectedAmount(payment: Payment) {
   return Number(getActualAmountValue(payment) || 0) + Number(payment.feeRecord?.lateFee || 0);
 }
@@ -265,6 +332,7 @@ export default function ReportsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExam, setSelectedExam] = useState<number | null>(null);
   const [branchFilter, setBranchFilter] = useState<string>('');
+  const [batchFilter, setBatchFilter] = useState<string>('');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | 'cash' | 'upi'>('all');
 
   useEffect(() => {
@@ -350,7 +418,7 @@ export default function ReportsPage() {
     }
     setDueFilterLoading(false);
     return undefined;
-  }, [selectedExam, branchFilter, tab]);
+  }, [selectedExam, branchFilter, batchFilter, tab]);
 
   useEffect(() => {
     setDuePage(1);
@@ -433,13 +501,17 @@ export default function ReportsPage() {
         const branchValue = paymentReportBranch(p, eligibleStudents);
         if (branchValue.toLowerCase() !== branchFilter.toLowerCase()) return false;
       }
+      if (batchFilter) {
+        const batchValue = paymentReportBatch(p, eligibleStudents);
+        if (batchValue.toLowerCase() !== batchFilter.toLowerCase()) return false;
+      }
       if (
         paymentMethodFilter !== 'all' &&
         String(p.paymentMethod || '').toLowerCase() !== paymentMethodFilter
       ) return false;
       return true;
     });
-  }, [payments, selectedExam, branchFilter, paymentMethodFilter, selectedDate, selectedMonth, tab, eligibleStudents]);
+  }, [payments, selectedExam, branchFilter, batchFilter, paymentMethodFilter, selectedDate, selectedMonth, tab, eligibleStudents]);
 
   const filteredDueRecords = useMemo(() => {
     const paidRolls = new Set(
@@ -455,6 +527,10 @@ export default function ReportsPage() {
         const branchValue = dueReportBranch(record, eligibleStudents);
         if (branchValue.toLowerCase() !== branchFilter.toLowerCase()) return false;
       }
+      if (batchFilter) {
+        const batchValue = dueReportBatch(record, eligibleStudents);
+        if (batchValue.toLowerCase() !== batchFilter.toLowerCase()) return false;
+      }
       return true;
     });
 
@@ -466,6 +542,11 @@ export default function ReportsPage() {
       if (branchFilter) {
         const branchValue = String(student.branch || '').toLowerCase();
         if (branchValue !== branchFilter.toLowerCase()) return false;
+      }
+      if (batchFilter) {
+        const exam = exams.find((ex) => ex.id === student.examId);
+        const batchValue = String(student.batch || exam?.batch || '').toLowerCase();
+        if (batchValue !== batchFilter.toLowerCase()) return false;
       }
       return true;
     });
@@ -491,7 +572,7 @@ export default function ReportsPage() {
     });
 
     return [...unpaidRecords, ...eligibleUnpaidRecords];
-  }, [dueRecords, branchFilter, eligibleStudents, exams, payments, selectedExam]);
+  }, [dueRecords, branchFilter, batchFilter, eligibleStudents, exams, payments, selectedExam]);
 
   const paymentColumns = useMemo(
     () => [
@@ -509,6 +590,7 @@ export default function ReportsPage() {
       },
       { key: 'student', header: 'Student', render: (r: Payment) => r.feeRecord?.studentName || '-' },
       { key: 'roll', header: 'Roll', render: (r: Payment) => r.feeRecord?.studentRollNumber || '-' },
+      { key: 'batch', header: 'Batch', render: (r: Payment) => paymentReportBatch(r, eligibleStudents) },
       {
         key: 'amount',
         header: 'Actual amount',
@@ -519,7 +601,7 @@ export default function ReportsPage() {
       { key: 'txn', header: 'Transaction', render: (r: Payment) => r.transactionReference || '-' },
       { key: 'receipt', header: 'Receipt', render: (r: Payment) => r.receiptNumber || '-' },
     ],
-    [tab],
+    [tab, eligibleStudents],
   );
 
   const dueColumns = useMemo(
@@ -540,6 +622,7 @@ export default function ReportsPage() {
       { key: 'exam', header: 'Exam', render: (r: ExamFeeRecord) => r.exam?.name || '-' },
       { key: 'student', header: 'Student', render: (r: ExamFeeRecord) => r.studentName || '-' },
       { key: 'roll', header: 'Roll', render: (r: ExamFeeRecord) => r.studentRollNumber || '-' },
+      { key: 'batch', header: 'Batch', render: (r: ExamFeeRecord) => dueReportBatch(r, eligibleStudents) },
       {
         key: 'applied',
         header: 'Fee applied',
@@ -566,7 +649,7 @@ export default function ReportsPage() {
       },
       { key: 'status', header: 'Status', render: (r: ExamFeeRecord) => String(r.status) },
     ],
-    [],
+    [eligibleStudents, exams],
   );
 
   const branchOptions = useMemo(() => {
@@ -580,6 +663,29 @@ export default function ReportsPage() {
     }
     return Array.from(set).sort();
   }, [exams, selectedExamObject]);
+
+  const batchOptions = useMemo(() => {
+    const set = new Set<string>();
+    const sources = selectedExamObject ? [selectedExamObject] : exams;
+    for (const exam of sources) {
+      for (const batch of getExamBatches(exam)) {
+        set.add(batch);
+      }
+    }
+    for (const student of eligibleStudents) {
+      if (selectedExam && student.examId !== selectedExam) continue;
+      if (student.batch?.trim()) {
+        set.add(student.batch.trim());
+      }
+    }
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [exams, selectedExam, selectedExamObject, eligibleStudents]);
+
+  useEffect(() => {
+    if (batchFilter && !batchOptions.includes(batchFilter)) {
+      setBatchFilter('');
+    }
+  }, [batchOptions, batchFilter]);
 
   const totalDueCount = filteredDueRecords.length;
   const pageCount = Math.max(1, Math.ceil(totalDueCount / duePageSize));
@@ -621,6 +727,7 @@ export default function ReportsPage() {
     const filters: string[] = [];
     filters.push(selectedExamObject ? `Exam: ${selectedExamObject.name}` : 'Exam: All examinations');
     filters.push(branchFilter ? `Branch: ${branchFilter}` : 'Branch: All branches');
+    filters.push(batchFilter ? `Batch: ${batchFilter}` : 'Batch: All batches');
     if (!isDue) {
       filters.push(
         paymentMethodFilter !== 'all'
@@ -939,9 +1046,26 @@ export default function ReportsPage() {
             onChange={(e) => setSelectedExam(e.target.value ? Number(e.target.value) : null)}
           >
             <option value="">Select exam</option>
-            {exams.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.name} — {ex.course} / {ex.branch}
+            {exams.map((ex) => {
+              const batches = getExamBatches(ex);
+              const batchText = batches.length ? ` · Batch: ${batches.join(', ')}` : '';
+              return (
+                <option key={ex.id} value={ex.id}>
+                  {ex.name} — {ex.course} / {ex.branch}{batchText}
+                </option>
+              );
+            })}
+          </select>
+
+          <select
+            className="rounded border px-3 py-2 text-sm"
+            value={batchFilter}
+            onChange={(e) => setBatchFilter(e.target.value)}
+          >
+            <option value="">All batches</option>
+            {batchOptions.map((batch) => (
+              <option key={batch} value={batch}>
+                {batch}
               </option>
             ))}
           </select>
@@ -1048,7 +1172,7 @@ export default function ReportsPage() {
               monochrome
               footer={
                 <tr className="font-semibold">
-                  <td colSpan={3} className="px-4 py-3 text-right">
+                  <td colSpan={4} className="px-4 py-3 text-right">
                     Total fee collected
                   </td>
                   <td className="px-4 py-3 text-slate-700">
@@ -1057,7 +1181,7 @@ export default function ReportsPage() {
                       0,
                     )}
                   </td>
-                  <td colSpan={paymentColumns.length - 4} className="px-4 py-3" />
+                  <td colSpan={paymentColumns.length - 5} className="px-4 py-3" />
                 </tr>
               }
             />
