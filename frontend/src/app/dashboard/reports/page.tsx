@@ -7,6 +7,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
 import { downloadPaymentReportPdf } from '@/lib/printPaymentReport';
+import { downloadPaymentReportExcel } from '@/lib/exportPaymentReportExcel';
 import type { ExamFeeRecord, Payment } from '@/types/fee';
 import type { EligibleExamStudent, Exam } from '@/types/exam';
 import { formatPaymentIST } from '@/lib/formatIST';
@@ -638,25 +639,35 @@ export default function ReportsPage() {
     return [...unpaidRecords, ...eligibleUnpaidRecords];
   }, [dueRecords, branchFilter, batchFilter, eligibleStudents, exams, payments, selectedExam]);
 
-  const dueSectionsByExam = useMemo(() => {
-    const map = new Map<
-      number,
-      {
-        examId: number;
-        exam: Exam | null;
-        records: ExamFeeRecord[];
-        totalActual: number;
-        totalLate: number;
-        totalAmount: number;
-      }
+  const dueSectionsByBatch = useMemo(() => {
+    const batchMap = new Map<
+      string,
+      Map<
+        number,
+        {
+          examId: number;
+          exam: Exam | null;
+          records: ExamFeeRecord[];
+          totalActual: number;
+          totalLate: number;
+          totalAmount: number;
+        }
+      >
     >();
 
     for (const record of filteredDueRecords) {
+      const batch = dueReportBatch(record, eligibleStudents);
       const examId = record.examId;
       const exam = record.exam ?? exams.find((e) => e.id === examId) ?? null;
       const display = getFeeRecordDisplayValues(record, exam);
 
-      let section = map.get(examId);
+      let examMap = batchMap.get(batch);
+      if (!examMap) {
+        examMap = new Map();
+        batchMap.set(batch, examMap);
+      }
+
+      let section = examMap.get(examId);
       if (!section) {
         section = {
           examId,
@@ -666,7 +677,7 @@ export default function ReportsPage() {
           totalLate: 0,
           totalAmount: 0,
         };
-        map.set(examId, section);
+        examMap.set(examId, section);
       }
 
       section.records.push(record);
@@ -675,24 +686,59 @@ export default function ReportsPage() {
       section.totalAmount += display.totalAmount;
     }
 
-    return Array.from(map.values()).sort((a, b) => {
-      const nameA = a.exam?.name || `Exam ${a.examId}`;
-      const nameB = b.exam?.name || `Exam ${b.examId}`;
-      return nameA.localeCompare(nameB);
-    });
-  }, [filteredDueRecords, exams]);
+    const sortBatchKeys = (a: string, b: string) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return b.localeCompare(a);
+    };
+
+    return Array.from(batchMap.entries())
+      .sort(([a], [b]) => sortBatchKeys(a, b))
+      .map(([batch, examMap]) => {
+        const examSections = Array.from(examMap.values()).sort((a, b) => {
+          const nameA = a.exam?.name || `Exam ${a.examId}`;
+          const nameB = b.exam?.name || `Exam ${b.examId}`;
+          return nameA.localeCompare(nameB);
+        });
+
+        let totalUnpaidStudents = 0;
+        let totalActual = 0;
+        let totalLate = 0;
+        let totalAmount = 0;
+
+        for (const sec of examSections) {
+          totalUnpaidStudents += sec.records.length;
+          totalActual += sec.totalActual;
+          totalLate += sec.totalLate;
+          totalAmount += sec.totalAmount;
+        }
+
+        return {
+          batch,
+          examSections,
+          totalUnpaidStudents,
+          totalActual,
+          totalLate,
+          totalAmount,
+        };
+      });
+  }, [filteredDueRecords, eligibleStudents, exams]);
 
   const dueOverallSummary = useMemo(() => {
     let totalUnpaidStudents = 0;
     let totalActualFee = 0;
     let totalLateFee = 0;
     let totalPayable = 0;
+    const uniqueExams = new Set<number>();
 
-    for (const section of dueSectionsByExam) {
-      totalUnpaidStudents += section.records.length;
-      totalActualFee += section.totalActual;
-      totalLateFee += section.totalLate;
-      totalPayable += section.totalAmount;
+    for (const batchGroup of dueSectionsByBatch) {
+      totalUnpaidStudents += batchGroup.totalUnpaidStudents;
+      totalActualFee += batchGroup.totalActual;
+      totalLateFee += batchGroup.totalLate;
+      totalPayable += batchGroup.totalAmount;
+      for (const section of batchGroup.examSections) {
+        uniqueExams.add(section.examId);
+      }
     }
 
     return {
@@ -700,9 +746,9 @@ export default function ReportsPage() {
       totalActualFee,
       totalLateFee,
       totalPayable,
-      examCount: dueSectionsByExam.length,
+      examCount: uniqueExams.size,
     };
-  }, [dueSectionsByExam]);
+  }, [dueSectionsByBatch]);
 
   const paymentColumns = useMemo(
     () => [
@@ -834,7 +880,7 @@ export default function ReportsPage() {
 
   const displayedPayments = filteredPayments;
 
-  function handleDownloadPdf() {
+  function handleExport(format: 'pdf' | 'excel') {
     const isDue = tab === 'due';
     const reportPeriod =
       tab === 'day'
@@ -927,7 +973,7 @@ export default function ReportsPage() {
         { key: 'dueDate', label: 'Due date', width: 62 },
       ];
 
-      downloadPaymentReportPdf({
+      const dueReportPayload = {
         collegeName,
         documentTitle,
         periodLabel: reportPeriod,
@@ -978,61 +1024,88 @@ export default function ReportsPage() {
         detailedSectionTitle: 'Detailed statement - batch wise',
         sections: [...batchGroups.entries()]
           .sort(([a], [b]) => sortBatchKeys(a, b))
-          .map(([batch, records]) => {
-            const sorted = [...records].sort((a, b) =>
-              `${a.studentRollNumber} ${a.studentName}`.localeCompare(
-                `${b.studentRollNumber} ${b.studentName}`,
-              ),
-            );
-            const batchActual = sorted.reduce(
-              (sum, record) => sum + getFeeRecordDisplayValues(record).actualAmount,
-              0,
-            );
-            const batchLate = sorted.reduce(
-              (sum, record) => sum + getFeeRecordDisplayValues(record).lateFee,
-              0,
-            );
-            return {
-              sectionTitle: `Batch: ${batch}`,
-              columns: dueDetailColumns,
-              rows: sorted.map((record, index) => {
-                const display = getFeeRecordDisplayValues(record);
-                const branch = dueReportBranch(record, eligibleStudents);
-                const dueDate = record.dueDate
-                  ? (() => {
-                      const match = String(record.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
-                      if (match) {
-                        const [, year, month, day] = match;
-                        return new Date(
-                          Number(year),
-                          Number(month) - 1,
-                          Number(day),
-                          12,
-                          0,
-                          0,
-                        ).toLocaleDateString('en-IN');
-                      }
-                      return new Date(record.dueDate).toLocaleDateString('en-IN');
-                    })()
-                  : '-';
+          .flatMap(([batch, records]) => {
+            const examMap = new Map<string, ExamFeeRecord[]>();
+            for (const r of records) {
+              const examName = r.exam?.name || 'Unspecified examination';
+              const exRows = examMap.get(examName) || [];
+              exRows.push(r);
+              examMap.set(examName, exRows);
+            }
+
+            return Array.from(examMap.entries())
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([examName, examRecords]) => {
+                const sorted = [...examRecords].sort((a, b) =>
+                  `${a.studentRollNumber} ${a.studentName}`.localeCompare(
+                    `${b.studentRollNumber} ${b.studentName}`,
+                  ),
+                );
+                const batchActual = sorted.reduce(
+                  (sum, record) => sum + getFeeRecordDisplayValues(record).actualAmount,
+                  0,
+                );
+                const batchLate = sorted.reduce(
+                  (sum, record) => sum + getFeeRecordDisplayValues(record).lateFee,
+                  0,
+                );
+                const batchTotal = batchActual + batchLate;
                 return {
-                  sno: String(index + 1),
-                  student: record.studentName || '-',
-                  roll: record.studentRollNumber || '-',
-                  branch,
-                  exam: record.exam?.name || '-',
-                  amount: formatReportMoney(display.actualAmount),
-                  lateFee: formatReportMoney(display.lateFee),
-                  status: String(record.status),
-                  dueDate,
+                  sectionTitle: `Batch: ${batch}  |  Exam: ${examName}`,
+                  examName,
+                  batch,
+                  columns: dueDetailColumns,
+                  rows: sorted.map((record, index) => {
+                    const display = getFeeRecordDisplayValues(record);
+                    const branch = dueReportBranch(record, eligibleStudents);
+                    const dueDate = record.dueDate
+                      ? (() => {
+                          const match = String(record.dueDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                          if (match) {
+                            const [, year, month, day] = match;
+                            return new Date(
+                              Number(year),
+                              Number(month) - 1,
+                              Number(day),
+                              12,
+                              0,
+                              0,
+                            ).toLocaleDateString('en-IN');
+                          }
+                          return new Date(record.dueDate).toLocaleDateString('en-IN');
+                        })()
+                      : '-';
+                    return {
+                      sno: String(index + 1),
+                      student: record.studentName || '-',
+                      roll: record.studentRollNumber || '-',
+                      branch,
+                      exam: record.exam?.name || '-',
+                      amount: formatReportMoney(display.actualAmount),
+                      lateFee: formatReportMoney(display.lateFee),
+                      status: String(record.status),
+                      dueDate,
+                    };
+                  }),
+                  footer: `Subtotal (${batch} - ${examName}): ${sorted.length} dues    Rs. ${formatReportMoney(batchTotal)}`,
+                  footerData: {
+                    countLabel: `${sorted.length} unpaid students`,
+                    totalActual: batchActual,
+                    totalLate: batchLate,
+                    totalAmount: batchTotal,
+                  },
                 };
-              }),
-              footer: `Batch total: ${sorted.length} dues    Rs. ${formatReportMoney(batchActual + batchLate)}`,
-            };
+              });
           }),
         grandTotal: `Grand total: ${filteredDueRecords.length} dues    Rs. ${formatReportMoney(totalActual + totalLate)}`,
-        fileName: `due-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`,
-      });
+        fileName: `due-report-${new Date().toISOString().replace(/[:.]/g, '-')}.${format === 'excel' ? 'xlsx' : 'pdf'}`,
+      };
+
+      if (format === 'excel') {
+        downloadPaymentReportExcel(dueReportPayload);
+      } else {
+        downloadPaymentReportPdf(dueReportPayload);
+      }
       return;
     }
 
@@ -1093,7 +1166,7 @@ export default function ReportsPage() {
       { key: 'paidAt', label: 'Paid at', width: 85 },
     ];
 
-    downloadPaymentReportPdf({
+    const paymentReportPayload = {
       collegeName,
       documentTitle,
       periodLabel: reportPeriod,
@@ -1146,38 +1219,66 @@ export default function ReportsPage() {
       detailedSectionTitle: 'Detailed statement - batch wise',
       sections: [...batchGroups.entries()]
         .sort(([a], [b]) => sortBatchKeys(a, b))
-        .map(([batch, records]) => {
-          const sorted = [...records].sort((a, b) =>
-            `${a.feeRecord?.studentRollNumber || ''} ${a.feeRecord?.studentName || ''}`.localeCompare(
-              `${b.feeRecord?.studentRollNumber || ''} ${b.feeRecord?.studentName || ''}`,
-            ),
-          );
-          const batchTotal = sorted.reduce((sum, payment) => sum + getCollectedAmount(payment), 0);
-          return {
-            sectionTitle: `Batch: ${batch}`,
-            columns: paidDetailColumns,
-            rows: sorted.map((payment, index) => {
-              const branch = paymentReportBranch(payment, eligibleStudents);
+        .flatMap(([batch, records]) => {
+          const examMap = new Map<string, Payment[]>();
+          for (const p of records) {
+            const examName = p.feeRecord?.exam?.name || 'Unspecified examination';
+            const exRows = examMap.get(examName) || [];
+            exRows.push(p);
+            examMap.set(examName, exRows);
+          }
+
+          return Array.from(examMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([examName, examPayments]) => {
+              const sorted = [...examPayments].sort((a, b) =>
+                `${a.feeRecord?.studentRollNumber || ''} ${a.feeRecord?.studentName || ''}`.localeCompare(
+                  `${b.feeRecord?.studentRollNumber || ''} ${b.feeRecord?.studentName || ''}`,
+                ),
+              );
+              const batchTotal = sorted.reduce((sum, payment) => sum + getCollectedAmount(payment), 0);
+              const batchLate = sorted.reduce((sum, payment) => sum + Number(payment.feeRecord?.lateFee || 0), 0);
+              const batchActual = sorted.reduce((sum, payment) => sum + getActualAmountValue(payment), 0);
               return {
-                sno: String(index + 1),
-                student: payment.feeRecord?.studentName || '-',
-                roll: payment.feeRecord?.studentRollNumber || '-',
-                branch,
-                exam: payment.feeRecord?.exam?.name || '-',
-                amount: formatReportMoney(getActualAmountValue(payment)),
-                lateFee: formatReportMoney(Number(payment.feeRecord?.lateFee || 0)),
-                method: paymentMethodLabel(payment.paymentMethod),
-                paidAt: paymentTimestamp(payment)
-                  ? formatPaymentIST(paymentTimestamp(payment) as string)
-                  : '-',
+                sectionTitle: `Batch: ${batch}  |  Exam: ${examName}`,
+                examName,
+                batch,
+                columns: paidDetailColumns,
+                rows: sorted.map((payment, index) => {
+                  const branch = paymentReportBranch(payment, eligibleStudents);
+                  return {
+                    sno: String(index + 1),
+                    student: payment.feeRecord?.studentName || '-',
+                    roll: payment.feeRecord?.studentRollNumber || '-',
+                    branch,
+                    exam: payment.feeRecord?.exam?.name || '-',
+                    amount: formatReportMoney(getActualAmountValue(payment)),
+                    lateFee: formatReportMoney(Number(payment.feeRecord?.lateFee || 0)),
+                    method: paymentMethodLabel(payment.paymentMethod),
+                    paidAt: paymentTimestamp(payment)
+                      ? formatPaymentIST(paymentTimestamp(payment) as string)
+                      : '-',
+                  };
+                }),
+                footer: `Subtotal (${batch} - ${examName}): ${sorted.length} payments    Rs. ${formatReportMoney(batchTotal)}`,
+                footerData: {
+                  countLabel: `${sorted.length} payments`,
+                  totalActual: batchActual,
+                  totalLate: batchLate,
+                  totalAmount: batchTotal,
+                },
               };
-            }),
-            footer: `Batch total: ${sorted.length} payments    Rs. ${formatReportMoney(batchTotal)}`,
-          };
+            });
         }),
       grandTotal: `Grand total: ${filteredPayments.length} payments    Rs. ${formatReportMoney(totalCollected)}`,
-      fileName: `payment-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`,
-    });
+      fileName: `payment-report-${new Date().toISOString().replace(/[:.]/g, '-')}.${format === 'excel' ? 'xlsx' : 'pdf'}`,
+    };
+
+    if (format === 'excel') {
+      downloadPaymentReportExcel(paymentReportPayload);
+    } else {
+      downloadPaymentReportPdf(paymentReportPayload);
+    }
   }
 
   const columns = [
@@ -1302,7 +1403,10 @@ export default function ReportsPage() {
             activeId={tab}
             onChange={(id) => setTab(id as any)}
           />
-          <Button variant="secondary" onClick={handleDownloadPdf} className="shrink-0">
+          <Button variant="secondary" onClick={() => handleExport('excel')} className="shrink-0">
+            Export Excel
+          </Button>
+          <Button variant="secondary" onClick={() => handleExport('pdf')} className="shrink-0">
             Download PDF
           </Button>
         </div>
@@ -1348,7 +1452,7 @@ export default function ReportsPage() {
                 </div>
               </div>
 
-              {(eligibleLoading || dueBackgroundLoading) && dueSectionsByExam.length > 0 ? (
+              {(eligibleLoading || dueBackgroundLoading) && dueSectionsByBatch.length > 0 ? (
                 <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50/80 border border-amber-200/60 px-3.5 py-2 rounded-lg">
                   <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
                   Checking additional student eligibility in the background…
@@ -1357,108 +1461,145 @@ export default function ReportsPage() {
 
               {isDueInitialLoading ? (
                 <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-500 shadow-sm">
-                  Loading pending due reports by examination…
+                  Loading pending due reports by batch…
                 </div>
-              ) : dueSectionsByExam.length === 0 ? (
+              ) : dueSectionsByBatch.length === 0 ? (
                 <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-center text-sm text-slate-500 shadow-sm">
-                  No pending dues found for the selected examination or branch filters.
+                  No pending dues found for the selected examination, batch, or branch filters.
                 </div>
               ) : (
-                dueSectionsByExam.map((section) => {
-                  const examName = section.exam?.name || `Examination #${section.examId}`;
-                  const examTypeTag = section.exam?.type ? `(${section.exam.type.toUpperCase()})` : '';
-                  const details = [section.exam?.course, section.exam?.branch, section.exam?.batch ? `Batch ${section.exam.batch}` : null]
-                    .filter(Boolean)
-                    .join(' • ');
-
-                  return (
-                    <div key={section.examId} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                      {/* Exam Section Header Bar */}
-                      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/90 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />
-                            <h4 className="text-base font-bold text-slate-900">{examName} {examTypeTag}</h4>
-                          </div>
-                          {details ? (
-                            <p className="mt-1 text-xs text-slate-500">{details}</p>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-800">
-                            {section.records.length} Unpaid Students
-                          </span>
-                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">
-                            Actual: ₹{formatReportMoney(section.totalActual)}
-                          </span>
-                          {section.totalLate > 0 ? (
-                            <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 font-semibold text-orange-800">
-                              Late Fee: ₹{formatReportMoney(section.totalLate)}
-                            </span>
-                          ) : null}
-                          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-bold text-indigo-950">
-                            Total Payable: ₹{formatReportMoney(section.totalAmount)}
-                          </span>
-                        </div>
+                dueSectionsByBatch.map((batchGroup) => (
+                  <div key={batchGroup.batch} className="space-y-4 rounded-2xl border border-slate-300 bg-slate-50/60 p-5 shadow-sm">
+                    {/* Batch Group Header Bar */}
+                    <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <span className="inline-block h-3.5 w-3.5 rounded-full bg-indigo-600" />
+                        <h3 className="text-lg font-extrabold text-slate-900">
+                          Batch: {batchGroup.batch}
+                        </h3>
+                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-800">
+                          {batchGroup.examSections.length} {batchGroup.examSections.length === 1 ? 'Exam' : 'Exams'}
+                        </span>
                       </div>
 
-                      {/* Section Table for this Exam */}
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-200 bg-slate-100/60 text-[0.6875rem] uppercase tracking-wide text-slate-500">
-                              <th className="px-5 py-3 font-semibold">#</th>
-                              <th className="px-5 py-3 font-semibold">Student Name</th>
-                              <th className="px-5 py-3 font-semibold">Roll Number (PIN)</th>
-                              <th className="px-5 py-3 font-semibold">Branch</th>
-                              <th className="px-5 py-3 font-semibold">Actual Fee</th>
-                              <th className="px-5 py-3 font-semibold">Late Fee</th>
-                              <th className="px-5 py-3 font-semibold">Total Amount to Pay</th>
-                              <th className="px-5 py-3 font-semibold">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {section.records.map((record, index) => {
-                              const display = getFeeRecordDisplayValues(record, section.exam);
-                              const branch = dueReportBranch(record, eligibleStudents);
-
-                              return (
-                                <tr key={record.id || index} className="hover:bg-slate-50/50 transition">
-                                  <td className="px-5 py-3.5 text-xs font-mono text-slate-400">{index + 1}</td>
-                                  <td className="px-5 py-3.5 font-semibold text-slate-900">{record.studentName || '-'}</td>
-                                  <td className="px-5 py-3.5 font-mono text-xs font-semibold text-slate-700">{record.studentRollNumber || '-'}</td>
-                                  <td className="px-5 py-3.5 text-xs text-slate-600">{branch}</td>
-                                  <td className="px-5 py-3.5 text-xs font-medium text-slate-800">₹{formatReportMoney(display.actualAmount)}</td>
-                                  <td className="px-5 py-3.5 text-xs font-medium text-amber-700">
-                                    {display.lateFee > 0 ? `₹${formatReportMoney(display.lateFee)}` : '-'}
-                                  </td>
-                                  <td className="px-5 py-3.5 font-bold text-slate-900">₹{formatReportMoney(display.totalAmount)}</td>
-                                  <td className="px-5 py-3.5">
-                                    <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-amber-800">
-                                      Unpaid
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                          <tfoot>
-                            <tr className="border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-800">
-                              <td colSpan={4} className="px-5 py-3 text-right">
-                                Subtotal for {examName}:
-                              </td>
-                              <td className="px-5 py-3 text-slate-900">₹{formatReportMoney(section.totalActual)}</td>
-                              <td className="px-5 py-3 text-amber-800">₹{formatReportMoney(section.totalLate)}</td>
-                              <td className="px-5 py-3 text-indigo-950 text-sm font-extrabold">₹{formatReportMoney(section.totalAmount)}</td>
-                              <td className="px-5 py-3 text-slate-500 font-normal">{section.records.length} unpaid students</td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-800">
+                          {batchGroup.totalUnpaidStudents} Unpaid Students
+                        </span>
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">
+                          Actual: ₹{formatReportMoney(batchGroup.totalActual)}
+                        </span>
+                        {batchGroup.totalLate > 0 ? (
+                          <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 font-semibold text-orange-800">
+                            Late Fee: ₹{formatReportMoney(batchGroup.totalLate)}
+                          </span>
+                        ) : null}
+                        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-bold text-indigo-950">
+                          Batch Total: ₹{formatReportMoney(batchGroup.totalAmount)}
+                        </span>
                       </div>
                     </div>
-                  );
-                })
+
+                    {/* Separate Exam Tables for each Exam in this Batch */}
+                    <div className="space-y-4 pt-1">
+                      {batchGroup.examSections.map((section) => {
+                        const examName = section.exam?.name || `Examination #${section.examId}`;
+                        const examTypeTag = section.exam?.type ? `(${section.exam.type.toUpperCase()})` : '';
+                        const details = [section.exam?.course, section.exam?.branch]
+                          .filter(Boolean)
+                          .join(' • ');
+
+                        return (
+                          <div key={section.examId} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                            {/* Exam Section Header Bar */}
+                            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-100/70 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                                  <h4 className="text-sm font-bold text-slate-900">{examName} {examTypeTag}</h4>
+                                </div>
+                                {details ? (
+                                  <p className="mt-0.5 text-xs text-slate-500">{details}</p>
+                                ) : null}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 font-semibold text-amber-800">
+                                  {section.records.length} Unpaid Students
+                                </span>
+                                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 font-semibold text-slate-700">
+                                  Actual: ₹{formatReportMoney(section.totalActual)}
+                                </span>
+                                {section.totalLate > 0 ? (
+                                  <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 font-semibold text-orange-800">
+                                    Late Fee: ₹{formatReportMoney(section.totalLate)}
+                                  </span>
+                                ) : null}
+                                <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 font-bold text-indigo-950">
+                                  Subtotal: ₹{formatReportMoney(section.totalAmount)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Table for this Exam */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-sm">
+                                <thead>
+                                  <tr className="border-b border-slate-200 bg-slate-50 text-[0.6875rem] uppercase tracking-wide text-slate-500">
+                                    <th className="px-5 py-3 font-semibold">#</th>
+                                    <th className="px-5 py-3 font-semibold">Student Name</th>
+                                    <th className="px-5 py-3 font-semibold">Roll Number (PIN)</th>
+                                    <th className="px-5 py-3 font-semibold">Branch</th>
+                                    <th className="px-5 py-3 font-semibold">Actual Fee</th>
+                                    <th className="px-5 py-3 font-semibold">Late Fee</th>
+                                    <th className="px-5 py-3 font-semibold">Total Amount to Pay</th>
+                                    <th className="px-5 py-3 font-semibold">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {section.records.map((record, index) => {
+                                    const display = getFeeRecordDisplayValues(record, section.exam);
+                                    const branch = dueReportBranch(record, eligibleStudents);
+
+                                    return (
+                                      <tr key={record.id || index} className="hover:bg-slate-50/50 transition">
+                                        <td className="px-5 py-3 text-xs font-mono text-slate-400">{index + 1}</td>
+                                        <td className="px-5 py-3 font-semibold text-slate-900">{record.studentName || '-'}</td>
+                                        <td className="px-5 py-3 font-mono text-xs font-semibold text-slate-700">{record.studentRollNumber || '-'}</td>
+                                        <td className="px-5 py-3 text-xs text-slate-600">{branch}</td>
+                                        <td className="px-5 py-3 text-xs font-medium text-slate-800">₹{formatReportMoney(display.actualAmount)}</td>
+                                        <td className="px-5 py-3 text-xs font-medium text-amber-700">
+                                          {display.lateFee > 0 ? `₹${formatReportMoney(display.lateFee)}` : '-'}
+                                        </td>
+                                        <td className="px-5 py-3 font-bold text-slate-900">₹{formatReportMoney(display.totalAmount)}</td>
+                                        <td className="px-5 py-3">
+                                          <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-amber-800">
+                                            Unpaid
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-800">
+                                    <td colSpan={4} className="px-5 py-3 text-right">
+                                      Subtotal for {examName}:
+                                    </td>
+                                    <td className="px-5 py-3 text-slate-900">₹{formatReportMoney(section.totalActual)}</td>
+                                    <td className="px-5 py-3 text-amber-800">₹{formatReportMoney(section.totalLate)}</td>
+                                    <td className="px-5 py-3 text-indigo-950 text-sm font-extrabold">₹{formatReportMoney(section.totalAmount)}</td>
+                                    <td className="px-5 py-3 text-slate-500 font-normal">{section.records.length} unpaid students</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           ) : (
