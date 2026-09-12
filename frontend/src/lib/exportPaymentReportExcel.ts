@@ -40,6 +40,9 @@ export type PaymentReportExcelInput = {
   filters: string[];
   transactionSummaryTitle: string;
   transactionSummary: PaymentReportSummaryRow[];
+  examSummaryTitle?: string;
+  examSummaryCol1Label?: string;
+  examSummaryCol2Label?: string;
   examSummary?: PaymentReportExamSummaryRow[] | null;
   detailedSectionTitle?: string;
   sections?: PaymentReportSection[];
@@ -119,10 +122,12 @@ export function downloadPaymentReportExcel(input: PaymentReportExcelInput) {
   summaryAoa.push([]);
   sumRowIdx += 1;
 
-  // Exam-wise Summary Table
+  // Exam-wise / Branch-wise Summary Table
   if (input.examSummary?.length) {
-    addSummaryBanner('EXAM-WISE SUMMARY');
-    summaryAoa.push(['Examination', 'Batch Breakdown', 'Count', 'Amount (Rs.)', 'Late Fee (Rs.)']);
+    addSummaryBanner(input.examSummaryTitle?.toUpperCase() || 'EXAM-WISE SUMMARY');
+    const col1 = input.examSummaryCol1Label || 'Examination';
+    const col2 = input.examSummaryCol2Label || 'Batch Breakdown';
+    summaryAoa.push([col1, col2, 'Count', 'Amount (Rs.)', 'Late Fee (Rs.)']);
     sumRowIdx += 1;
 
     for (const row of input.examSummary) {
@@ -202,7 +207,11 @@ export function downloadPaymentReportExcel(input: PaymentReportExcelInput) {
     let totalExamAmount = 0;
 
     for (const section of examSections) {
-      const batchLabel = section.batch ? `BATCH: ${section.batch}` : section.sectionTitle || 'RECORDS';
+      const batchLabel = section.branch
+        ? (section.batch ? `BRANCH: ${section.branch}  |  BATCH: ${section.batch}` : `BRANCH: ${section.branch}`)
+        : section.batch
+        ? `BATCH: ${section.batch}`
+        : section.sectionTitle || 'RECORDS';
       addDetailBanner(`>>>  ${batchLabel.toUpperCase()}  <<<`);
 
       // Table Header Row
@@ -216,7 +225,13 @@ export function downloadPaymentReportExcel(input: PaymentReportExcelInput) {
           const val = r[c.key];
           if (val == null || val === '') return '-';
           if (c.key === 'sno') return Number(val) || val;
-          if (c.key === 'amount' || c.key === 'lateFee' || c.key === 'applied') {
+          if (
+            c.key === 'amount' ||
+            c.key === 'lateFee' ||
+            c.key === 'applied' ||
+            c.key === 'totalPaid' ||
+            c.key === 'totalAmount'
+          ) {
             return parseMoneyNum(val);
           }
           return val;
@@ -225,7 +240,7 @@ export function downloadPaymentReportExcel(input: PaymentReportExcelInput) {
         detRowIdx += 1;
       }
 
-      // Batch Subtotal Row
+      // Batch / Branch Subtotal Row
       if (section.footerData) {
         const footerRow: (string | number | null)[] = new Array(section.columns.length).fill(null);
         footerRow[0] = 'Subtotal:';
@@ -242,9 +257,13 @@ export function downloadPaymentReportExcel(input: PaymentReportExcelInput) {
             footerRow[idx] = section.footerData.totalLate;
             totalExamLate += section.footerData.totalLate;
           }
-          if (col.key === 'totalAmount' && section.footerData?.totalAmount != null) {
-            footerRow[idx] = section.footerData.totalAmount;
-            totalExamAmount += section.footerData.totalAmount;
+          if (
+            (col.key === 'totalAmount' || col.key === 'totalPaid') &&
+            (section.footerData?.totalAmount != null || (section.footerData as any)?.totalPaid != null)
+          ) {
+            const tot = section.footerData?.totalAmount ?? (section.footerData as any)?.totalPaid ?? 0;
+            footerRow[idx] = tot;
+            totalExamAmount += tot;
           }
         });
         totalExamCount += section.rows.length;
@@ -266,7 +285,7 @@ export function downloadPaymentReportExcel(input: PaymentReportExcelInput) {
     sampleCols.forEach((col, idx) => {
       if (col.key === 'amount') examSummaryRow[idx] = totalExamActual;
       if (col.key === 'lateFee') examSummaryRow[idx] = totalExamLate;
-      if (col.key === 'totalAmount') examSummaryRow[idx] = totalExamAmount;
+      if (col.key === 'totalAmount' || col.key === 'totalPaid') examSummaryRow[idx] = totalExamAmount;
     });
 
     detailAoa.push(examSummaryRow);

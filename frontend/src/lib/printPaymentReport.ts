@@ -34,6 +34,8 @@ export type PaymentReportPdfInput = {
   filters: string[];
   transactionSummaryTitle: string;
   transactionSummary: PaymentReportSummaryRow[];
+  examSummaryTitle?: string;
+  examSummaryColumns?: Column[];
   examSummary?: PaymentReportExamSummaryRow[] | null;
   detailedSectionTitle?: string;
   sections?: PaymentReportSection[];
@@ -240,15 +242,16 @@ export function downloadPaymentReportPdf(input: PaymentReportPdfInput) {
   );
 
   if (input.examSummary && input.examSummary.length) {
-    drawSectionTitle('Exam-wise summary');
+    drawSectionTitle(input.examSummaryTitle || 'Exam-wise summary');
+    const summaryColumns = input.examSummaryColumns || [
+      { key: 'exam', label: 'Examination', width: 200 },
+      { key: 'batchBreakdown', label: 'Batch', width: 100 },
+      { key: 'count', label: 'Count', width: 45 },
+      { key: 'amount', label: 'Amount (Rs.)', width: 75 },
+      { key: 'lateFee', label: 'Late fee (Rs.)', width: 75 },
+    ];
     drawSimpleTable(
-      [
-        { key: 'exam', label: 'Examination', width: 200 },
-        { key: 'batchBreakdown', label: 'Batch', width: 100 },
-        { key: 'count', label: 'Count', width: 45 },
-        { key: 'amount', label: 'Amount (Rs.)', width: 75 },
-        { key: 'lateFee', label: 'Late fee (Rs.)', width: 75 },
-      ],
+      summaryColumns,
       input.examSummary.map((row) => ({
         exam: row.exam,
         batchBreakdown: row.batchBreakdown || '-',

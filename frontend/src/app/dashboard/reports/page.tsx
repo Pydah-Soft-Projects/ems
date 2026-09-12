@@ -10,7 +10,7 @@ import { downloadPaymentReportPdf } from '@/lib/printPaymentReport';
 import { downloadPaymentReportExcel } from '@/lib/exportPaymentReportExcel';
 import type { ExamFeeRecord, Payment } from '@/types/fee';
 import type { EligibleExamStudent, Exam } from '@/types/exam';
-import { formatPaymentIST } from '@/lib/formatIST';
+import { formatPaymentIST, formatPaymentISTDate, formatISTDate, formatISTDateRange } from '@/lib/formatIST';
 
 function fmtDateISO(d: string | Date) {
   if (typeof d === 'string') {
@@ -362,6 +362,42 @@ function getFeeRecordDisplayValues(record: ExamFeeRecord, fallbackExam: Exam | n
   };
 }
 
+interface ExamWiseBranchDateGroup {
+  dateStr: string;
+  payments: Payment[];
+  count: number;
+  actualFee: number;
+  lateFee: number;
+  totalCollected: number;
+}
+
+interface ExamWiseBranchGroup {
+  branch: string;
+  earliestPaidAt: string | null;
+  latestPaidAt: string | null;
+  payments: Payment[];
+  count: number;
+  actualFee: number;
+  lateFee: number;
+  totalCollected: number;
+  dateGroups: ExamWiseBranchDateGroup[];
+}
+
+interface ExamWiseGroup {
+  examId: number;
+  exam: Exam | null;
+  examName: string;
+  course?: string;
+  batch?: string;
+  earliestPaidAt: string | null;
+  latestPaidAt: string | null;
+  totalPayments: number;
+  totalActualFee: number;
+  totalLateFee: number;
+  totalCollected: number;
+  branches: ExamWiseBranchGroup[];
+}
+
 export default function ReportsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -373,7 +409,7 @@ export default function ReportsPage() {
   const [eligibleLoading, setEligibleLoading] = useState(false);
   const [duePage, setDuePage] = useState(1);
   const [duePageSize, setDuePageSize] = useState(50);
-  const [tab, setTab] = useState<'day' | 'month' | 'due'>('day');
+  const [tab, setTab] = useState<'day' | 'month' | 'exam' | 'due'>('day');
   const [selectedDate, setSelectedDate] = useState(() => fmtDateISO(new Date()));
   const [selectedMonth, setSelectedMonth] = useState(() => fmtMonthISO(new Date()));
   const DUE_PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
@@ -475,7 +511,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let mounted = true;
-    if (tab !== 'due') return;
+    if (tab !== 'due' && tab !== 'exam') return;
     const loadEligibleStudents = async () => {
       if (!exams.length) {
         setEligibleStudents([]);
@@ -750,6 +786,188 @@ export default function ReportsPage() {
     };
   }, [dueSectionsByBatch]);
 
+  const examWiseGroups = useMemo(() => {
+    if (tab !== 'exam') return [];
+
+    const examMap = new Map<number, { exam: Exam | null; payments: Payment[] }>();
+
+    for (const payment of filteredPayments) {
+      const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId ?? 0;
+      let entry = examMap.get(examId);
+      if (!entry) {
+        const examObj = payment.feeRecord?.exam ?? exams.find((e) => e.id === examId) ?? null;
+        entry = { exam: examObj, payments: [] };
+        examMap.set(examId, entry);
+      }
+      entry.payments.push(payment);
+    }
+
+    if (selectedExam && !examMap.has(selectedExam) && selectedExamObject) {
+      examMap.set(selectedExam, { exam: selectedExamObject, payments: [] });
+    }
+
+    const groups: ExamWiseGroup[] = [];
+
+    for (const [examId, { exam, payments }] of examMap.entries()) {
+      // Sort payments chronologically: from starting payment onwards up to last transaction
+      const sortedPayments = [...payments].sort((a, b) => {
+        const timeA = new Date(String(paymentTimestamp(a) || 0)).getTime();
+        const timeB = new Date(String(paymentTimestamp(b) || 0)).getTime();
+        return timeA - timeB;
+      });
+
+      const earliestPaidAt =
+        sortedPayments.length > 0 ? (paymentTimestamp(sortedPayments[0]) as string) : null;
+      const latestPaidAt =
+        sortedPayments.length > 0
+          ? (paymentTimestamp(sortedPayments[sortedPayments.length - 1]) as string)
+          : null;
+
+      const branchMap = new Map<string, Payment[]>();
+      for (const payment of sortedPayments) {
+        const branch = paymentReportBranch(payment, eligibleStudents);
+        const list = branchMap.get(branch) || [];
+        list.push(payment);
+        branchMap.set(branch, list);
+      }
+
+      const sortedBranchNames = Array.from(branchMap.keys()).sort((a, b) => {
+        if (a === 'Unassigned') return 1;
+        if (b === 'Unassigned') return -1;
+        return a.localeCompare(b);
+      });
+
+      const branches: ExamWiseBranchGroup[] = sortedBranchNames.map((branchName) => {
+        const bPayments = branchMap.get(branchName) || [];
+        const bEarliest =
+          bPayments.length > 0 ? (paymentTimestamp(bPayments[0]) as string) : null;
+        const bLatest =
+          bPayments.length > 0
+            ? (paymentTimestamp(bPayments[bPayments.length - 1]) as string)
+            : null;
+
+        const dateMap = new Map<string, Payment[]>();
+        for (const payment of bPayments) {
+          const ts = paymentTimestamp(payment);
+          const dateStr = ts ? formatPaymentISTDate(ts) : 'Unknown Date';
+          const dList = dateMap.get(dateStr) || [];
+          dList.push(payment);
+          dateMap.set(dateStr, dList);
+        }
+
+        const dateGroups: ExamWiseBranchDateGroup[] = Array.from(dateMap.entries())
+          .sort(([, aList], [, bList]) => {
+            const timeA = new Date(String(paymentTimestamp(aList[0]) || 0)).getTime();
+            const timeB = new Date(String(paymentTimestamp(bList[0]) || 0)).getTime();
+            return timeA - timeB;
+          })
+          .map(([dateStr, dPayments]) => {
+            let dActual = 0;
+            let dLate = 0;
+            let dTotal = 0;
+            for (const p of dPayments) {
+              dActual += getActualAmountValue(p);
+              dLate += Number(p.feeRecord?.lateFee || 0);
+              dTotal += getCollectedAmount(p);
+            }
+            return {
+              dateStr,
+              payments: dPayments,
+              count: dPayments.length,
+              actualFee: dActual,
+              lateFee: dLate,
+              totalCollected: dTotal,
+            };
+          });
+
+        const actualFee = dateGroups.reduce((sum, dg) => sum + dg.actualFee, 0);
+        const lateFee = dateGroups.reduce((sum, dg) => sum + dg.lateFee, 0);
+        const totalCollected = dateGroups.reduce((sum, dg) => sum + dg.totalCollected, 0);
+
+        return {
+          branch: branchName,
+          earliestPaidAt: bEarliest,
+          latestPaidAt: bLatest,
+          payments: bPayments,
+          count: bPayments.length,
+          actualFee,
+          lateFee,
+          totalCollected,
+          dateGroups,
+        };
+      });
+
+      let totalPayments = 0;
+      let totalActualFee = 0;
+      let totalLateFee = 0;
+      let totalCollected = 0;
+
+      for (const b of branches) {
+        totalPayments += b.count;
+        totalActualFee += b.actualFee;
+        totalLateFee += b.lateFee;
+        totalCollected += b.totalCollected;
+      }
+
+      const examName = exam?.name || `Examination #${examId}`;
+
+      groups.push({
+        examId,
+        exam,
+        examName,
+        course: exam?.course,
+        batch: exam?.batch,
+        earliestPaidAt,
+        latestPaidAt,
+        totalPayments,
+        totalActualFee,
+        totalLateFee,
+        totalCollected,
+        branches,
+      });
+    }
+
+    return groups.sort((a, b) => a.examName.localeCompare(b.examName));
+  }, [tab, filteredPayments, exams, selectedExam, selectedExamObject, eligibleStudents]);
+
+  const examWiseOverallSummary = useMemo(() => {
+    let totalExams = examWiseGroups.length;
+    let totalPayments = 0;
+    let totalActualFee = 0;
+    let totalLateFee = 0;
+    let totalCollected = 0;
+    let earliestPaidAt: string | null = null;
+    let latestPaidAt: string | null = null;
+
+    for (const group of examWiseGroups) {
+      totalPayments += group.totalPayments;
+      totalActualFee += group.totalActualFee;
+      totalLateFee += group.totalLateFee;
+      totalCollected += group.totalCollected;
+
+      if (group.earliestPaidAt) {
+        if (!earliestPaidAt || new Date(group.earliestPaidAt).getTime() < new Date(earliestPaidAt).getTime()) {
+          earliestPaidAt = group.earliestPaidAt;
+        }
+      }
+      if (group.latestPaidAt) {
+        if (!latestPaidAt || new Date(group.latestPaidAt).getTime() > new Date(latestPaidAt).getTime()) {
+          latestPaidAt = group.latestPaidAt;
+        }
+      }
+    }
+
+    return {
+      totalExams,
+      totalPayments,
+      totalActualFee,
+      totalLateFee,
+      totalCollected,
+      earliestPaidAt,
+      latestPaidAt,
+    };
+  }, [examWiseGroups]);
+
   const paymentColumns = useMemo(
     () => [
       {
@@ -759,7 +977,7 @@ export default function ReportsPage() {
           const paidAt = paymentTimestamp(r);
           return paidAt
             ? tab === 'day'
-              ? formatPaymentIST(paidAt)
+              ? formatPaymentISTDate(paidAt)
               : fmtMonthISO(paidAt)
             : '-';
         },
@@ -882,13 +1100,34 @@ export default function ReportsPage() {
 
   function handleExport(format: 'pdf' | 'excel') {
     const isDue = tab === 'due';
+    const isExam = tab === 'exam';
+
+    const examStartStr = examWiseOverallSummary.earliestPaidAt
+      ? formatPaymentISTDate(examWiseOverallSummary.earliestPaidAt)
+      : null;
+    const examEndStr = examWiseOverallSummary.latestPaidAt
+      ? formatPaymentISTDate(examWiseOverallSummary.latestPaidAt)
+      : null;
+    const examTimelineStr = formatISTDateRange(
+      examWiseOverallSummary.earliestPaidAt,
+      examWiseOverallSummary.latestPaidAt,
+    );
+
     const reportPeriod =
       tab === 'day'
         ? `Day wise - ${formatReportDate(selectedDate)}`
         : tab === 'month'
           ? `Month wise - ${formatReportMonth(selectedMonth)}`
-          : 'Pending dues';
-    const documentTitle = isDue ? 'Due Report' : 'Payment Report';
+          : tab === 'exam'
+            ? selectedExamObject
+              ? `Exam: ${selectedExamObject.name} · (${examTimelineStr})`
+              : `Exam wise · (${examTimelineStr})`
+            : 'Pending dues';
+    const documentTitle = isDue
+      ? 'Due Report'
+      : isExam
+        ? 'Exam-wise Payment Report'
+        : 'Payment Report';
     const generatedAt = `${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`;
 
     const collegeFromRows = isDue
@@ -1109,6 +1348,159 @@ export default function ReportsPage() {
       return;
     }
 
+    if (isExam) {
+      const methodTotals = new Map<string, { count: number; amount: number }>();
+      let totalCollected = 0;
+      let totalLate = 0;
+      let lateCount = 0;
+
+      for (const group of examWiseGroups) {
+        for (const b of group.branches) {
+          for (const payment of b.payments) {
+            const method = paymentMethodLabel(payment.paymentMethod);
+            const current = methodTotals.get(method) || { count: 0, amount: 0 };
+            const collected = getCollectedAmount(payment);
+            current.count += 1;
+            current.amount += collected;
+            methodTotals.set(method, current);
+            totalCollected += collected;
+            const lateFee = Number(payment.feeRecord?.lateFee || 0);
+            totalLate += lateFee;
+            if (lateFee > 0) lateCount += 1;
+          }
+        }
+      }
+
+      const examDetailColumns = [
+        { key: 'sno', label: 'S.No', width: 26 },
+        { key: 'student', label: 'Student', width: includeExamColumn ? 76 : 98 },
+        { key: 'roll', label: 'Roll', width: 62 },
+        { key: 'branch', label: 'Branch', width: 50 },
+        ...(includeExamColumn ? [{ key: 'exam', label: 'Exam', width: 76 }] : []),
+        { key: 'batch', label: 'Batch', width: 52 },
+        { key: 'amount', label: 'Actual Fee', width: 52 },
+        { key: 'lateFee', label: 'Late Fee', width: 44 },
+        { key: 'totalPaid', label: 'Total Paid', width: 54 },
+        { key: 'method', label: 'Method', width: 46 },
+        { key: 'paidAt', label: 'Paid Date', width: 62 },
+      ];
+
+      const examSummaryRows = examWiseGroups.flatMap((group) => {
+        return group.branches.flatMap((b) => {
+          return b.dateGroups.map((dg) => ({
+            exam: includeExamColumn ? `${group.examName} (${b.branch})` : b.branch,
+            batchBreakdown: dg.dateStr,
+            count: String(dg.count),
+            amount: formatReportMoney(dg.totalCollected),
+            lateFee: formatReportMoney(dg.lateFee),
+          }));
+        });
+      });
+
+      const examReportPayload = {
+        collegeName,
+        documentTitle,
+        periodLabel: reportPeriod,
+        generatedAt,
+        filters: [
+          ...filters,
+          `Starting Date: ${examStartStr || '-'}`,
+          `Last Date: ${examEndStr || '-'}`,
+        ],
+        transactionSummaryTitle: 'Transaction summary',
+        transactionSummary: [
+          ...[...methodTotals.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([method, totals]) => ({
+              particular: method,
+              count: String(totals.count),
+              amount: formatReportMoney(totals.amount),
+            })),
+          {
+            particular: 'Late fee (included above)',
+            count: String(lateCount),
+            amount: formatReportMoney(totalLate),
+          },
+          {
+            particular: 'Total collections',
+            count: String(examWiseOverallSummary.totalPayments),
+            amount: formatReportMoney(totalCollected),
+          },
+        ],
+        examSummaryTitle: 'Branch-wise summary',
+        examSummaryColumns: [
+          { key: 'exam', label: includeExamColumn ? 'Exam (Branch)' : 'Branch', width: 140 },
+          { key: 'batchBreakdown', label: 'Payment Date', width: 160 },
+          { key: 'count', label: 'Count', width: 45 },
+          { key: 'amount', label: 'Amount (Rs.)', width: 75 },
+          { key: 'lateFee', label: 'Late fee (Rs.)', width: 75 },
+        ],
+        examSummaryCol1Label: includeExamColumn ? 'Exam (Branch)' : 'Branch',
+        examSummaryCol2Label: 'Payment Date',
+        examSummary: [
+          ...examSummaryRows,
+          {
+            exam: 'Total',
+            batchBreakdown: `Period: ${examTimelineStr}`,
+            count: String(examWiseOverallSummary.totalPayments),
+            amount: formatReportMoney(totalCollected),
+            lateFee: formatReportMoney(totalLate),
+          },
+        ],
+        detailedSectionTitle: 'Detailed statement - branch & date wise',
+        sections: examWiseGroups.flatMap((group) => {
+          return group.branches.flatMap((b) => {
+            return b.dateGroups
+              .filter((dg) => dg.payments.length > 0)
+              .map((dg) => {
+                return {
+                  sectionTitle: `Exam: ${group.examName}  |  Branch: ${b.branch}  |  Date: ${dg.dateStr}`,
+                  examName: group.examName,
+                  branch: b.branch,
+                  columns: examDetailColumns,
+                  rows: dg.payments.map((payment, index) => {
+                    const actualVal = getActualAmountValue(payment);
+                    const lateVal = Number(payment.feeRecord?.lateFee || 0);
+                    const totalPaid = actualVal + lateVal;
+                    return {
+                      sno: String(index + 1),
+                      student: payment.feeRecord?.studentName || '-',
+                      roll: payment.feeRecord?.studentRollNumber || '-',
+                      branch: b.branch,
+                      exam: group.examName,
+                      batch: paymentReportBatch(payment, eligibleStudents),
+                      amount: formatReportMoney(actualVal),
+                      lateFee: formatReportMoney(lateVal),
+                      totalPaid: formatReportMoney(totalPaid),
+                      method: paymentMethodLabel(payment.paymentMethod),
+                      paidAt: paymentTimestamp(payment)
+                        ? formatPaymentISTDate(paymentTimestamp(payment) as string)
+                        : '-',
+                    };
+                  }),
+                  footer: `Subtotal (${group.examName} - ${b.branch} - ${dg.dateStr}): ${dg.count} payments    Rs. ${formatReportMoney(dg.totalCollected)}`,
+                  footerData: {
+                    countLabel: `${dg.count} payments`,
+                    totalActual: dg.actualFee,
+                    totalLate: dg.lateFee,
+                    totalAmount: dg.totalCollected,
+                  },
+                };
+              });
+          });
+        }),
+        grandTotal: `Grand total: ${examWiseOverallSummary.totalPayments} payments    Rs. ${formatReportMoney(totalCollected)}`,
+        fileName: `exam-payment-report-${new Date().toISOString().replace(/[:.]/g, '-')}.${format === 'excel' ? 'xlsx' : 'pdf'}`,
+      };
+
+      if (format === 'excel') {
+        downloadPaymentReportExcel(examReportPayload);
+      } else {
+        downloadPaymentReportPdf(examReportPayload);
+      }
+      return;
+    }
+
     const methodTotals = new Map<string, { count: number; amount: number }>();
     let totalCollected = 0;
     let totalLate = 0;
@@ -1163,7 +1555,7 @@ export default function ReportsPage() {
       { key: 'amount', label: 'Amount', width: 52 },
       { key: 'lateFee', label: 'Late fee', width: 44 },
       { key: 'method', label: 'Method', width: 46 },
-      { key: 'paidAt', label: 'Paid at', width: 85 },
+      { key: 'paidAt', label: 'Paid Date', width: 62 },
     ];
 
     const paymentReportPayload = {
@@ -1256,7 +1648,7 @@ export default function ReportsPage() {
                     lateFee: formatReportMoney(Number(payment.feeRecord?.lateFee || 0)),
                     method: paymentMethodLabel(payment.paymentMethod),
                     paidAt: paymentTimestamp(payment)
-                      ? formatPaymentIST(paymentTimestamp(payment) as string)
+                      ? formatPaymentISTDate(paymentTimestamp(payment) as string)
                       : '-',
                   };
                 }),
@@ -1291,10 +1683,10 @@ export default function ReportsPage() {
     { key: 'receipt', header: 'Receipt', render: (r: Payment) => r.receiptNumber || '-' },
     {
       key: 'paidAt',
-      header: 'Paid At',
+      header: 'Paid Date',
       render: (r: Payment) => {
         const paidAt = paymentTimestamp(r);
-        return paidAt ? formatPaymentIST(paidAt) : '-';
+        return paidAt ? formatPaymentISTDate(paidAt) : '-';
       },
     },
   ];
@@ -1302,12 +1694,22 @@ export default function ReportsPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title={tab === 'day'
-          ? `Payment Reports - Day wise - ${formatReportDate(selectedDate)}`
-          : tab === 'month'
-          ? `Payment Reports - Month wise - ${formatReportMonth(selectedMonth)}`
-          : 'Payment Reports - Pending dues'}
-        description="Students who paid fees, view day-wise or month-wise and download Report."
+        title={
+          tab === 'day'
+            ? `Payment Reports - Day wise - ${formatReportDate(selectedDate)}`
+            : tab === 'month'
+            ? `Payment Reports - Month wise - ${formatReportMonth(selectedMonth)}`
+            : tab === 'exam'
+            ? selectedExamObject
+              ? `Payment Reports - Exam wise - ${selectedExamObject.name}`
+              : 'Payment Reports - Exam wise - All Examinations'
+            : 'Payment Reports - Pending dues'
+        }
+        description={
+          tab === 'exam'
+            ? 'Exam-wise payment reports tracking from starting payment onwards up to the last transaction with branch-wise breakdown.'
+            : 'Students who paid fees, view day-wise or month-wise and download Report.'
+        }
         action={<div />}
       />
 
@@ -1391,6 +1793,13 @@ export default function ReportsPage() {
               />
             </label>
           ) : null}
+
+          {tab === 'exam' ? (
+            <div className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 text-xs font-medium text-emerald-800">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Payment Cycle: Starting Date → Last Date</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -1398,6 +1807,7 @@ export default function ReportsPage() {
             items={[
               { id: 'day', label: 'Day wise' },
               { id: 'month', label: 'Month wise' },
+              { id: 'exam', label: 'Exam wise' },
               { id: 'due', label: 'Due' },
             ]}
             activeId={tab}
@@ -1418,16 +1828,26 @@ export default function ReportsPage() {
             <h3 className="text-sm font-semibold">
               {tab === 'due'
                 ? 'Pending due students'
+                : tab === 'exam'
+                ? 'Exam-wise payments (Starting to Last Transaction)'
                 : tab === 'day'
                 ? 'Day-wise payments'
                 : 'Month-wise payments'}{' '}
-              — {tab === 'due' ? displayedDueRecords.length : displayedPayments.length}{' '}
+              — {tab === 'due'
+                  ? displayedDueRecords.length
+                  : tab === 'exam'
+                  ? examWiseOverallSummary.totalPayments
+                  : displayedPayments.length}{' '}
               {tab === 'due' ? 'dues' : 'payments'}
             </h3>
             <div className="text-sm text-[var(--muted)]">
-              Total amount: ₹{formatReportMoney(tab === 'due'
-                ? filteredDueRecords.reduce((s, r) => s + getActualAmountValueFromRecord(r), 0)
-                : displayedPayments.reduce((s, p) => s + Number(getActualAmountValue(p) || 0), 0))}
+              Total amount: ₹{formatReportMoney(
+                tab === 'due'
+                  ? filteredDueRecords.reduce((s, r) => s + getActualAmountValueFromRecord(r), 0)
+                  : tab === 'exam'
+                  ? examWiseOverallSummary.totalCollected
+                  : displayedPayments.reduce((s, p) => s + Number(getCollectedAmount(p) || 0), 0)
+              )}
             </div>
           </div>
           {tab === 'due' ? (
@@ -1600,6 +2020,241 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          ) : tab === 'exam' ? (
+            <div className="space-y-6">
+              {/* Overall Exam-wise Summary Cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Examinations</p>
+                  <p className="mt-1 text-2xl font-extrabold text-slate-900">{examWiseOverallSummary.totalExams}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-emerald-700">Total Paid Students</p>
+                  <p className="mt-1 text-2xl font-extrabold text-emerald-900">{examWiseOverallSummary.totalPayments}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-500">Total Actual Fee</p>
+                  <p className="mt-1 text-2xl font-extrabold text-slate-800">₹{formatReportMoney(examWiseOverallSummary.totalActualFee)}</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-amber-700">Total Late Fee</p>
+                  <p className="mt-1 text-2xl font-extrabold text-amber-900">₹{formatReportMoney(examWiseOverallSummary.totalLateFee)}</p>
+                </div>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-sm">
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-indigo-700">Total Collected</p>
+                  <p className="mt-1 text-2xl font-extrabold text-indigo-950">₹{formatReportMoney(examWiseOverallSummary.totalCollected)}</p>
+                </div>
+              </div>
+
+              {/* Overall Payment Cycle Timeline */}
+              {examWiseOverallSummary.earliestPaidAt && examWiseOverallSummary.latestPaidAt ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 text-xs text-emerald-900 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600 animate-pulse" />
+                    <span className="font-bold uppercase tracking-wider text-emerald-800">Payment Cycle Dates (Starting → Last):</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 font-semibold">
+                    <span className="rounded-md bg-white/90 px-2.5 py-1 border border-emerald-300">
+                      Starting Date: {formatPaymentISTDate(examWiseOverallSummary.earliestPaidAt)}
+                    </span>
+                    <span className="text-emerald-700 font-bold">→</span>
+                    <span className="rounded-md bg-white/90 px-2.5 py-1 border border-emerald-300">
+                      Last Date: {formatPaymentISTDate(examWiseOverallSummary.latestPaidAt)}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
+              {loading ? (
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-slate-200 bg-white text-sm text-slate-500 shadow-sm">
+                  Loading exam-wise payment reports…
+                </div>
+              ) : examWiseGroups.length === 0 ? (
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-center text-sm text-slate-500 shadow-sm">
+                  No payment records found for the selected examination, branch, or batch filters.
+                </div>
+              ) : (
+                examWiseGroups.map((group) => {
+                  const examDetails = [
+                    group.course,
+                    group.batch,
+                    group.exam?.type ? String(group.exam.type).toUpperCase() : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ');
+                  const examDateRange = formatISTDateRange(group.earliestPaidAt, group.latestPaidAt);
+
+                  return (
+                    <div key={group.examId} className="space-y-4 rounded-2xl border border-slate-300 bg-slate-50/70 p-5 shadow-sm">
+                      {/* Exam Header Bar */}
+                      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="inline-block h-3.5 w-3.5 rounded-full bg-emerald-600" />
+                            <h3 className="text-lg font-extrabold text-slate-900">
+                              {group.examName}
+                            </h3>
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                              {group.totalPayments} {group.totalPayments === 1 ? 'Payment' : 'Payments'}
+                            </span>
+                          </div>
+                          {examDetails ? (
+                            <p className="mt-1 text-xs text-slate-500">{examDetails}</p>
+                          ) : null}
+                          {examDateRange !== '—' ? (
+                            <div className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-2.5 py-1 text-[0.6875rem] font-medium text-emerald-900 shadow-xs">
+                              <span className="font-bold text-emerald-700">Payment Dates:</span> {examDateRange}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">
+                            Actual: ₹{formatReportMoney(group.totalActualFee)}
+                          </span>
+                          {group.totalLateFee > 0 ? (
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-800">
+                              Late Fee: ₹{formatReportMoney(group.totalLateFee)}
+                            </span>
+                          ) : null}
+                          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 font-bold text-indigo-950">
+                            Total: ₹{formatReportMoney(group.totalCollected)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Branch-wise Sub-tables grouped by each Date */}
+                      <div className="space-y-4 pt-1">
+                        {group.branches.filter((b) => b.payments.length > 0).map((b) => {
+                          return (
+                            <div key={b.branch} className="space-y-3 rounded-xl border border-slate-300 bg-white p-4 shadow-sm">
+                              {/* Branch Section Header Bar */}
+                              <div className="flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-600" />
+                                  <h4 className="text-base font-bold text-slate-900">
+                                    Branch: {b.branch}
+                                  </h4>
+                                  <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
+                                    {b.count} {b.count === 1 ? 'payment' : 'payments'}
+                                  </span>
+                                  <span className="text-xs text-slate-500 font-medium">
+                                    ({b.dateGroups.length} {b.dateGroups.length === 1 ? 'date' : 'dates'})
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 font-semibold text-slate-700">
+                                    Actual: ₹{formatReportMoney(b.actualFee)}
+                                  </span>
+                                  {b.lateFee > 0 ? (
+                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 font-semibold text-amber-800">
+                                      Late Fee: ₹{formatReportMoney(b.lateFee)}
+                                    </span>
+                                  ) : null}
+                                  <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 font-bold text-indigo-950">
+                                    Branch Total: ₹{formatReportMoney(b.totalCollected)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Separate Table per Date */}
+                              <div className="space-y-4">
+                                {b.dateGroups.map((dg) => (
+                                  <div key={dg.dateStr} className="overflow-hidden rounded-lg border border-slate-200">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-2 text-xs border-b border-slate-200">
+                                      <div className="flex items-center gap-2">
+                                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                                        <span className="font-bold text-slate-800">Payment Date: {dg.dateStr}</span>
+                                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.6875rem] font-bold text-emerald-800">
+                                          {dg.count} {dg.count === 1 ? 'payment' : 'payments'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-3 font-semibold text-slate-700">
+                                        <span>Actual: ₹{formatReportMoney(dg.actualFee)}</span>
+                                        {dg.lateFee > 0 ? <span className="text-amber-700">Late: ₹{formatReportMoney(dg.lateFee)}</span> : null}
+                                        <span className="text-indigo-950 font-bold">Subtotal: ₹{formatReportMoney(dg.totalCollected)}</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-left text-sm">
+                                        <thead>
+                                          <tr className="border-b border-slate-200 bg-white text-[0.6875rem] uppercase tracking-wide text-slate-500">
+                                            <th className="px-4 py-2.5 font-semibold">#</th>
+                                            <th className="px-4 py-2.5 font-semibold">Student Name</th>
+                                            <th className="px-4 py-2.5 font-semibold">Roll Number</th>
+                                            <th className="px-4 py-2.5 font-semibold">Batch</th>
+                                            <th className="px-4 py-2.5 font-semibold">Actual Fee</th>
+                                            <th className="px-4 py-2.5 font-semibold">Late Fee</th>
+                                            <th className="px-4 py-2.5 font-semibold">Total Paid</th>
+                                            <th className="px-4 py-2.5 font-semibold">Method</th>
+                                            <th className="px-4 py-2.5 font-semibold">Receipt / Ref</th>
+                                            <th className="px-4 py-2.5 font-semibold">Paid Date</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 bg-white">
+                                          {dg.payments.map((payment, index) => {
+                                            const actualVal = getActualAmountValue(payment);
+                                            const lateVal = Number(payment.feeRecord?.lateFee || 0);
+                                            const totalPaid = actualVal + lateVal;
+                                            const timestamp = paymentTimestamp(payment);
+                                            const receiptNo =
+                                              payment.receiptNumber ||
+                                              payment.transactionReference ||
+                                              '-';
+
+                                            return (
+                                              <tr key={payment.id || index} className="hover:bg-slate-50/50 transition">
+                                                <td className="px-4 py-2.5 text-xs font-mono text-slate-400">{index + 1}</td>
+                                                <td className="px-4 py-2.5 font-semibold text-slate-900">{payment.feeRecord?.studentName || '-'}</td>
+                                                <td className="px-4 py-2.5 font-mono text-xs font-semibold text-slate-700">{payment.feeRecord?.studentRollNumber || '-'}</td>
+                                                <td className="px-4 py-2.5 text-xs text-slate-600">{paymentReportBatch(payment, eligibleStudents)}</td>
+                                                <td className="px-4 py-2.5 text-xs font-medium text-slate-800">₹{formatReportMoney(actualVal)}</td>
+                                                <td className="px-4 py-2.5 text-xs font-medium text-amber-700">
+                                                  {lateVal > 0 ? `₹${formatReportMoney(lateVal)}` : '-'}
+                                                </td>
+                                                <td className="px-4 py-2.5 font-bold text-slate-900">₹{formatReportMoney(totalPaid)}</td>
+                                                <td className="px-4 py-2.5 text-xs">
+                                                  <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                                                    {paymentMethodLabel(payment.paymentMethod)}
+                                                  </span>
+                                                </td>
+                                                <td className="px-4 py-2.5 font-mono text-xs text-slate-600">{receiptNo}</td>
+                                                <td className="px-4 py-2.5 text-xs text-slate-600 whitespace-nowrap">
+                                                  {timestamp ? formatPaymentISTDate(timestamp) : '-'}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr className="border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-800">
+                                            <td colSpan={4} className="px-4 py-2.5 text-right">
+                                              Subtotal ({b.branch} - {dg.dateStr}):
+                                            </td>
+                                            <td className="px-4 py-2.5 text-slate-900">₹{formatReportMoney(dg.actualFee)}</td>
+                                            <td className="px-4 py-2.5 text-amber-800">₹{formatReportMoney(dg.lateFee)}</td>
+                                            <td className="px-4 py-2.5 text-indigo-950 text-sm font-extrabold">₹{formatReportMoney(dg.totalCollected)}</td>
+                                            <td colSpan={3} className="px-4 py-2.5 text-slate-500 font-normal">
+                                              {dg.count} {dg.count === 1 ? 'payment' : 'payments'}
+                                            </td>
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           ) : (

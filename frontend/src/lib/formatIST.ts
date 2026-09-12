@@ -37,47 +37,43 @@ export function formatPaymentIST(value: string | Date | null | undefined): strin
 
 export function formatPaymentISTDate(value: string | Date | null | undefined): string {
   if (!value) return '—';
-  if (typeof value === 'string') {
-    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      const [, y, m, d] = match;
-      const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
-      return dt.toLocaleDateString('en-IN');
-    }
-  }
   const d = parseISTDate(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-IN', {
+  return d.toLocaleDateString('en-GB', {
     timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   });
 }
 
 export function formatISTDate(value: string | Date | null | undefined): string {
   if (!value) return '—';
-  if (typeof value === 'string') {
-    const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      const [, y, m, d] = match;
-      const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
-      return dt.toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    }
-  }
   const d = parseISTDate(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-IN', {
+  return d.toLocaleDateString('en-GB', {
     timeZone: 'Asia/Kolkata',
     day: '2-digit',
-    month: 'short',
+    month: '2-digit',
     year: 'numeric',
   });
 }
 
+export function formatISTDateRange(
+  start: string | Date | null | undefined,
+  end: string | Date | null | undefined,
+): string {
+  const s = formatPaymentISTDate(start);
+  const e = formatPaymentISTDate(end);
+  if (s === '—' && e === '—') return '—';
+  if (s === '—') return e;
+  if (e === '—') return s;
+  if (s === e) return s;
+  return `${s} to ${e}`;
+}
+
 /**
- * Format pure date (YYYY-MM-DD or ISO) as 'DD/MM/YYYY' or 'DD MMM YYYY' in IST
+ * Format pure date (YYYY-MM-DD or ISO) as 'DD/MM/YYYY' in IST
  */
 export function formatDate(value?: string | Date | null): string {
   if (!value) return '—';
