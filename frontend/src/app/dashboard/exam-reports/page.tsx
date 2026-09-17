@@ -504,6 +504,7 @@ export default function ExamReportsPage() {
                           <th className="px-3 py-2.5">Course</th>
                           <th className="px-3 py-2.5 text-center">Eligible</th>
                           <th className="px-3 py-2.5 text-center">Applied</th>
+                          <th className="px-3 py-2.5 text-center">Not Applied</th>
                           <th className="px-3 py-2.5 text-center">Paid</th>
                           <th className="px-3 py-2.5 text-center">Not Paid</th>
                           <th className="px-3 py-2.5 text-center">Paid w/ Late Fee</th>
@@ -523,6 +524,7 @@ export default function ExamReportsPage() {
                             <td className="px-3 py-2.5 text-slate-600">{row.course}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-slate-900">{row.totalEligible}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-indigo-900">{row.totalApplied}</td>
+                            <td className="px-3 py-2.5 text-center font-semibold text-sky-700">{Math.max(0, row.totalEligible - row.totalApplied)}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-emerald-700">{row.paidCount}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-rose-600">{row.notPaidCount}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-amber-800">{row.paidWithLateFeeCount}</td>
@@ -552,6 +554,7 @@ export default function ExamReportsPage() {
                         <th className="px-3 py-2.5">Branch</th>
                         <th className="px-3 py-2.5 text-center">Total Eligible</th>
                         <th className="px-3 py-2.5 text-center">Total Applied</th>
+                        <th className="px-3 py-2.5 text-center">Not Applied</th>
                         <th className="px-3 py-2.5 text-center">Paid Count</th>
                         <th className="px-3 py-2.5 text-center">Not Paid Count</th>
                         <th className="px-3 py-2.5 text-center">Paid with Late Fee</th>
@@ -571,6 +574,7 @@ export default function ExamReportsPage() {
                           <td className="px-3 py-2.5 font-medium text-slate-800">{row.branch}</td>
                           <td className="px-3 py-2.5 text-center font-bold text-slate-900">{row.totalEligible}</td>
                           <td className="px-3 py-2.5 text-center font-bold text-indigo-900">{row.totalApplied}</td>
+                          <td className="px-3 py-2.5 text-center font-semibold text-sky-700">{Math.max(0, row.totalEligible - row.totalApplied)}</td>
                           <td className="px-3 py-2.5 text-center font-semibold text-emerald-700">{row.paidCount}</td>
                           <td className="px-3 py-2.5 text-center font-semibold text-rose-600">{row.notPaidCount}</td>
                           <td className="px-3 py-2.5 text-center font-semibold text-amber-800">{row.paidWithLateFeeCount}</td>
