@@ -100,6 +100,13 @@ export const navigation: NavGroup[] = [
         privilege: 'exams:read',
       },
       {
+        href: '/dashboard/exam-reports',
+        label: 'Exam Application Reports',
+        description: 'Batch and branch wise application summary & paid counts',
+        icon: 'reports',
+        privilege: 'exams:read',
+      },
+      {
         href: '/dashboard/remuneration',
         label: 'Remuneration',
         description: 'Bills for external setters, evaluators & examiners',

@@ -779,6 +779,9 @@ class SdmsService {
         const fromDate = from ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const toDate = to ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
+        const fromDateStr = toDateOnly(fromDate);
+        const toDateStr = toDateOnly(toDate);
+
         const qb = eventRepo.createQueryBuilder('e')
             .select('e.id', 'id')
             .addSelect('e.title', 'title')
@@ -799,18 +802,18 @@ class SdmsService {
             .addSelect('e.created_at', 'created_at')
             .addSelect('e.updated_at', 'updated_at')
             .where('e.is_active = 1')
-            .andWhere('e.event_date <= :toDate', { toDate: toDate.toISOString().slice(0, 10) })
+            .andWhere('e.event_date <= :toDate', { toDate: toDateStr })
             // Spanning events: included if end_date is NULL (open-ended) OR >= fromDate
-            .andWhere('(e.end_date IS NULL OR e.end_date >= :fromDate)', { fromDate: fromDate.toISOString().slice(0, 10) })
+            .andWhere('(e.end_date IS NULL OR e.end_date >= :fromDate)', { fromDate: fromDateStr })
             .orderBy('e.event_date', 'ASC')
             .addOrderBy('e.id', 'ASC');
 
-        if (filters.targetCollege !== undefined) qb.andWhere('e.target_college = :v', { v: filters.targetCollege || null });
-        if (filters.targetCourse !== undefined) qb.andWhere('e.target_course = :v', { v: filters.targetCourse || null });
-        if (filters.targetBranch !== undefined) qb.andWhere('e.target_branch = :v', { v: filters.targetBranch || null });
-        if (filters.targetBatch !== undefined) qb.andWhere('e.target_batch = :v', { v: filters.targetBatch || null });
-        if (filters.targetYear !== undefined) qb.andWhere('e.target_year = :v', { v: filters.targetYear || null });
-        if (filters.targetSemester !== undefined) qb.andWhere('e.target_semester = :v', { v: filters.targetSemester || null });
+        if (filters.targetCollege) qb.andWhere('e.target_college = :v', { v: String(filters.targetCollege) });
+        if (filters.targetCourse) qb.andWhere('e.target_course = :v', { v: String(filters.targetCourse) });
+        if (filters.targetBranch) qb.andWhere('e.target_branch = :v', { v: String(filters.targetBranch) });
+        if (filters.targetBatch) qb.andWhere('e.target_batch = :v', { v: String(filters.targetBatch) });
+        if (filters.targetYear) qb.andWhere('e.target_year = :v', { v: String(filters.targetYear) });
+        if (filters.targetSemester) qb.andWhere('e.target_semester = :v', { v: String(filters.targetSemester) });
 
         const rows = await qb.getRawMany();
         return rows.map((r) => ({
@@ -840,14 +843,22 @@ class SdmsService {
         const examId = Number(exam.id);
         if (!examId) throw AppError.badRequest('Invalid exam id for SDMS event creation');
 
-        // Marker to keep deletion + re-creation idempotent.
         const marker = `[ems_exam_id:${examId}]`;
         const descriptionBase = (suffix) => `${marker} ${suffix}`;
 
+        // De-duplicate: delete all previously created events for this exam ID or exam name
         const deleteResult = await eventRepo.createQueryBuilder()
             .delete()
             .where('description LIKE :p', { p: `%${marker}%` })
+            .orWhere('title LIKE :nameP', { nameP: `%${exam.name}%` })
             .execute();
+
+        if (exam.status !== 'published') {
+            return {
+                deleted: deleteResult?.affectedRows ?? null,
+                created: 0,
+            };
+        }
 
         const scopes = (exam.scopes && exam.scopes.length > 0)
             ? exam.scopes
@@ -863,9 +874,22 @@ class SdmsService {
                 },
             ];
 
-        const createdBy = 43;
+        // Combine scope attributes into clean summary strings to prevent scope repetition
+        const colleges = [...new Set(scopes.map((s) => s.college ?? exam.college).filter(Boolean))];
+        const courses = [...new Set(scopes.map((s) => s.course ?? exam.course).filter(Boolean))];
+        const branches = [...new Set(scopes.map((s) => s.branch ?? exam.branch).filter(Boolean))];
+        const batches = [...new Set(scopes.map((s) => s.batch ?? exam.batch).filter(Boolean))];
 
+        const targetCollege = colleges.join(', ') || null;
+        const targetCourse = courses.join(', ') || null;
+        const targetBranch = branches.join(', ') || null;
+        const targetBatch = batches.join(', ') || null;
+        const targetYear = exam.yearOfStudy != null ? String(exam.yearOfStudy) : null;
+        const targetSemester = exam.semester != null ? String(exam.semester) : null;
+
+        const createdBy = actor?.id ? Number(actor.id) : null;
         const createdAt = new Date();
+
         const saveEvent = (payload) => eventRepo.save(eventRepo.create({
             ...payload,
             createdBy,
@@ -876,85 +900,159 @@ class SdmsService {
 
         const events = [];
 
-        // 1) Application window (applicationStartDate → applicationEndDate)
-        const hasApplicationWindow = !!(exam.applicationStartDate && exam.applicationEndDate);
-        // Late fee slabs
+        // 1) Application Start & Application Close milestones
+        if (exam.applicationStartDate) {
+            const startDateStr = toDateOnly(exam.applicationStartDate);
+            const endDateStr = exam.applicationEndDate ? toDateOnly(exam.applicationEndDate) : null;
+            const desc = endDateStr
+                ? `Exam application opens on ${startDateStr}. Application window ends on ${endDateStr}.`
+                : `Exam application opens on ${startDateStr}.`;
+
+            events.push(
+                await saveEvent({
+                    title: `Application Open: ${exam.name}`,
+                    description: descriptionBase(desc),
+                    eventDate: startDateStr,
+                    endDate: startDateStr,
+                    eventType: 'exam',
+                    targetCollege,
+                    targetCourse,
+                    targetBranch,
+                    targetBatch,
+                    targetYear,
+                    targetSemester,
+                    startTime: null,
+                    endTime: null,
+                }),
+            );
+        }
+
+        if (exam.applicationEndDate && toDateOnly(exam.applicationEndDate) !== toDateOnly(exam.applicationStartDate)) {
+            const startDateStr = exam.applicationStartDate ? toDateOnly(exam.applicationStartDate) : null;
+            const endDateStr = toDateOnly(exam.applicationEndDate);
+            const desc = startDateStr
+                ? `Exam application closes on ${endDateStr} (Last Date). Application window started on ${startDateStr}.`
+                : `Exam application closes on ${endDateStr} (Last Date).`;
+
+            events.push(
+                await saveEvent({
+                    title: `Application Closing: ${exam.name}`,
+                    description: descriptionBase(desc),
+                    eventDate: endDateStr,
+                    endDate: endDateStr,
+                    eventType: 'exam',
+                    targetCollege,
+                    targetCourse,
+                    targetBranch,
+                    targetBatch,
+                    targetYear,
+                    targetSemester,
+                    startTime: null,
+                    endTime: null,
+                }),
+            );
+        }
+
+        // 2) Late fee slabs
         const slabs = Array.isArray(exam.lateFeeSlabs) ? exam.lateFeeSlabs : [];
-        const applicationEnd = exam.applicationEndDate ?? null;
-        // 2) Exam window (examinationStartDate → examinationEndDate)
-        const hasExamWindow = !!(exam.examinationStartDate && exam.examinationEndDate);
+        for (let i = 0; i < slabs.length; i++) {
+            const slab = slabs[i];
+            if (!slab?.fromDate) continue;
+            const slabDateStr = toDateOnly(slab.fromDate);
+            events.push(
+                await saveEvent({
+                    title: `Late Fee Slab ${i + 1} (${slab.amount ?? '—'}): ${exam.name}`,
+                    description: descriptionBase(`Late fee slab amount=${slab.amount ?? null}`),
+                    eventDate: slabDateStr,
+                    endDate: slabDateStr,
+                    eventType: 'exam',
+                    targetCollege,
+                    targetCourse,
+                    targetBranch,
+                    targetBatch,
+                    targetYear,
+                    targetSemester,
+                    startTime: null,
+                    endTime: null,
+                }),
+            );
+        }
 
-        for (const scope of scopes) {
-            const targetCollege = scope.college ?? exam.college ?? null;
-            const targetCourse = scope.course ?? exam.course ?? null;
-            const targetBranch = scope.branch ?? exam.branch ?? null;
-            const targetBatch = scope.batch ?? exam.batch ?? null;
-            const targetYear = scope.yearOfStudy != null ? String(scope.yearOfStudy) : null;
-            const targetSemester = scope.semester != null ? String(scope.semester) : null;
+        // 3) Examination Start & Examination End milestones
+        if (exam.examinationStartDate) {
+            const examStartStr = toDateOnly(exam.examinationStartDate);
+            events.push(
+                await saveEvent({
+                    title: `Examination Start: ${exam.name}`,
+                    description: descriptionBase('Examination start date'),
+                    eventDate: examStartStr,
+                    endDate: examStartStr,
+                    eventType: 'exam',
+                    targetCollege,
+                    targetCourse,
+                    targetBranch,
+                    targetBatch,
+                    targetYear,
+                    targetSemester,
+                    startTime: null,
+                    endTime: null,
+                }),
+            );
+        }
 
-            if (hasApplicationWindow) {
-                events.push(
-                    await saveEvent({
-                        title: `Application Open: ${exam.name}`,
-                        description: descriptionBase(`Application window (${scope.course}/${scope.branch ?? ''})`),
-                        eventDate: exam.applicationStartDate,
-                        endDate: exam.applicationEndDate,
-                        eventType: 'exam',
-                        targetCollege,
-                        targetCourse,
-                        targetBranch,
-                        targetBatch,
-                        targetYear,
-                        targetSemester,
-                        startTime: null,
-                        endTime: null,
-                    }),
-                );
-            }
+        if (exam.examinationEndDate && toDateOnly(exam.examinationEndDate) !== toDateOnly(exam.examinationStartDate)) {
+            const examEndStr = toDateOnly(exam.examinationEndDate);
+            events.push(
+                await saveEvent({
+                    title: `Examination End: ${exam.name}`,
+                    description: descriptionBase('Examination end date'),
+                    eventDate: examEndStr,
+                    endDate: examEndStr,
+                    eventType: 'exam',
+                    targetCollege,
+                    targetCourse,
+                    targetBranch,
+                    targetBatch,
+                    targetYear,
+                    targetSemester,
+                    startTime: null,
+                    endTime: null,
+                }),
+            );
+        }
 
-            for (let i = 0; i < slabs.length; i++) {
-                const slab = slabs[i];
-                if (!slab?.fromDate) continue;
-                // Last slab may have toDate = NULL -> treat as until application end.
-                const slabEnd = slab.toDate ?? applicationEnd ?? null;
-                events.push(
-                    await saveEvent({
-                        title: `Late Fee Slab ${i + 1} (${slab.amount ?? '—'}): ${exam.name}`,
-                        description: descriptionBase(`Late fee slab amount=${slab.amount ?? null}`),
-                        eventDate: slab.fromDate,
-                        endDate: slabEnd,
-                        eventType: 'exam',
-                        targetCollege,
-                        targetCourse,
-                        targetBranch,
-                        targetBatch,
-                        targetYear,
-                        targetSemester,
-                        startTime: null,
-                        endTime: null,
-                    }),
-                );
-            }
+        // 4) Individual Subject Exam Timetable (Deduplicated)
+        const examSubjects = Array.isArray(exam.examSubjects) ? exam.examSubjects : [];
+        const processedPapers = new Set();
 
-            if (hasExamWindow) {
-                events.push(
-                    await saveEvent({
-                        title: `Examination: ${exam.name}`,
-                        description: descriptionBase('Examination start/end window'),
-                        eventDate: exam.examinationStartDate,
-                        endDate: exam.examinationEndDate,
-                        eventType: 'exam',
-                        targetCollege,
-                        targetCourse,
-                        targetBranch,
-                        targetBatch,
-                        targetYear,
-                        targetSemester,
-                        startTime: null,
-                        endTime: null,
-                    }),
-                );
-            }
+        for (const es of examSubjects) {
+            if (!es.examDate) continue;
+            const dateStr = toDateOnly(es.examDate);
+            const paperKey = `${es.subjectId}:${dateStr}:${es.session ?? ''}:${es.branch ?? ''}`;
+            if (processedPapers.has(paperKey)) continue;
+            processedPapers.add(paperKey);
+
+            const subjectTitle = es.subject?.code && es.subject?.name
+                ? `${es.subject.code} - ${es.subject.name}`
+                : es.subject?.name ?? `Subject ${es.subjectId}`;
+
+            events.push(
+                await saveEvent({
+                    title: `Paper: ${subjectTitle} (${exam.name})`,
+                    description: descriptionBase(`Subject exam paper: ${subjectTitle}`),
+                    eventDate: dateStr,
+                    endDate: dateStr,
+                    eventType: 'exam',
+                    targetCollege,
+                    targetCourse,
+                    targetBranch: es.branch ?? targetBranch,
+                    targetBatch,
+                    targetYear,
+                    targetSemester,
+                    startTime: es.startTime ?? null,
+                    endTime: es.endTime ?? null,
+                }),
+            );
         }
 
         return {

@@ -45,6 +45,7 @@ export function RegulationForm({
     if (initial) {
       setCode(initial.code);
       setName(initial.name);
+      setDescription(initial.description ?? '');
       setEffectiveDate(
         initial.effectiveDate ? String(initial.effectiveDate).slice(0, 10) : '',
       );
@@ -67,16 +68,7 @@ export function RegulationForm({
     setError('');
   }, [initial]);
 
-  function validateStep1(): boolean {
-    if (!code.trim() || !name.trim()) {
-      setError('Code and name are required.');
-      return false;
-    }
-    setError('');
-    return true;
-  }
-
-  function validateStep2(): boolean {
+  function validateCollegesAndScope(): boolean {
     if (selectedCollegeIds.length === 0) {
       setError('Select at least one college.');
       return false;
@@ -94,14 +86,27 @@ export function RegulationForm({
     return true;
   }
 
+  function validateRegulationDetails(): boolean {
+    if (!code.trim() || !name.trim()) {
+      setError('Code and name are required.');
+      return false;
+    }
+    setError('');
+    return true;
+  }
+
   function handleNext(e: FormEvent) {
     e.preventDefault();
-    if (validateStep1()) setStep(2);
+    if (validateCollegesAndScope()) setStep(2);
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!validateStep2()) return;
+    if (!validateCollegesAndScope()) {
+      setStep(1);
+      return;
+    }
+    if (!validateRegulationDetails()) return;
 
     const scopePayload = flattenScopeForm(scopes);
 
@@ -126,12 +131,21 @@ export function RegulationForm({
     >
       {/* Step indicator */}
       <div className="flex items-center gap-3 border-b border-[var(--border)] pb-4">
-        <StepPill n={1} label="Regulation details" active={step === 1} done={step > 1} />
+        <StepPill n={1} label="Colleges & scope" active={step === 1} done={step > 1} />
         <div className="h-px flex-1 bg-[var(--border)]" />
-        <StepPill n={2} label="Colleges & scope" active={step === 2} done={false} />
+        <StepPill n={2} label="Regulation details" active={step === 2} done={false} />
       </div>
 
       {step === 1 ? (
+        <RegulationScopeMapper
+          value={scopes}
+          onChange={setScopes}
+          selectedCollegeIds={selectedCollegeIds}
+          onSelectedCollegeIdsChange={setSelectedCollegeIds}
+          excludeRegulationId={initial?.id}
+          regulationActive={status === 'active'}
+        />
+      ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
@@ -185,15 +199,6 @@ export function RegulationForm({
             </select>
           </div>
         </>
-      ) : (
-        <RegulationScopeMapper
-          value={scopes}
-          onChange={setScopes}
-          selectedCollegeIds={selectedCollegeIds}
-          onSelectedCollegeIdsChange={setSelectedCollegeIds}
-          excludeRegulationId={initial?.id}
-          regulationActive={status === 'active'}
-        />
       )}
 
       {error && (
@@ -223,7 +228,7 @@ export function RegulationForm({
             Cancel
           </Button>
           {step === 1 ? (
-            <Button type="submit">Next: Map colleges & batches</Button>
+            <Button type="submit">Next: Regulation details</Button>
           ) : (
             <Button type="submit" disabled={loading}>
               {loading

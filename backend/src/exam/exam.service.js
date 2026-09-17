@@ -655,7 +655,7 @@ class ExamService {
             throw AppError.notFound('Examination not found');
         return exam;
     }
-    async update(id, dto) {
+    async update(id, dto, actor = {}) {
         const exam = await this.findOne(id);
         if (exam.status === ExamStatus.ARCHIVED) {
             throw AppError.badRequest('Archived examinations cannot be updated');
@@ -810,7 +810,32 @@ class ExamService {
                     ? ExamStatus.DRAFT
                     : exam.status,
         });
-        return this.examRepo.save(exam);
+        const savedExam = await this.examRepo.save(exam);
+        if (savedExam.status === ExamStatus.PUBLISHED) {
+            try {
+                const fullExam = await this.findOne(id);
+                await this.sdms.createOrReplaceExamEventsForPublishedExam(fullExam, actor);
+            } catch (err) {
+                log.error({ err, examId: id }, 'Failed to sync SDMS exam events on update');
+            }
+        }
+        return savedExam;
+    }
+    async syncEventsForPublishedExams(actor = {}) {
+        const publishedExams = await this.examRepo.find({
+            where: { status: ExamStatus.PUBLISHED },
+            relations: ['scopes', 'examSubjects', 'lateFeeSlabs'],
+        });
+        let totalCreated = 0;
+        for (const exam of publishedExams) {
+            try {
+                const res = await this.sdms.createOrReplaceExamEventsForPublishedExam(exam, actor);
+                totalCreated += res.created ?? 0;
+            } catch (err) {
+                log.error({ err, examId: exam.id }, 'Failed to sync exam events');
+            }
+        }
+        return { syncedExams: publishedExams.length, totalCreated };
     }
     async submitForApproval(id) {
         const exam = await this.findOne(id);
@@ -3048,6 +3073,198 @@ class ExamService {
             .where('LOWER(fr.studentRollNumber) = LOWER(:roll)', { roll })
             .orderBy('p.paidAt', 'DESC')
             .getMany();
+    }
+
+    async getExamApplicationReport(filters = {}) {
+        const { examId, batch, branch, course, status, search } = filters;
+
+        // Cache key for 5-second TTL cache to speed up repeated queries
+        const cacheKey = `report_${examId || 'all'}_${search || ''}`;
+        const now = Date.now();
+        if (!this._reportCache) {
+            this._reportCache = new Map();
+        }
+
+        const cached = this._reportCache.get(cacheKey);
+        let records;
+        if (cached && (now - cached.timestamp < 5000)) {
+            records = cached.records;
+        } else {
+            const qb = this.feeRecordRepo
+                .createQueryBuilder('fr')
+                .leftJoinAndSelect('fr.exam', 'exam')
+                .leftJoinAndSelect('fr.application', 'app')
+                .leftJoinAndSelect('fr.payments', 'p')
+                .orderBy('fr.createdAt', 'DESC');
+
+            if (examId) {
+                qb.andWhere('fr.examId = :examId', { examId: Number(examId) });
+            }
+
+            if (search) {
+                const term = `%${String(search).trim().toLowerCase()}%`;
+                qb.andWhere('(LOWER(fr.studentRollNumber) LIKE :term OR LOWER(fr.studentName) LIKE :term)', { term });
+            }
+
+            records = await qb.getMany();
+            this._reportCache.set(cacheKey, { timestamp: now, records });
+
+            // Purge old cache entries older than 30s
+            if (this._reportCache.size > 20) {
+                for (const [k, v] of this._reportCache.entries()) {
+                    if (now - v.timestamp > 30000) this._reportCache.delete(k);
+                }
+            }
+        }
+
+        const missingPins = [...new Set(
+            records
+                .filter((r) => !r.application?.studentBranch || !r.exam?.batch)
+                .map((r) => r.studentRollNumber)
+                .filter(Boolean)
+        )];
+
+        const studentMap = new Map();
+        if (missingPins.length > 0) {
+            try {
+                const chunkSize = 200;
+                for (let i = 0; i < missingPins.length; i += chunkSize) {
+                    const chunk = missingPins.slice(i, i + chunkSize);
+                    const students = await this.sdms.studentRepo
+                        .createQueryBuilder('s')
+                        .select(['s.id', 's.pinNo', 's.batch', 's.branch', 's.course'])
+                        .where('s.pinNo IN (:...chunk)', { chunk })
+                        .getMany();
+                    for (const s of students) {
+                        if (s?.pinNo) {
+                            studentMap.set(String(s.pinNo).trim().toUpperCase(), s);
+                        }
+                    }
+                }
+            } catch {
+                // fallback to record values if SDMS lookup fails
+            }
+        }
+
+        const items = records.map((r) => {
+            const sdmsStudent = studentMap.get(String(r.studentRollNumber || '').trim().toUpperCase());
+            const resolvedBatch = sdmsStudent?.batch || r.exam?.batch || 'Unassigned';
+            const resolvedBranch = r.application?.studentBranch || sdmsStudent?.branch || r.exam?.branch || 'Unassigned';
+            const resolvedCourse = sdmsStudent?.course || r.exam?.course || 'Unassigned';
+            const baseFee = Number(r.baseFee || 0);
+            const lateFee = Number(r.lateFee || 0);
+            const totalAmount = Number(r.totalAmount || 0);
+            const isPaid = String(r.status || '').toLowerCase() === 'paid';
+            const isPaidLateFee = isPaid && lateFee > 0;
+            const successfulPayment = (r.payments || []).find((p) => String(p.status).toLowerCase() === 'success') || r.payments?.[0];
+
+            return {
+                id: r.id,
+                examId: r.examId,
+                examName: r.exam?.name || `Exam #${r.examId}`,
+                examCode: r.exam?.code || null,
+                studentRollNumber: r.studentRollNumber,
+                studentName: r.studentName,
+                batch: resolvedBatch,
+                branch: resolvedBranch,
+                course: resolvedCourse,
+                baseFee,
+                lateFee,
+                totalAmount,
+                status: isPaid ? 'paid' : 'pending',
+                isPaid,
+                isPaidLateFee,
+                paidAt: successfulPayment?.paidAt || null,
+                submittedAt: r.application?.submittedAt || r.createdAt,
+                paymentMode: successfulPayment?.paymentMode || null,
+                paymentMethod: successfulPayment?.paymentMethod || null,
+                receiptNumber: successfulPayment?.receiptNumber || null,
+            };
+        });
+
+        let filteredItems = items;
+        if (batch) {
+            const b = String(batch).trim().toLowerCase();
+            filteredItems = filteredItems.filter((i) => i.batch.toLowerCase() === b);
+        }
+        if (branch) {
+            const br = String(branch).trim().toLowerCase();
+            filteredItems = filteredItems.filter((i) => i.branch.toLowerCase() === br);
+        }
+        if (course) {
+            const c = String(course).trim().toLowerCase();
+            filteredItems = filteredItems.filter((i) => i.course.toLowerCase() === c);
+        }
+
+        const totalApplied = filteredItems.length;
+        const paidCount = filteredItems.filter((i) => i.isPaid).length;
+        const notPaidCount = filteredItems.filter((i) => !i.isPaid).length;
+        const paidWithLateFeeCount = filteredItems.filter((i) => i.isPaidLateFee).length;
+        const totalAmountCollected = filteredItems
+            .filter((i) => i.isPaid)
+            .reduce((sum, i) => sum + i.totalAmount, 0);
+        const totalLateFeeCollected = filteredItems
+            .filter((i) => i.isPaid)
+            .reduce((sum, i) => sum + i.lateFee, 0);
+
+        const breakdownMap = new Map();
+        for (const item of filteredItems) {
+            const key = `${item.batch}||${item.branch}||${item.course}`;
+            if (!breakdownMap.has(key)) {
+                breakdownMap.set(key, {
+                    batch: item.batch,
+                    branch: item.branch,
+                    course: item.course,
+                    totalApplied: 0,
+                    paidCount: 0,
+                    notPaidCount: 0,
+                    paidWithLateFeeCount: 0,
+                    totalAmountCollected: 0,
+                    totalLateFeeCollected: 0,
+                });
+            }
+            const b = breakdownMap.get(key);
+            b.totalApplied += 1;
+            if (item.isPaid) {
+                b.paidCount += 1;
+                b.totalAmountCollected += item.totalAmount;
+                b.totalLateFeeCollected += item.lateFee;
+                if (item.isPaidLateFee) {
+                    b.paidWithLateFeeCount += 1;
+                }
+            } else {
+                b.notPaidCount += 1;
+            }
+        }
+
+        const breakdown = Array.from(breakdownMap.values()).sort((a, b) =>
+            a.batch.localeCompare(b.batch) || a.branch.localeCompare(b.branch)
+        );
+
+        let itemsForList = filteredItems;
+        if (status) {
+            const s = String(status).toLowerCase().trim();
+            if (s === 'paid') {
+                itemsForList = itemsForList.filter((i) => i.isPaid);
+            } else if (s === 'pending' || s === 'not_paid' || s === 'unpaid') {
+                itemsForList = itemsForList.filter((i) => !i.isPaid);
+            } else if (s === 'paid_with_late_fee') {
+                itemsForList = itemsForList.filter((i) => i.isPaidLateFee);
+            }
+        }
+
+        return {
+            summary: {
+                totalApplied,
+                paidCount,
+                notPaidCount,
+                paidWithLateFeeCount,
+                totalAmountCollected,
+                totalLateFeeCollected,
+            },
+            breakdown,
+            items: itemsForList,
+        };
     }
 }
 module.exports = { ExamService };

@@ -201,6 +201,18 @@ function createSdmsRoutes(services) {
       );
     }),
   );
+  router.post(
+    '/events/sync',
+    requirePrivilege('exams:write', 'exams:read'),
+    asyncHandler(async (req, res) => {
+      if (services.exam && typeof services.exam.syncEventsForPublishedExams === 'function') {
+        const result = await services.exam.syncEventsForPublishedExams(req.user);
+        res.json({ success: true, ...result });
+      } else {
+        res.json({ success: false, message: 'Exam service unavailable' });
+      }
+    }),
+  );
   return router;
 }
 

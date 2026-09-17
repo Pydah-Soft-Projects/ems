@@ -39,6 +39,7 @@ export default function ExamsPage() {
   const [statusFilter, setStatusFilter] = useState<ExamStatusFilter>('all');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncingEvents, setSyncingEvents] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [selected, setSelected] = useState<Exam | null>(null);
@@ -76,6 +77,27 @@ export default function ExamsPage() {
   }, [loadExams]);
 
   const counts = useMemo(() => ({ total: exams.length }), [exams]);
+
+  async function handleSyncCalendar() {
+    setSyncingEvents(true);
+    setActionError('');
+    try {
+      const res = await api.syncSdmsEvents();
+      toast.push(
+        `Calendar notifications updated for ${res.syncedExams ?? 0} published examination(s) (${res.totalCreated ?? 0} events synced).`,
+        'success',
+      );
+      await loadExams();
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to update calendar notifications.',
+      );
+    } finally {
+      setSyncingEvents(false);
+    }
+  }
 
   async function handleSubmit(exam: Exam) {
     setSaving(true);
@@ -188,24 +210,48 @@ export default function ExamsPage() {
         title="Examinations"
         description="Create examinations from mapped subjects, submit for approval, and publish for student enrollment."
         action={
-          canWrite ? (
-            <Button onClick={() => router.push('/dashboard/exams/new')}>
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {statusFilter === 'published' && canWrite ? (
+              <Button
+                variant="secondary"
+                onClick={() => void handleSyncCalendar()}
+                disabled={syncingEvents}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 4.5v15m7.5-7.5h-15"
-                />
-              </svg>
-              New examination
-            </Button>
-          ) : undefined
+                <svg
+                  className={`h-4 w-4 ${syncingEvents ? 'animate-spin' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                  />
+                </svg>
+                {syncingEvents ? 'Updating...' : 'Update calendar & notifications'}
+              </Button>
+            ) : null}
+            {canWrite ? (
+              <Button onClick={() => router.push('/dashboard/exams/new')}>
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 4.5v15m7.5-7.5h-15"
+                  />
+                </svg>
+                New examination
+              </Button>
+            ) : undefined}
+          </div>
         }
       />
 
@@ -221,8 +267,33 @@ export default function ExamsPage() {
 
       <Card>
         <CardHeader
-          title="Examinations"
+          title={statusFilter === 'published' ? 'Published examinations' : 'Examinations'}
           description={`${counts.total} examination${counts.total !== 1 ? 's' : ''}`}
+          action={
+            statusFilter === 'published' && canWrite ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void handleSyncCalendar()}
+                disabled={syncingEvents}
+              >
+                <svg
+                  className={`h-3.5 w-3.5 ${syncingEvents ? 'animate-spin' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                  />
+                </svg>
+                {syncingEvents ? 'Updating...' : 'Update calendar & notifications'}
+              </Button>
+            ) : undefined
+          }
         />
         <CardBody className="!p-0">
           <ExamTable

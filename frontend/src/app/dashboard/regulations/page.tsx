@@ -150,7 +150,7 @@ export default function RegulationsPage() {
           selected
             ? 'Update regulation details. Code cannot be changed.'
             : formOpen && !selected
-              ? 'Step 1: Regulation details → Step 2: Colleges, programmes & batches'
+              ? 'Step 1: Colleges, programmes & batches → Step 2: Regulation details'
               : 'Add a new academic regulation to the examination portal.'
         }
       >

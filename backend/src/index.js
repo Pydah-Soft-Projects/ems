@@ -84,10 +84,11 @@ async function listenWithRetry(app, port, maxAttempts = 15) {
       if (err.code !== 'EADDRINUSE' || attempt === maxAttempts) {
         throw err;
       }
+      await freeDevPort(port);
       const waitMs = 400 * attempt;
       logger.warn(
         { event: 'server.port_busy', port, waitMs, attempt, maxAttempts },
-        'Port busy; retrying',
+        'Port busy; attempting free port and retry',
       );
       await delay(waitMs);
     }

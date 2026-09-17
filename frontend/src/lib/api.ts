@@ -92,6 +92,56 @@ import {
   UpdateEmsUserInput,
 } from '@/types/user-management';
 
+export type ExamApplicationReportSummary = {
+  totalApplied: number;
+  paidCount: number;
+  notPaidCount: number;
+  paidWithLateFeeCount: number;
+  totalAmountCollected: number;
+  totalLateFeeCollected: number;
+};
+
+export type ExamApplicationReportBreakdownItem = {
+  batch: string;
+  branch: string;
+  course: string;
+  totalApplied: number;
+  paidCount: number;
+  notPaidCount: number;
+  paidWithLateFeeCount: number;
+  totalAmountCollected: number;
+  totalLateFeeCollected: number;
+};
+
+export type ExamApplicationReportItem = {
+  id: number;
+  examId: number;
+  examName: string;
+  examCode: string | null;
+  studentRollNumber: string;
+  studentName: string;
+  batch: string;
+  branch: string;
+  course: string;
+  baseFee: number;
+  lateFee: number;
+  totalAmount: number;
+  status: string;
+  isPaid: boolean;
+  isPaidLateFee: boolean;
+  paidAt: string | null;
+  submittedAt: string;
+  paymentMode: string | null;
+  paymentMethod: string | null;
+  receiptNumber: string | null;
+};
+
+export type ExamApplicationReportResponse = {
+  summary: ExamApplicationReportSummary;
+  breakdown: ExamApplicationReportBreakdownItem[];
+  items: ExamApplicationReportItem[];
+};
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export class ApiError extends Error {
@@ -445,9 +495,42 @@ export const api = {
     return request<SdmsEvent[]>(`/sdms/events${query}`);
   },
 
+  async syncSdmsEvents() {
+    try {
+      return await request<{ success: boolean; syncedExams?: number; totalCreated?: number }>(
+        '/exams/sync-events',
+        { method: 'POST' },
+      );
+    } catch {
+      return await request<{ success: boolean; syncedExams?: number; totalCreated?: number }>(
+        '/sdms/events/sync',
+        { method: 'POST' },
+      );
+    }
+  },
+
   getExams(status?: ExamStatus) {
     const query = status ? `?status=${status}` : '';
     return request<Exam[]>(`/exams${query}`);
+  },
+
+  getExamApplicationReport(filters: {
+    examId?: number;
+    batch?: string;
+    branch?: string;
+    course?: string;
+    status?: string;
+    search?: string;
+  } = {}) {
+    const params = new URLSearchParams();
+    if (filters.examId) params.set('examId', String(filters.examId));
+    if (filters.batch) params.set('batch', filters.batch);
+    if (filters.branch) params.set('branch', filters.branch);
+    if (filters.course) params.set('course', filters.course);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return request<ExamApplicationReportResponse>(`/exams/reports/application-summary${query}`);
   },
 
   getExam(id: number) {

@@ -14,6 +14,24 @@ function createExamRoutes(services) {
   router.use(requireStaff);
 
   router.post(
+    '/sync-events',
+    requirePrivilege('exams:write', 'exams:read'),
+    asyncHandler(async (req, res) => {
+      const result = await services.exam.syncEventsForPublishedExams(req.user);
+      res.json({ success: true, ...result });
+    }),
+  );
+
+  router.get(
+    '/reports/application-summary',
+    requirePrivilege('exams:read', 'fees:read'),
+    asyncHandler(async (req, res) => {
+      const report = await services.exam.getExamApplicationReport(req.query);
+      res.json(report);
+    }),
+  );
+
+  router.post(
     '/',
     requirePrivilege('exams:write'),
     asyncHandler(async (req, res) => {
@@ -39,7 +57,7 @@ function createExamRoutes(services) {
     '/:id',
     requirePrivilege('exams:edit'),
     asyncHandler(async (req, res) => {
-      res.json(await services.exam.update(parseId(req.params.id), req.body));
+      res.json(await services.exam.update(parseId(req.params.id), req.body, req.user));
     }),
   );
   router.post(
