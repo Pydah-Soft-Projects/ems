@@ -3378,10 +3378,48 @@ class ExamService {
             .reduce((sum, i) => sum + i.lateFee, 0);
 
         const breakdownMap = new Map();
+        
+        if (examId) {
+            try {
+                const examObj = await this.examRepo.findOne({
+                    where: { id: Number(examId) },
+                    relations: ['scopes']
+                });
+                if (examObj && examObj.scopes) {
+                    for (const scope of examObj.scopes) {
+                        const bBatch = scope.batch || examObj.batch;
+                        const bBranch = scope.branch || examObj.branch;
+                        const bCourse = scope.course || examObj.course;
+                        const bExamName = examObj.name || `Exam #${examId}`;
+                        if (bBatch && bBranch && bCourse) {
+                            const key = `${bExamName}||${bBatch}||${bBranch}||${bCourse}`;
+                            if (!breakdownMap.has(key)) {
+                                breakdownMap.set(key, {
+                                    examName: bExamName,
+                                    batch: bBatch,
+                                    branch: bBranch,
+                                    course: bCourse,
+                                    totalApplied: 0,
+                                    paidCount: 0,
+                                    notPaidCount: 0,
+                                    paidWithLateFeeCount: 0,
+                                    totalAmountCollected: 0,
+                                    totalLateFeeCollected: 0,
+                                    totalEligible: 0
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (err) {}
+        }
+
         for (const item of filteredItems) {
-            const key = `${item.batch}||${item.branch}||${item.course}`;
+            const bExamName = item.examName || 'Multiple/Unknown';
+            const key = `${bExamName}||${item.batch}||${item.branch}||${item.course}`;
             if (!breakdownMap.has(key)) {
                 breakdownMap.set(key, {
+                    examName: bExamName,
                     batch: item.batch,
                     branch: item.branch,
                     course: item.course,
@@ -3391,6 +3429,7 @@ class ExamService {
                     paidWithLateFeeCount: 0,
                     totalAmountCollected: 0,
                     totalLateFeeCollected: 0,
+                    totalEligible: 0
                 });
             }
             const b = breakdownMap.get(key);
@@ -3407,11 +3446,71 @@ class ExamService {
             }
         }
 
-        const breakdown = Array.from(breakdownMap.values()).sort((a, b) =>
-            a.batch.localeCompare(b.batch) || a.branch.localeCompare(b.branch)
+        const breakdownArray = Array.from(breakdownMap.values()).sort((a, b) =>
+            (a.examName || '').localeCompare(b.examName || '') || a.batch.localeCompare(b.batch) || a.branch.localeCompare(b.branch)
         );
 
-        let itemsForList = filteredItems;
+        const appliedPins = new Set(filteredItems.map(i => String(i.studentRollNumber || '').trim().toUpperCase()));
+        const notAppliedItems = [];
+
+        let totalEligibleAll = 0;
+        for (const b of breakdownArray) {
+            if (b.batch === 'Unassigned' || b.branch === 'Unassigned' || b.course === 'Unassigned') {
+                b.totalEligible = b.totalApplied;
+            } else {
+                try {
+                    const eligibleStudents = await this.sdms.studentRepo.find({
+                        where: {
+                            batch: b.batch,
+                            branch: b.branch,
+                            course: b.course,
+                            studentStatus: 'Regular'
+                        },
+                        select: ['pinNo', 'studentName']
+                    });
+
+                    let countEligible = 0;
+                    for (const s of eligibleStudents) {
+                        const pin = String(s.pinNo || '').trim().toUpperCase();
+                        if (pin) {
+                            countEligible++;
+                            if (!appliedPins.has(pin)) {
+                                notAppliedItems.push({
+                                    id: `not_applied_${pin}_${b.examName}`,
+                                    examId: examId ? Number(examId) : 0,
+                                    examName: b.examName || (examId ? `Exam #${examId}` : 'Multiple'),
+                                    examCode: null,
+                                    studentRollNumber: s.pinNo,
+                                    studentName: s.studentName,
+                                    batch: b.batch,
+                                    branch: b.branch,
+                                    course: b.course,
+                                    baseFee: 0,
+                                    lateFee: 0,
+                                    totalAmount: 0,
+                                    status: 'not_applied',
+                                    isPaid: false,
+                                    isPaidLateFee: false,
+                                    paidAt: null,
+                                    submittedAt: null,
+                                    paymentMode: null,
+                                    paymentMethod: null,
+                                    receiptNumber: null,
+                                });
+                            }
+                        }
+                    }
+                    b.totalEligible = Math.max(countEligible, b.totalApplied);
+                } catch (e) {
+                    b.totalEligible = b.totalApplied;
+                }
+            }
+            totalEligibleAll += b.totalEligible;
+        }
+        
+        const breakdown = breakdownArray;
+
+        let itemsForList = [...filteredItems, ...notAppliedItems];
         if (status) {
             const s = String(status).toLowerCase().trim();
             if (s === 'paid') {
@@ -3425,6 +3524,7 @@ class ExamService {
 
         return {
             summary: {
+                totalEligible: totalEligibleAll,
                 totalApplied,
                 paidCount,
                 notPaidCount,

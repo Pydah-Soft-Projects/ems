@@ -99,6 +99,7 @@ import {
 } from '@/types/user-management';
 
 export type ExamApplicationReportSummary = {
+  totalEligible: number;
   totalApplied: number;
   paidCount: number;
   notPaidCount: number;
@@ -107,10 +108,12 @@ export type ExamApplicationReportSummary = {
   totalLateFeeCollected: number;
 };
 
-export type ExamApplicationReportBreakdownItem = {
+export interface ExamApplicationReportBreakdownItem {
+  examName?: string;
   batch: string;
   branch: string;
   course: string;
+  totalEligible: number;
   totalApplied: number;
   paidCount: number;
   notPaidCount: number;

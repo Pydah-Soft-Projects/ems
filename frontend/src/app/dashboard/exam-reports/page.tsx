@@ -41,7 +41,7 @@ export default function ExamReportsPage() {
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'summary' | 'breakdown' | 'students'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'breakdown' | 'students' | 'not_applied'>('summary');
 
   const [rawReportData, setRawReportData] = useState<ExamApplicationReportResponse | null>(null);
   const initialLoadDone = React.useRef(false);
@@ -106,21 +106,12 @@ export default function ExamReportsPage() {
       items = items.filter((i) => (i.branch || '').toLowerCase() === br);
     }
 
-    const totalApplied = items.length;
-    const paidCount = items.filter((i) => i.isPaid).length;
-    const notPaidCount = items.filter((i) => !i.isPaid).length;
-    const paidWithLateFeeCount = items.filter((i) => i.isPaidLateFee).length;
-    const totalAmountCollected = items
-      .filter((i) => i.isPaid)
-      .reduce((sum, i) => sum + (i.totalAmount || 0), 0);
-    const totalLateFeeCollected = items
-      .filter((i) => i.isPaid)
-      .reduce((sum, i) => sum + (i.lateFee || 0), 0);
-
     const breakdownMap = new Map<string, {
+      examName?: string;
       batch: string;
       branch: string;
       course: string;
+      totalEligible: number;
       totalApplied: number;
       paidCount: number;
       notPaidCount: number;
@@ -129,13 +120,33 @@ export default function ExamReportsPage() {
       totalLateFeeCollected: number;
     }>();
 
+    for (const b of rawReportData.breakdown) {
+      const bExamName = b.examName || 'Multiple/Unknown';
+      breakdownMap.set(`${bExamName}||${b.batch}||${b.branch}||${b.course}`, {
+        examName: bExamName,
+        batch: b.batch,
+        branch: b.branch,
+        course: b.course,
+        totalEligible: b.totalEligible || 0,
+        totalApplied: 0,
+        paidCount: 0,
+        notPaidCount: 0,
+        paidWithLateFeeCount: 0,
+        totalAmountCollected: 0,
+        totalLateFeeCollected: 0,
+      });
+    }
+
     for (const item of items) {
-      const key = `${item.batch}||${item.branch}||${item.course}`;
+      const bExamName = item.examName || 'Multiple/Unknown';
+      const key = `${bExamName}||${item.batch}||${item.branch}||${item.course}`;
       if (!breakdownMap.has(key)) {
         breakdownMap.set(key, {
+          examName: bExamName,
           batch: item.batch,
           branch: item.branch,
           course: item.course,
+          totalEligible: 0,
           totalApplied: 0,
           paidCount: 0,
           notPaidCount: 0,
@@ -145,33 +156,55 @@ export default function ExamReportsPage() {
         });
       }
       const b = breakdownMap.get(key)!;
-      b.totalApplied += 1;
-      if (item.isPaid) {
-        b.paidCount += 1;
-        b.totalAmountCollected += item.totalAmount || 0;
-        b.totalLateFeeCollected += item.lateFee || 0;
-        if (item.isPaidLateFee) {
-          b.paidWithLateFeeCount += 1;
+      if (item.status !== 'not_applied') {
+        b.totalApplied += 1;
+        if (item.isPaid) {
+          b.paidCount += 1;
+          b.totalAmountCollected += item.totalAmount || 0;
+          b.totalLateFeeCollected += item.lateFee || 0;
+          if (item.isPaidLateFee) {
+            b.paidWithLateFeeCount += 1;
+          }
+        } else {
+          b.notPaidCount += 1;
         }
-      } else {
-        b.notPaidCount += 1;
       }
     }
 
-    const breakdown = Array.from(breakdownMap.values()).sort(
-      (a, b) => a.batch.localeCompare(b.batch) || a.branch.localeCompare(b.branch)
-    );
+    let totalEligibleAll = 0;
+    const breakdown = Array.from(breakdownMap.values())
+      .filter((b) => {
+        if (selectedBatch && b.batch.toLowerCase() !== selectedBatch.trim().toLowerCase()) return false;
+        if (selectedBranch && b.branch.toLowerCase() !== selectedBranch.trim().toLowerCase()) return false;
+        return true;
+      })
+      .sort((a, b) => 
+        (a.examName || '').localeCompare(b.examName || '') || 
+        a.batch.localeCompare(b.batch) || 
+        a.branch.localeCompare(b.branch)
+      );
+
+    for (const b of breakdown) {
+      totalEligibleAll += b.totalEligible;
+    }
 
     let listItems = items;
     if (selectedStatus && selectedStatus !== 'all') {
       const s = selectedStatus.toLowerCase().trim();
       if (s === 'paid') {
         listItems = listItems.filter((i) => i.isPaid);
-      } else if (s === 'not_paid' || s === 'pending' || s === 'unpaid') {
-        listItems = listItems.filter((i) => !i.isPaid);
+      } else if (s === 'not_paid' || s === 'applied_not_paid') {
+        listItems = listItems.filter((i) => !i.isPaid && i.status !== 'not_applied');
       } else if (s === 'paid_with_late_fee') {
         listItems = listItems.filter((i) => i.isPaidLateFee);
+      } else if (s === 'not_applied') {
+        listItems = listItems.filter((i) => i.status === 'not_applied');
       }
+    } else {
+      // For 'all' status, we might just want to show applied students by default, 
+      // or we can show all depending on what tab is active. 
+      // Actually, since we'll have a separate tab for not applied, let's keep listItems as is, 
+      // and let the tabs filter it visually, or change selectedStatus when clicking tabs.
     }
 
     if (search.trim()) {
@@ -184,8 +217,30 @@ export default function ExamReportsPage() {
       );
     }
 
+    listItems.sort((a, b) => {
+      const branchA = a.branch || '';
+      const branchB = b.branch || '';
+      if (branchA !== branchB) return branchA.localeCompare(branchB);
+      
+      const pinA = a.studentRollNumber || '';
+      const pinB = b.studentRollNumber || '';
+      return pinA.localeCompare(pinB);
+    });
+
+    const appliedItems = items.filter((i) => i.status !== 'not_applied');
+    const totalApplied = appliedItems.length;
+    const paidCount = appliedItems.filter((i) => i.isPaid).length;
+    const notPaidCount = appliedItems.filter((i) => !i.isPaid).length;
+    const paidWithLateFeeCount = appliedItems.filter((i) => i.isPaidLateFee).length;
+    const totalAmountCollected = appliedItems
+      .filter((i) => i.isPaid)
+      .reduce((sum, i) => sum + (i.totalAmount || 0), 0);
+    const totalLateFeeCollected = appliedItems
+      .filter((i) => i.isPaid)
+      .reduce((sum, i) => sum + (i.lateFee || 0), 0);
     return {
       summary: {
+        totalEligible: totalEligibleAll,
         totalApplied,
         paidCount,
         notPaidCount,
@@ -222,6 +277,7 @@ export default function ExamReportsPage() {
   };
 
   const summary = reportData?.summary ?? {
+    totalEligible: 0,
     totalApplied: 0,
     paidCount: 0,
     notPaidCount: 0,
@@ -294,18 +350,24 @@ export default function ExamReportsPage() {
               </select>
             </div>
 
-            {activeTab === 'students' && (
+            {(activeTab === 'students' || activeTab === 'not_applied') && (
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Payment Status</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Student Status Filter</label>
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-[var(--primary)] focus:outline-none"
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="paid">Paid Only</option>
-                  <option value="not_paid">Not Paid (Pending)</option>
-                  <option value="paid_with_late_fee">Paid with Late Fee</option>
+                  {activeTab === 'not_applied' ? (
+                    <option value="not_applied">Not Applied</option>
+                  ) : (
+                    <>
+                      <option value="all">All Applied</option>
+                      <option value="paid">Paid Only</option>
+                      <option value="not_paid">Applied but Not Paid</option>
+                      <option value="paid_with_late_fee">Paid with Late Fee</option>
+                    </>
+                  )}
                 </select>
               </div>
             )}
@@ -325,7 +387,13 @@ export default function ExamReportsPage() {
       </Card>
 
       {/* Metric Cards Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50/70 to-white p-4 shadow-2xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">Total Eligible</p>
+          <p className="mt-1 text-2xl font-bold text-sky-950">{summary.totalEligible}</p>
+          <p className="mt-1 text-[11px] text-sky-600">Total eligible in scope</p>
+        </div>
+
         <div
           onClick={() => {
             setSelectedStatus('all');
@@ -362,7 +430,7 @@ export default function ExamReportsPage() {
           }`}
         >
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Not Paid (Pending)</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Applied But Not Paid</p>
             <span className="rounded bg-rose-200/80 px-1.5 py-0.5 text-[10px] font-bold text-rose-900">
               FILTER
             </span>
@@ -402,10 +470,18 @@ export default function ExamReportsPage() {
             items={[
               { id: 'summary', label: 'Summary Overview' },
               { id: 'breakdown', label: `Batch & Branch Breakdown (${reportData?.breakdown.length ?? 0})` },
-              { id: 'students', label: `Applied Students List (${reportData?.items.length ?? 0})` },
+              { id: 'students', label: `Applied Students List (${reportData?.items.filter(i => i.status !== 'not_applied').length ?? 0})` },
+              { id: 'not_applied', label: `Not Applied Students List (${reportData?.items.filter(i => i.status === 'not_applied').length ?? 0})` },
             ]}
             activeId={activeTab}
-            onChange={(id) => setActiveTab(id as 'summary' | 'breakdown' | 'students')}
+            onChange={(id) => {
+              setActiveTab(id as 'summary' | 'breakdown' | 'students' | 'not_applied');
+              if (id === 'not_applied') {
+                setSelectedStatus('not_applied');
+              } else if (id === 'students' && selectedStatus === 'not_applied') {
+                setSelectedStatus('all');
+              }
+            }}
           />
 
           {activeTab === 'summary' && (
@@ -422,10 +498,13 @@ export default function ExamReportsPage() {
                     <table className="w-full text-left text-xs text-slate-700">
                       <thead className="bg-slate-100/80 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                         <tr>
+                          {!selectedExamId && <th className="px-3 py-2.5 w-48">Exam Name</th>}
                           <th className="px-3 py-2.5">Batch</th>
                           <th className="px-3 py-2.5">Branch</th>
                           <th className="px-3 py-2.5">Course</th>
+                          <th className="px-3 py-2.5 text-center">Eligible</th>
                           <th className="px-3 py-2.5 text-center">Applied</th>
+                          <th className="px-3 py-2.5 text-center">Not Applied</th>
                           <th className="px-3 py-2.5 text-center">Paid</th>
                           <th className="px-3 py-2.5 text-center">Not Paid</th>
                           <th className="px-3 py-2.5 text-center">Paid w/ Late Fee</th>
@@ -434,11 +513,18 @@ export default function ExamReportsPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-200/70">
                         {reportData?.breakdown.map((row, idx) => (
-                          <tr key={`${row.batch}-${row.branch}-${idx}`} className="hover:bg-slate-50/70">
+                          <tr key={`${row.examName}-${row.batch}-${row.branch}-${idx}`} className="hover:bg-slate-50/70">
+                            {!selectedExamId && (
+                              <td className="px-3 py-2.5 text-xs text-slate-600 font-medium">
+                                {row.examName || 'N/A'}
+                              </td>
+                            )}
                             <td className="px-3 py-2.5 font-semibold text-slate-900">{row.batch}</td>
                             <td className="px-3 py-2.5 font-medium text-slate-800">{row.branch}</td>
                             <td className="px-3 py-2.5 text-slate-600">{row.course}</td>
+                            <td className="px-3 py-2.5 text-center font-semibold text-slate-900">{row.totalEligible}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-indigo-900">{row.totalApplied}</td>
+                            <td className="px-3 py-2.5 text-center font-semibold text-sky-700">{Math.max(0, row.totalEligible - row.totalApplied)}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-emerald-700">{row.paidCount}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-rose-600">{row.notPaidCount}</td>
                             <td className="px-3 py-2.5 text-center font-semibold text-amber-800">{row.paidWithLateFeeCount}</td>
@@ -463,9 +549,12 @@ export default function ExamReportsPage() {
                   <table className="w-full text-left text-xs text-slate-700">
                     <thead className="bg-slate-100/80 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                       <tr>
+                        {!selectedExamId && <th className="px-3 py-2.5 w-48">Exam Name</th>}
                         <th className="px-3 py-2.5">Batch</th>
                         <th className="px-3 py-2.5">Branch</th>
+                        <th className="px-3 py-2.5 text-center">Total Eligible</th>
                         <th className="px-3 py-2.5 text-center">Total Applied</th>
+                        <th className="px-3 py-2.5 text-center">Not Applied</th>
                         <th className="px-3 py-2.5 text-center">Paid Count</th>
                         <th className="px-3 py-2.5 text-center">Not Paid Count</th>
                         <th className="px-3 py-2.5 text-center">Paid with Late Fee</th>
@@ -475,10 +564,17 @@ export default function ExamReportsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-200/70">
                       {reportData?.breakdown.map((row, idx) => (
-                        <tr key={`${row.batch}-${row.branch}-${idx}`} className="hover:bg-slate-50/70">
+                        <tr key={`${row.examName}-${row.batch}-${row.branch}-${idx}`} className="hover:bg-slate-50/70">
+                          {!selectedExamId && (
+                            <td className="px-3 py-2.5 text-xs text-slate-600 font-medium">
+                              {row.examName || 'N/A'}
+                            </td>
+                          )}
                           <td className="px-3 py-2.5 font-semibold text-slate-900">{row.batch}</td>
                           <td className="px-3 py-2.5 font-medium text-slate-800">{row.branch}</td>
+                          <td className="px-3 py-2.5 text-center font-bold text-slate-900">{row.totalEligible}</td>
                           <td className="px-3 py-2.5 text-center font-bold text-indigo-900">{row.totalApplied}</td>
+                          <td className="px-3 py-2.5 text-center font-semibold text-sky-700">{Math.max(0, row.totalEligible - row.totalApplied)}</td>
                           <td className="px-3 py-2.5 text-center font-semibold text-emerald-700">{row.paidCount}</td>
                           <td className="px-3 py-2.5 text-center font-semibold text-rose-600">{row.notPaidCount}</td>
                           <td className="px-3 py-2.5 text-center font-semibold text-amber-800">{row.paidWithLateFeeCount}</td>
@@ -497,11 +593,11 @@ export default function ExamReportsPage() {
             </Card>
           )}
 
-          {activeTab === 'students' && (
+          {(activeTab === 'students' || activeTab === 'not_applied') && (
             <Card>
               <CardHeader
-                title="Individual Student Applications & Payments"
-                description="Complete list of applied students with fee details and payment status."
+                title={activeTab === 'not_applied' ? 'Not Applied Students' : 'Individual Student Applications & Payments'}
+                description={activeTab === 'not_applied' ? 'List of eligible students who have not applied.' : 'Complete list of applied students with fee details and payment status.'}
               />
               <CardBody>
                 {reportData?.items.length === 0 ? (
@@ -537,7 +633,11 @@ export default function ExamReportsPage() {
                             </td>
                             <td className="px-3 py-2.5 text-right font-bold text-slate-900">{formatMoney(item.totalAmount)}</td>
                             <td className="px-3 py-2.5 text-center">
-                              {item.isPaid ? (
+                              {item.status === 'not_applied' ? (
+                                <span className="inline-flex items-center rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-800">
+                                  NOT APPLIED
+                                </span>
+                              ) : item.isPaid ? (
                                 item.isPaidLateFee ? (
                                   <span className="inline-flex items-center rounded-md border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                                     PAID (LATE FEE)
@@ -549,7 +649,7 @@ export default function ExamReportsPage() {
                                 )
                               ) : (
                                 <span className="inline-flex items-center rounded-md border border-rose-300 bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">
-                                  NOT PAID
+                                  APPLIED, NOT PAID
                                 </span>
                               )}
                             </td>
