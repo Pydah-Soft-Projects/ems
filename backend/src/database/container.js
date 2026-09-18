@@ -48,6 +48,10 @@ const { CanaraVpaService } = require('../settings/canara-vpa.service');
 const {
   FeeManagementService,
 } = require('../fee-management/fee-management.service');
+const {
+  FeeHeadsService,
+} = require('../fee-management/fee-heads.service');
+const { FeeHead: FeeHeadEntity } = require('../fee-management/schemas/fee-head.schema');
 const { Professional } = require('../remuneration/schemas/professional.schema');
 const {
   RemunerationBill,
@@ -117,6 +121,13 @@ function createServices(dataSource, studentDataSource) {
   settings.setCanaraSettings(canaraSettings);
 
   const feeManagement = new FeeManagementService(sdms);
+  const feeHeads = new FeeHeadsService(
+    dataSource.getRepository(FeeHeadEntity),
+    feeManagement,
+    dataSource.getRepository(ExamFeeRecord),
+    dataSource.getRepository(RegulationScope),
+    dataSource.getRepository(Regulation),
+  );
 
   const exam = new ExamService(
     dataSource.getRepository(Exam),
@@ -187,6 +198,7 @@ function createServices(dataSource, studentDataSource) {
     sdms,
     settings,
     feeManagement,
+    feeHeads,
     results,
     professionals,
     remuneration,

@@ -53,6 +53,7 @@ const {
   EmsUser,
   EmsAuditLog,
 } = require('../auth/schemas/ems-rbac.schema');
+const { FeeHead } = require('../fee-management/schemas/fee-head.schema');
 
 const entities = [
   Regulation,
@@ -80,6 +81,7 @@ const entities = [
   EmsRole,
   EmsUser,
   EmsAuditLog,
+  FeeHead,
 ];
 
 function createExamPortalDataSource() {

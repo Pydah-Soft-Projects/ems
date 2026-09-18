@@ -21,6 +21,7 @@ import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
 import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
+import { FeeHead, FeeHeadResolution } from '@/types/fee-head';
 import {
   calcUpiConvenienceFee,
   feeRecordDisplayName,
@@ -37,6 +38,11 @@ type CollectChannel =
 interface FeeCollectionDeskProps {
   rollNumber: string;
 }
+
+export type OptionalResolvedFeeHead = {
+  head: FeeHead;
+  resolved: FeeHeadResolution;
+};
 
 export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const router = useRouter();
@@ -74,6 +80,87 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [eligibleExams, setEligibleExams] = useState<StudentExamListItem[]>([]);
   const [eligibleError, setEligibleError] = useState('');
   const [applyExam, setApplyExam] = useState<StudentExamListItem | null>(null);
+
+  // Fee Head Application State
+  const [feeHeadsList, setFeeHeadsList] = useState<FeeHead[]>([]);
+  const [optionalFeeHeads, setOptionalFeeHeads] = useState<OptionalResolvedFeeHead[]>([]);
+  const [selectedOptionalHeadIds, setSelectedOptionalHeadIds] = useState<Set<string>>(new Set());
+  const [targetFeeRecord, setTargetFeeRecord] = useState<ExamFeeRecord | null>(null);
+  const [selectedHeadId, setSelectedHeadId] = useState('');
+  const [customHeadAmount, setCustomHeadAmount] = useState('');
+  const [resolvedHeadInfo, setResolvedHeadInfo] = useState<FeeHeadResolution | null>(null);
+  const [applyingHead, setApplyingHead] = useState(false);
+  const [headError, setHeadError] = useState('');
+
+  const loadFeeHeads = async () => {
+    try {
+      const heads = await api.getFeeHeads({ isActive: true });
+      setFeeHeadsList(heads);
+    } catch {
+      setFeeHeadsList([]);
+    }
+  };
+
+  const openApplyHeadModal = (record: ExamFeeRecord) => {
+    setTargetFeeRecord(record);
+    setSelectedHeadId('');
+    setCustomHeadAmount('');
+    setResolvedHeadInfo(null);
+    setHeadError('');
+    void loadFeeHeads();
+  };
+
+  const handleSelectHead = async (headId: string) => {
+    setSelectedHeadId(headId);
+    setResolvedHeadInfo(null);
+    if (!headId) {
+      setCustomHeadAmount('');
+      return;
+    }
+    const head = feeHeadsList.find((h) => String(h.id) === headId);
+    if (!head) return;
+
+    const regCode = sdms?.batch || targetFeeRecord?.exam?.batch || undefined;
+
+    try {
+      const res = await api.resolveFeeHead(headId, regCode);
+      setCustomHeadAmount(String(res.amount));
+      setResolvedHeadInfo(res);
+    } catch {
+      setCustomHeadAmount(String(head.defaultAmount || 0));
+    }
+  };
+
+  const handleApplyFeeHead = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!targetFeeRecord || !selectedHeadId) {
+      setHeadError('Please select a fee head.');
+      return;
+    }
+    const amountVal = parseFloat(customHeadAmount);
+    if (isNaN(amountVal) || amountVal < 0) {
+      setHeadError('Please enter a valid amount.');
+      return;
+    }
+
+    setApplyingHead(true);
+    setHeadError('');
+    try {
+      const regCode = sdms?.batch || targetFeeRecord?.exam?.batch || undefined;
+      await api.applyFeeHeadToRecord({
+        feeRecordId: targetFeeRecord.id,
+        headId: selectedHeadId,
+        regulationCode: regCode,
+        customAmount: amountVal,
+      });
+      setTargetFeeRecord(null);
+      void load();
+    } catch (err) {
+      setHeadError(err instanceof ApiError ? err.message : 'Failed to apply fee head.');
+    } finally {
+      setApplyingHead(false);
+    }
+  };
 
   const loadEligibleExams = async (studentId: number) => {
     setEligibleError('');
@@ -144,6 +231,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         setPayments([]);
       }
 
+      let fetchedSdms: SdmsStudent | null = null;
       try {
         // search matches name, PIN, and admission number (2026 batch has no PIN yet)
         const res = await api.getSdmsStudents({
@@ -156,6 +244,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               s.pinNo?.toLowerCase() === rollNumber.toLowerCase() ||
               s.admissionNumber?.toLowerCase() === rollNumber.toLowerCase(),
           ) ?? res.items[0] ?? null;
+        fetchedSdms = exact;
         setSdms(exact);
         if (exact?.studentName) setStudentName(exact.studentName);
         if (exact) {
@@ -166,6 +255,36 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       } catch {
         setSdms(null);
         setEligibleExams([]);
+      }
+
+      try {
+        const heads = await api.getFeeHeads({ isActive: true });
+        setFeeHeadsList(heads);
+        const regCode = fetchedSdms?.batch || lookup.records[0]?.exam?.batch || rollNumber;
+        const resolvedList: OptionalResolvedFeeHead[] = await Promise.all(
+          heads.map(async (head) => {
+            try {
+              const res = await api.resolveFeeHead(head.id, regCode);
+              return { head, resolved: res };
+            } catch {
+              return {
+                head,
+                resolved: {
+                  feeHeadId: head.id,
+                  code: head.code,
+                  name: head.name,
+                  type: head.type,
+                  appliedRegulation: null,
+                  amount: head.defaultAmount || 0,
+                },
+              };
+            }
+          }),
+        );
+        setOptionalFeeHeads(resolvedList);
+      } catch {
+        setFeeHeadsList([]);
+        setOptionalFeeHeads([]);
       }
     } catch (err) {
       setError(
@@ -237,10 +356,22 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     [records, selectedIds],
   );
 
-  const collectTotal = selectedPending.reduce(
-    (s, r) => s + Number(r.totalAmount),
-    0,
+  const selectedOptionalTotal = useMemo(() => {
+    let sum = 0;
+    for (const item of optionalFeeHeads) {
+      if (selectedOptionalHeadIds.has(String(item.head.id))) {
+        sum += Number(item.resolved.amount || 0);
+      }
+    }
+    return sum;
+  }, [optionalFeeHeads, selectedOptionalHeadIds]);
+
+  const selectedPendingTotal = useMemo(
+    () => selectedPending.reduce((s, r) => s + Number(r.totalAmount), 0),
+    [selectedPending],
   );
+
+  const collectTotal = selectedPendingTotal + selectedOptionalTotal;
 
   function toggleRecord(id: number) {
     setSelectedIds((prev) => {
@@ -253,74 +384,126 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
   async function confirmPayment(e: FormEvent) {
     e.preventDefault();
-    if (selectedPending.length === 0) {
-      setPayError('Select at least one pending fee to collect.');
+    if (selectedPending.length === 0 && selectedOptionalHeadIds.size === 0) {
+      setPayError('Select at least one pending fee or optional fee head to collect.');
+      return;
+    }
+
+    setSaving(true);
+    setPayError('');
+
+    let pendingToPay = [...selectedPending];
+
+    // Apply checked optional fee heads first
+    if (selectedOptionalHeadIds.size > 0) {
+      const regCode = sdms?.batch || selectedPending[0]?.exam?.batch || undefined;
+      const targetFeeRecordId = selectedPending[0]?.id || null;
+
+      let appliedRecord: ExamFeeRecord | null = null;
+      for (const headIdStr of Array.from(selectedOptionalHeadIds)) {
+        const item = optionalFeeHeads.find((o) => String(o.head.id) === headIdStr);
+        if (item) {
+          try {
+            appliedRecord = await api.applyFeeHeadToRecord({
+              feeRecordId: targetFeeRecordId,
+              headId: item.head.id,
+              regulationCode: regCode,
+              customAmount: item.resolved.amount,
+              studentRollNumber: rollNumber,
+              studentName: displayName,
+            });
+          } catch (err) {
+            console.warn('Failed to apply optional fee head:', err);
+          }
+        }
+      }
+      setSelectedOptionalHeadIds(new Set());
+
+      if (pendingToPay.length === 0 && appliedRecord) {
+        pendingToPay = [appliedRecord];
+      } else if (targetFeeRecordId && appliedRecord) {
+        pendingToPay = pendingToPay.map((r) => (r.id === appliedRecord!.id ? appliedRecord! : r));
+      }
+    }
+
+    if (pendingToPay.length === 0) {
+      setSaving(false);
+      setPayError('Failed to prepare fee record for payment.');
       return;
     }
 
     if (paymentMethod === 'razorpay') {
       if (!razorpayReady) {
+        setSaving(false);
         setPayError(
           'Razorpay is not configured. Enable it under Settings → Razorpay.',
         );
         return;
       }
-      if (selectedPending.length !== 1) {
-        setPayError('Select exactly one fee row for online Razorpay payment.');
+      if (pendingToPay.length !== 1) {
+        setSaving(false);
+        setPayError('Select exactly one fee row or fee head combination for online Razorpay payment.');
         return;
       }
+      setSaving(false);
       setPayError('');
       setSelfOnlineRecord(null);
       setCanaraRecord(null);
-      setRazorpayRecord(selectedPending[0]);
+      setRazorpayRecord(pendingToPay[0]);
       return;
     }
 
     if (paymentMethod === 'self_online') {
       if (!selfOnlineReady) {
+        setSaving(false);
         setPayError(
           'Self Online is not configured. Enable Merchant UPI ID under Settings → Self Online UPI.',
         );
         return;
       }
-      if (selectedPending.length !== 1) {
-        setPayError('Select exactly one fee row for Self Online UPI payment.');
+      if (pendingToPay.length !== 1) {
+        setSaving(false);
+        setPayError('Select exactly one fee row or fee head combination for Self Online UPI payment.');
         return;
       }
+      setSaving(false);
       setPayError('');
       setRazorpayRecord(null);
       setCanaraRecord(null);
-      setSelfOnlineRecord(selectedPending[0]);
+      setSelfOnlineRecord(pendingToPay[0]);
       return;
     }
 
     if (paymentMethod === 'canara_dynamic_qr') {
       if (!canaraReady) {
+        setSaving(false);
         setPayError(
           'Canara Dynamic QR is not ready. Configure it under Settings → Canara Bank Dynamic QR.',
         );
         return;
       }
-      if (selectedPending.length !== 1) {
-        setPayError('Select exactly one fee row for Canara Dynamic QR payment.');
+      if (pendingToPay.length !== 1) {
+        setSaving(false);
+        setPayError('Select exactly one fee row or fee head combination for Canara Dynamic QR payment.');
         return;
       }
+      setSaving(false);
       setPayError('');
       setRazorpayRecord(null);
       setSelfOnlineRecord(null);
-      setCanaraRecord(selectedPending[0]);
+      setCanaraRecord(pendingToPay[0]);
       return;
     }
 
     if (!collectedBy.trim()) {
+      setSaving(false);
       setPayError('Collector name is required.');
       return;
     }
-    setSaving(true);
-    setPayError('');
+
     try {
       let lastPaymentId: number | null = null;
-      for (const record of selectedPending) {
+      for (const record of pendingToPay) {
         const payload: OfflinePaymentInput = {
           feeRecordId: record.id,
           paymentMethod: paymentMethod as PaymentMethod,
@@ -747,13 +930,14 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     <th className="px-4 py-3">Late</th>
                     <th className="px-4 py-3">Balance</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRecords.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="px-4 py-10 text-center text-sm text-[var(--muted)]"
                       >
                         No fees found for this selection.
@@ -785,7 +969,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                             <p className="text-xs text-[var(--muted)]">
                               {duplicate
                                 ? `Duplicate hall ticket fee · Y${r.exam?.yearOfStudy ?? '—'} / S${r.exam?.semester ?? '—'}`
-                                : `Y${r.exam?.yearOfStudy ?? '—'} / S${r.exam?.semester ?? '—'} · ${r.feeBreakdown?.map((b) => b.subjectCode).join(', ') || 'Exam fee'}`}
+                                : `Y${r.exam?.yearOfStudy ?? '—'} / S${r.exam?.semester ?? '—'} · ${r.feeBreakdown?.map((b) => `${b.feeHeadName || b.subjectName || b.subjectCode} (${money(b.amount ?? b.fee ?? 0)})`).join(' + ') || 'Exam fee'}`}
                             </p>
                           </td>
                           <td className="px-4 py-3 tabular-nums">
@@ -805,6 +989,20 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                             >
                               {r.status}
                             </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {r.status === 'pending' ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openApplyHeadModal(r)}
+                              >
+                                + Fee Head
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-[var(--muted)]">—</span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -923,9 +1121,9 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
 
           <form onSubmit={(e) => void confirmPayment(e)} className="mt-5 space-y-4">
             <div className="rounded-xl border border-[var(--border)] bg-slate-50 p-3 text-sm">
-              {selectedPending.length === 0 ? (
+              {selectedPending.length === 0 && selectedOptionalHeadIds.size === 0 ? (
                 <p className="text-[var(--muted)]">
-                  Select fee rows on the left
+                  Select fee rows on the left or optional fee heads below
                 </p>
               ) : (
                 <ul className="space-y-2">
@@ -942,9 +1140,86 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                       </span>
                     </li>
                   ))}
+                  {Array.from(selectedOptionalHeadIds).map((headIdStr) => {
+                    const item = optionalFeeHeads.find((o) => String(o.head.id) === headIdStr);
+                    if (!item) return null;
+                    return (
+                      <li
+                        key={headIdStr}
+                        className="flex items-start justify-between gap-2 border-t border-slate-200/60 pt-1.5"
+                      >
+                        <span className="text-xs font-medium text-slate-800">
+                          + {item.head.name}
+                        </span>
+                        <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+                          {money(item.resolved.amount)}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
+
+            {/* Optional Fee Heads (Select to Apply & Pay) */}
+            {optionalFeeHeads.length > 0 ? (
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Optional Fee Heads (Apply & Pay)
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Select to include in payment
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  {optionalFeeHeads.map(({ head, resolved }) => {
+                    const isChecked = selectedOptionalHeadIds.has(String(head.id));
+                    return (
+                      <label
+                        key={head.id}
+                        className={`flex items-start gap-2.5 p-2 rounded-lg border transition cursor-pointer text-xs ${
+                          isChecked
+                            ? 'border-slate-800 bg-white ring-1 ring-slate-400/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedOptionalHeadIds((prev) => {
+                              const next = new Set(prev);
+                              const idStr = String(head.id);
+                              if (next.has(idStr)) next.delete(idStr);
+                              else next.add(idStr);
+                              return next;
+                            });
+                          }}
+                          className="mt-0.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-semibold text-slate-900 truncate">
+                              {head.name}
+                            </span>
+                            <span className="font-bold tabular-nums text-slate-900 shrink-0">
+                              {money(resolved.amount)}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 line-clamp-1">
+                            {head.type === 'GLOBAL'
+                              ? `Global Flat Rate`
+                              : `Reg ${resolved.appliedRegulation || 'Default'} Price`}
+                            {resolved.isTimePeriodExpired ? ' · Post-Deadline Rate' : ''}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="flex items-center justify-between border-t border-[var(--border)] pt-3">
               <span className="text-sm font-medium text-slate-600">
@@ -1125,7 +1400,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             <Button
               type="submit"
               fullWidth
-              disabled={saving || selectedPending.length === 0}
+              disabled={saving || (selectedPending.length === 0 && selectedOptionalHeadIds.size === 0)}
             >
               {saving
                 ? 'Processing…'
@@ -1138,6 +1413,122 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
           </form>
         </aside>
       </div>
+
+      {/* Apply Fee Head Modal Dialog */}
+      {targetFeeRecord ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div>
+                <h3 className="font-bold text-slate-900">Apply Additional Fee Head</h3>
+                <p className="text-xs text-[var(--muted)]">
+                  Add custom/regulation fee head to record #{targetFeeRecord.id} ({targetFeeRecord.studentName})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTargetFeeRecord(null)}
+                className="rounded-full px-2 py-1 text-xs font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                Close
+              </button>
+            </div>
+
+            {headError ? (
+              <div className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700 font-medium">
+                {headError}
+              </div>
+            ) : null}
+
+            <form onSubmit={handleApplyFeeHead} className="space-y-4">
+              <label className="block space-y-1">
+                <span className="text-xs font-semibold text-slate-700">Select Fee Head</span>
+                <select
+                  required
+                  value={selectedHeadId}
+                  onChange={(e) => handleSelectHead(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-[var(--border)] bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--primary)]"
+                >
+                  <option value="">-- Choose active fee head --</option>
+                  {feeHeadsList.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name} ({h.code}) — {h.type === 'GLOBAL' ? `Global ₹${h.defaultAmount}` : 'Regulation Specific'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {selectedHeadId ? (
+                <>
+                  {resolvedHeadInfo ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+                      <div className="flex items-center justify-between font-bold text-slate-800">
+                        <span>
+                          {resolvedHeadInfo.type === 'GLOBAL'
+                            ? 'Global Flat Price'
+                            : `Regulation-Wise Price (${resolvedHeadInfo.appliedRegulation || 'Default'})`}
+                        </span>
+                        <span className="tabular-nums text-slate-900 font-extrabold text-sm">
+                          {money(resolvedHeadInfo.amount)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        {resolvedHeadInfo.type === 'GLOBAL'
+                          ? 'Global standard rate applies flat across all regulations.'
+                          : resolvedHeadInfo.isCustomForRegulation
+                          ? `Custom amount configured specifically for regulation / batch ${resolvedHeadInfo.appliedRegulation}.`
+                          : `No custom amount for regulation ${resolvedHeadInfo.appliedRegulation}; using default fallback amount.`}
+                      </p>
+                      {resolvedHeadInfo.isTimePeriodExpired ? (
+                        <p className="text-[10px] text-amber-700 font-semibold">
+                          Standard deadline passed; post-deadline rate applied.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <label className="block space-y-1">
+                    <span className="text-xs font-semibold text-slate-700">
+                      Applicable Fee Amount (₹)
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                      value={customHeadAmount}
+                      onChange={(e) => setCustomHeadAmount(e.target.value)}
+                      className="h-10 w-full rounded-lg border border-[var(--border)] bg-white px-3 text-sm font-semibold tabular-nums text-slate-900 outline-none focus:border-[var(--primary)]"
+                    />
+                    <p className="text-[11px] text-[var(--muted)]">
+                      Amount automatically computed for student regulation ({sdms?.batch || 'Default'}). You can adjust if authorized.
+                    </p>
+                  </label>
+                </>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTargetFeeRecord(null)}
+                  disabled={applyingHead}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={applyingHead || !selectedHeadId}
+                >
+                  {applyingHead ? 'Applying…' : 'Apply Fee Head'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

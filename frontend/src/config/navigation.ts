@@ -126,6 +126,13 @@ export const navigation: NavGroup[] = [
         privilege: ['fees:read', 'fees:collect'],
       },
       {
+        href: '/dashboard/fees/fee-heads',
+        label: 'Fee Heads Creation',
+        description: 'Global & regulation-specific fee head master',
+        icon: 'fees',
+        privilege: ['fees:read', 'fees:write', 'fees:collect'],
+      },
+      {
         href: '/dashboard/fees/self-online',
         label: 'Self Online reconcile',
         description: 'College UPI statements & verification',

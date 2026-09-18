@@ -23,9 +23,15 @@ export type PaymentStatus =
   | 'expired';
 
 export interface FeeBreakdownItem {
-  subjectId: number;
+  subjectId?: number;
   subjectCode: string;
-  fee: number | string;
+  fee?: number | string;
+  amount?: number | string;
+  subjectName?: string;
+  feeHeadCode?: string;
+  feeHeadName?: string;
+  feeHeadType?: string;
+  appliedRegulation?: string;
 }
 
 export interface Payment {

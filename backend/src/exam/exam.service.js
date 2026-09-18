@@ -2302,6 +2302,174 @@ class ExamService {
         }
         return record;
     }
+    async resolveFeeHeadAmount(head, regulationInput, scopeRepo) {
+        if (!head) return null;
+        const defaultAmt = Number(head.defaultAmount || 0);
+
+        if (head.type === 'GLOBAL' || !Array.isArray(head.regulationAmounts) || head.regulationAmounts.length === 0) {
+            return { amount: defaultAmt, appliedRegulation: 'GLOBAL' };
+        }
+
+        const inputRaw = String(regulationInput || '').trim();
+        const inputUpper = inputRaw.toUpperCase();
+
+        let match = (head.regulationAmounts || []).find(
+            (r) =>
+                String(r.regulationCode).trim().toUpperCase() === inputUpper ||
+                String(r.regulationId).trim() === inputUpper,
+        );
+
+        if (!match && scopeRepo && inputRaw) {
+            try {
+                const scope = await scopeRepo
+                    .createQueryBuilder('scope')
+                    .leftJoinAndSelect('scope.regulation', 'regulation')
+                    .where('LOWER(scope.batch) = LOWER(:b)', { b: inputRaw })
+                    .getOne();
+
+                if (scope && scope.regulation) {
+                    const regCodeFromDb = String(scope.regulation.code).trim().toUpperCase();
+                    const regIdFromDb = String(scope.regulation.id);
+
+                    match = head.regulationAmounts.find(
+                        (r) =>
+                            String(r.regulationCode).trim().toUpperCase() === regCodeFromDb ||
+                            String(r.regulationId).trim() === regIdFromDb,
+                    );
+                }
+            } catch {
+                // ignore scope lookup error
+            }
+        }
+
+        if (!match && inputUpper) {
+            let extractedYearDigits = null;
+            const pinMatch = inputUpper.match(/^(\d{2})/);
+            if (pinMatch) {
+                extractedYearDigits = pinMatch[1];
+            } else {
+                const yearMatch = inputUpper.match(/(20)?(\d{2})/);
+                if (yearMatch) {
+                    extractedYearDigits = yearMatch[2];
+                }
+            }
+
+            if (extractedYearDigits) {
+                match = head.regulationAmounts.find((r) => {
+                    const regCodeDigits = String(r.regulationCode).replace(/\D/g, '');
+                    return regCodeDigits === extractedYearDigits;
+                });
+            }
+        }
+
+        if (!match && inputUpper) {
+            match = head.regulationAmounts.find((r) => {
+                const codeUpper = String(r.regulationCode).trim().toUpperCase();
+                const codeClean = codeUpper.replace(/[^A-Z0-9]/g, '');
+                const inputClean = inputUpper.replace(/[^A-Z0-9]/g, '');
+                return inputClean.includes(codeClean) || codeClean.includes(inputClean);
+            });
+        }
+
+        if (!match) {
+            match = head.regulationAmounts[0];
+        }
+
+        let amount = match ? Number(match.amount) : defaultAmt;
+        const now = new Date();
+
+        if (match && Array.isArray(match.slabs) && match.slabs.length > 0) {
+            let matchedSlab = null;
+            for (const slab of match.slabs) {
+                const start = slab.startDate ? new Date(`${slab.startDate}T00:00:00.000Z`) : null;
+                const end = slab.endDate ? new Date(`${slab.endDate}T23:59:59.999Z`) : null;
+                if ((!start || now >= start) && (!end || now <= end)) {
+                    matchedSlab = slab;
+                    break;
+                }
+            }
+            if (matchedSlab) {
+                amount = Number(matchedSlab.amount != null && !isNaN(Number(matchedSlab.amount)) && Number(matchedSlab.amount) > 0 ? matchedSlab.amount : match.amount);
+            } else {
+                const lastSlab = match.slabs[match.slabs.length - 1];
+                if (lastSlab) {
+                    amount = Number(lastSlab.amount != null && !isNaN(Number(lastSlab.amount)) && Number(lastSlab.amount) > 0 ? lastSlab.amount : (match.amountAfterEnd ?? match.amount));
+                }
+            }
+        } else if (match && match.effectiveUntil) {
+            const endDate = new Date(`${match.effectiveUntil}T23:59:59.999Z`);
+            if (now > endDate && match.amountAfterEnd != null && !isNaN(Number(match.amountAfterEnd))) {
+                amount = Number(match.amountAfterEnd);
+            }
+        }
+
+        return {
+            amount,
+            appliedRegulation: match ? match.regulationCode : 'DEFAULT',
+        };
+    }
+
+    async syncFeeHeadAmountsForRecord(record) {
+        if (!record || record.status === FeeStatus.PAID)
+            return false;
+        let breakdown = [];
+        try {
+            breakdown = typeof record.feeBreakdown === 'string'
+                ? JSON.parse(record.feeBreakdown)
+                : (record.feeBreakdown || []);
+        } catch {
+            breakdown = [];
+        }
+        if (!Array.isArray(breakdown) || breakdown.length === 0)
+            return false;
+
+        let changed = false;
+        const regCode = record.exam?.batch || record.studentRollNumber;
+        const feeHeadRepo = this.feeRecordRepo.manager.getRepository('FeeHead');
+        const scopeRepo = this.feeRecordRepo.manager.getRepository('RegulationScope');
+
+        for (const item of breakdown) {
+            const code = item.feeHeadCode || item.subjectCode;
+            if (!code) continue;
+
+            try {
+                const head = await feeHeadRepo.findOne({
+                    where: [{ code: String(code).trim().toUpperCase(), isActive: true }],
+                });
+
+                if (head) {
+                    const resolvedAmount = await this.resolveFeeHeadAmount(head, regCode, scopeRepo);
+                    if (resolvedAmount != null) {
+                        const newAmt = Number(resolvedAmount.amount);
+                        if (Number(item.amount) !== newAmt) {
+                            item.amount = newAmt;
+                            item.feeHeadName = head.name;
+                            item.feeHeadType = head.type;
+                            item.appliedRegulation = resolvedAmount.appliedRegulation;
+                            changed = true;
+                        }
+                    }
+                }
+            } catch {
+                // Ignore non-fee-head items
+            }
+        }
+
+        if (changed) {
+            const newBaseFee = breakdown.reduce((sum, it) => sum + Number(it.amount || 0), 0);
+            const newTotalAmount = newBaseFee + Number(record.lateFee || 0);
+
+            record.feeBreakdown = breakdown;
+            record.baseFee = newBaseFee;
+            record.totalAmount = newTotalAmount;
+
+            await this.feeRecordRepo.save(record);
+            return true;
+        }
+
+        return false;
+    }
+
     async listFeeRecords(examId, rollNumber, status, page, limit) {
         const qb = this.feeRecordRepo
             .createQueryBuilder('fr')
@@ -2333,6 +2501,7 @@ class ExamService {
         const updatePromises = [];
         for (const record of records) {
             if (record.status !== FeeStatus.PAID) {
+                await this.syncFeeHeadAmountsForRecord(record);
                 if (record.exam) {
                     const { lateFee } = this.calculateLateFee(record.exam);
                     const nextLate = Number(lateFee);
@@ -2363,6 +2532,7 @@ class ExamService {
         if (!record)
             throw AppError.notFound('Fee record not found');
         if (record.status !== FeeStatus.PAID) {
+            await this.syncFeeHeadAmountsForRecord(record);
             await this.refreshLateFee(record);
         }
         return record;

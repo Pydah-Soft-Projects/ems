@@ -25,8 +25,25 @@ function registerFeeManagementModels(connection) {
           name: { type: String, required: true, unique: true, trim: true },
           code: { type: String, unique: true, trim: true, sparse: true },
           description: { type: String },
+          type: {
+            type: String,
+            enum: ['GLOBAL', 'REGULATION_SPECIFIC'],
+            default: 'GLOBAL',
+          },
+          defaultAmount: { type: Number, default: 0 },
+          regulationAmounts: [
+            {
+              regulationId: { type: String },
+              regulationCode: { type: String },
+              amount: { type: Number, required: true },
+              effectiveUntil: { type: Date },
+              amountAfterEnd: { type: Number },
+            },
+          ],
+          isMandatory: { type: Boolean, default: false },
+          isActive: { type: Boolean, default: true },
         },
-        { timestamps: true },
+        { timestamps: true, strict: false },
       ),
   );
 

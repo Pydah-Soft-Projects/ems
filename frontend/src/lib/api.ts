@@ -46,6 +46,12 @@ import {
   PaymentMethod,
 } from '@/types/fee';
 import {
+  FeeHead,
+  CreateFeeHeadInput,
+  UpdateFeeHeadInput,
+  FeeHeadResolution,
+} from '@/types/fee-head';
+import {
   ExamResultsResponse,
   ResultRowInput,
   ResultUploadResponse,
@@ -756,6 +762,63 @@ export const api = {
     return request<ExamFeeRecord>('/fees/duplicate-hall-ticket-fee', {
       method: 'POST',
       body: JSON.stringify({ examId, rollNumber, studentName }),
+    });
+  },
+
+  // ── Fee Heads Creation & Management ──
+  getFeeHeads(filters: { search?: string; type?: string; isActive?: boolean | string } = {}) {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search.trim());
+    if (filters.type) params.set('type', filters.type);
+    if (filters.isActive !== undefined && filters.isActive !== '') {
+      params.set('isActive', String(filters.isActive));
+    }
+    const query = params.toString() ? `?${params}` : '';
+    return request<FeeHead[]>(`/fees/fee-heads${query}`);
+  },
+
+  getFeeHead(id: string | number) {
+    return request<FeeHead>(`/fees/fee-heads/${id}`);
+  },
+
+  createFeeHead(data: CreateFeeHeadInput) {
+    return request<FeeHead>('/fees/fee-heads', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateFeeHead(id: string | number, data: UpdateFeeHeadInput) {
+    return request<FeeHead>(`/fees/fee-heads/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteFeeHead(id: string | number) {
+    return request<{ success: boolean; message: string }>(`/fees/fee-heads/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  resolveFeeHead(headId: string | number, regulationCode?: string) {
+    return request<FeeHeadResolution>('/fees/fee-heads/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ headId, regulationCode }),
+    });
+  },
+
+  applyFeeHeadToRecord(data: {
+    feeRecordId?: number | null;
+    headId: string | number;
+    regulationCode?: string;
+    customAmount?: number;
+    studentRollNumber?: string;
+    studentName?: string;
+  }) {
+    return request<ExamFeeRecord>('/fees/fee-heads/apply', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   },
 
