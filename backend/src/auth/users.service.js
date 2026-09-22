@@ -327,6 +327,25 @@ class UsersService {
     });
   }
 
+  async findUserByHrmsIdAnySource(hrmsUserId) {
+    if (!hrmsUserId) return null;
+    return this.userRepo.findOne({
+      where: { hrmsUserId: String(hrmsUserId) },
+      relations: ['role'],
+    });
+  }
+
+  async findUserByHrmsIdentity(email, employeeNumber) {
+    const conditions = [];
+    if (email) conditions.push({ email: this.normalizeEmail(email) });
+    if (employeeNumber) conditions.push({ employeeNumber: String(employeeNumber) });
+    if (conditions.length === 0) return null;
+    return this.userRepo.findOne({
+      where: conditions,
+      relations: ['role'],
+    });
+  }
+
   async findUserByEmail(email) {
     const normalized = this.normalizeEmail(email);
     if (!normalized) return null;

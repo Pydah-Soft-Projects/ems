@@ -98,7 +98,10 @@ class AuthService {
     }
 
     if (!this.users) return null;
-    const emsUser = await this.users.findUserByHrmsId(hrmsUserId, hrmsSource);
+    const emsUser =
+      (await this.users.findUserByHrmsId(hrmsUserId, hrmsSource)) ||
+      (await this.users.findUserByHrmsIdAnySource?.(hrmsUserId)) ||
+      (await this.users.findUserByHrmsIdentity?.(email, employeeNumber));
     if (!emsUser || emsUser.isActive === false) return null;
     const role = emsUser.role;
     if (!role || role.isActive === false) return null;
