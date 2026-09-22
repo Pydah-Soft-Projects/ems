@@ -54,6 +54,10 @@ const {
   EmsAuditLog,
 } = require('../auth/schemas/ems-rbac.schema');
 const { FeeHead } = require('../fee-management/schemas/fee-head.schema');
+const {
+  RevaluationNotification,
+  RevaluationApplication,
+} = require('../revaluation/schemas/revaluation-notification.schema');
 
 const entities = [
   Regulation,
@@ -82,6 +86,8 @@ const entities = [
   EmsUser,
   EmsAuditLog,
   FeeHead,
+  RevaluationNotification,
+  RevaluationApplication,
 ];
 
 function createExamPortalDataSource() {

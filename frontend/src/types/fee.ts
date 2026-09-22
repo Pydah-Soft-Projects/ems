@@ -55,7 +55,10 @@ export interface Payment {
 
 export interface ExamFeeRecord {
   id: number;
-  examId: number;
+  examId: number | null;
+  feeType?: 'EXAM' | 'REVALUATION' | string;
+  feeLabel?: string | null;
+  revaluationNotificationId?: number | null;
   examType?: ExamType | string;
   studentRollNumber: string;
   studentName: string;

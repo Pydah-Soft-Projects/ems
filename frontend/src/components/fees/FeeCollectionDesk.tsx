@@ -7,6 +7,7 @@ import { ApiError, api } from '@/lib/api';
 import { getStoredUser } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import {
   ExamFeeRecord,
   OfflinePaymentInput,
@@ -22,6 +23,7 @@ import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
 import { StaffApplyModal } from '@/components/fees/StaffApplyModal';
 import { FeeHead, FeeHeadResolution } from '@/types/fee-head';
+import type { RevaluationStudentDetail } from '@/types/revaluation';
 import {
   calcUpiConvenienceFee,
   feeRecordDisplayName,
@@ -80,6 +82,11 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [eligibleExams, setEligibleExams] = useState<StudentExamListItem[]>([]);
   const [eligibleError, setEligibleError] = useState('');
   const [applyExam, setApplyExam] = useState<StudentExamListItem | null>(null);
+  const [feeTab, setFeeTab] = useState<'examinations' | 'revaluations'>('examinations');
+  const [revaluationDetails, setRevaluationDetails] = useState<RevaluationStudentDetail[]>([]);
+  const [revaluationSelection, setRevaluationSelection] = useState<Record<number, number[]>>({});
+  const [applyingRevaluation, setApplyingRevaluation] = useState<number | null>(null);
+  const [revaluationPopup, setRevaluationPopup] = useState<RevaluationStudentDetail | null>(null);
 
   // Fee Head Application State
   const [feeHeadsList, setFeeHeadsList] = useState<FeeHead[]>([]);
@@ -176,6 +183,50 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     }
   };
 
+  const loadRevaluations = async (identifier: string) => {
+    try {
+      const notifications = await api.getRevaluationNotifications();
+      const published = notifications.filter((notification) => notification.status === 'published');
+      const details = (await Promise.all(published.map(async (notification) => {
+        try {
+          return await api.getRevaluationStudent(notification.id, identifier);
+        } catch {
+          return null;
+        }
+      }))).filter((detail): detail is RevaluationStudentDetail => detail !== null);
+      setRevaluationDetails(details);
+    } catch {
+      setRevaluationDetails([]);
+    }
+  };
+
+  async function applyRevaluation(detail: RevaluationStudentDetail) {
+    const selected = revaluationSelection[detail.notification.id] ?? [];
+    if (!selected.length) return;
+    setApplyingRevaluation(detail.notification.id);
+    setError('');
+    try {
+      await api.applyRevaluation(detail.notification.id, {
+        studentIdentifier: rollNumber,
+        selectedSubjectIds: selected,
+      });
+      await load();
+      await loadRevaluations(rollNumber);
+      setRevaluationPopup(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to apply revaluation.');
+    } finally {
+      setApplyingRevaluation(null);
+    }
+  }
+
+  const popupSelection = revaluationPopup
+    ? revaluationSelection[revaluationPopup.notification.id] ?? []
+    : [];
+  const popupFee = revaluationPopup
+    ? revaluationPopup.notification.feesByCount[popupSelection.length - 1]
+    : null;
+
   const load = async () => {
     setLoading(true);
     setError('');
@@ -249,12 +300,15 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         if (exact?.studentName) setStudentName(exact.studentName);
         if (exact) {
           await loadEligibleExams(exact.id);
+          await loadRevaluations(rollNumber);
         } else {
           setEligibleExams([]);
+          setRevaluationDetails([]);
         }
       } catch {
         setSdms(null);
         setEligibleExams([]);
+        setRevaluationDetails([]);
       }
 
       try {
@@ -785,19 +839,18 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             </div>
           )}
 
-          {/* Eligible examinations — apply on behalf of the student */}
+          {/* Examination and revaluation application tabs */}
           {sdms && (
             <div className="rounded-2xl border border-[var(--border)] bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-                <div>
-                  <h3 className="font-semibold text-slate-900">
-                    Eligible examinations
-                  </h3>
-                  <p className="text-xs text-[var(--muted)]">
-                    Published exams in this student&apos;s scope — apply here
-                    on their behalf, then collect the fee below
-                  </p>
+              <div className="border-b border-[var(--border)] px-5 pt-4">
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setFeeTab('examinations')} className={`rounded-t-lg px-4 py-2 text-sm font-semibold ${feeTab === 'examinations' ? 'bg-[var(--primary)] text-white' : 'bg-slate-100 text-slate-600'}`}>Examinations</button>
+                  <button type="button" onClick={() => setFeeTab('revaluations')} className={`rounded-t-lg px-4 py-2 text-sm font-semibold ${feeTab === 'revaluations' ? 'bg-[var(--primary)] text-white' : 'bg-slate-100 text-slate-600'}`}>Revaluations</button>
                 </div>
+              </div>
+              {feeTab === 'examinations' ? <>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+                <div><h3 className="font-semibold text-slate-900">Eligible examinations</h3><p className="text-xs text-[var(--muted)]">Published exams in this student&apos;s academic scope.</p></div>
               </div>
               {eligibleError ? (
                 <p className="px-5 py-4 text-sm text-[var(--danger)]">
@@ -875,6 +928,11 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   </table>
                 </div>
               )}
+              </> : <div className="p-5">
+                <h3 className="font-semibold text-slate-900">Eligible revaluations</h3>
+                <p className="mt-1 text-xs text-[var(--muted)]">Published revaluation notifications matching this student&apos;s programme, batch, year, and semester.</p>
+                {revaluationDetails.length === 0 ? <p className="py-5 text-sm text-[var(--muted)]">No published revaluations match this student.</p> : <div className="mt-4 space-y-3">{revaluationDetails.map((detail) => { const selected = revaluationSelection[detail.notification.id] ?? []; const existing = records.find((record) => record.feeType === 'REVALUATION' && record.revaluationNotificationId === detail.notification.id); return <div key={detail.notification.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-4"><div><p className="font-semibold text-slate-900">{detail.notification.title}</p><p className="text-xs text-[var(--muted)]">{detail.notification.regulationCode} · {detail.notification.startDate} → {detail.notification.endDate}</p></div><div className="flex items-center gap-2">{existing ? <Badge variant={existing.status === 'paid' ? 'success' : 'warning'}>{existing.status}</Badge> : <Button size="sm" onClick={() => setRevaluationPopup(detail)}>Apply</Button>}</div></div>; })}</div>}
+              </div>}
             </div>
           )}
 
@@ -1413,6 +1471,49 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
           </form>
         </aside>
       </div>
+
+      {revaluationPopup ? (
+        <Modal
+          open
+          onClose={() => setRevaluationPopup(null)}
+          title="Apply revaluation"
+          description={`${revaluationPopup.notification.title} · ${revaluationPopup.student.name}`}
+          size="lg"
+        >
+          <div className="space-y-4">
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              Select the subjects to send for revaluation.
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {revaluationPopup.subjects.map((subject) => (
+                <label key={subject.id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={popupSelection.includes(subject.id)}
+                    onChange={() => setRevaluationSelection((current) => ({
+                      ...current,
+                      [revaluationPopup.notification.id]: popupSelection.includes(subject.id)
+                        ? popupSelection.filter((id) => id !== subject.id)
+                        : [...popupSelection, subject.id],
+                    }))}
+                  />
+                  <span>{subject.code} - {subject.name}<span className="ml-2 text-xs text-slate-500">Sem {subject.semester ?? '—'}</span></span>
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+              <span className="text-sm font-semibold text-slate-800">Total amount: {popupFee == null ? 'Select subjects' : money(popupFee)}</span>
+              <Button
+                onClick={() => void applyRevaluation(revaluationPopup)}
+                loading={applyingRevaluation === revaluationPopup.notification.id}
+                disabled={!popupSelection.length}
+              >
+                Apply revaluation
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
 
       {/* Apply Fee Head Modal Dialog */}
       {targetFeeRecord ? (

@@ -74,6 +74,13 @@ export const navigation: NavGroup[] = [
         privilege: 'exams:read',
       },
       {
+        href: '/dashboard/revaluations',
+        label: 'Revaluations',
+        description: 'Publish revaluation access by regulation and batch',
+        icon: 'exams',
+        privilege: 'revaluations:read',
+      },
+      {
         href: '/dashboard/duplicate-hall-tickets',
         label: 'Duplicate hall tickets',
         description: 'Raise request, collect fee, and print duplicate hall tickets',

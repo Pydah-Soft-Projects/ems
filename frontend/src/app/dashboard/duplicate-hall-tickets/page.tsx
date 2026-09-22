@@ -727,7 +727,9 @@ export default function DuplicateHallTicketsPage() {
                 </thead>
                 <tbody>
                   {approveRows.map((record) => {
-                    const printKey = `${record.examId}:${record.studentRollNumber}`;
+                    if (record.examId == null) return null;
+                    const examId = record.examId;
+                    const printKey = `${examId}:${record.studentRollNumber}`;
                     const paidAt =
                       record.payments
                         ?.map((payment) => payment.paidAt)
@@ -779,7 +781,7 @@ export default function DuplicateHallTicketsPage() {
                               size="sm"
                               onClick={() =>
                                 void handlePreview(
-                                  record.examId,
+                                  examId,
                                   record.studentRollNumber,
                                 )
                               }
@@ -792,7 +794,7 @@ export default function DuplicateHallTicketsPage() {
                               loading={printingKey === printKey}
                               onClick={() =>
                                 void handlePrintDuplicate(
-                                  record.examId,
+                                  examId,
                                   record.studentRollNumber,
                                 )
                               }

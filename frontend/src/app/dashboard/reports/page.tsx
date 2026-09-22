@@ -242,7 +242,7 @@ function paymentReportBranch(
   payment: Payment,
   eligibleStudents: (EligibleExamStudent & { examId: number })[],
 ) {
-  const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId;
+  const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId ?? undefined;
   return resolveReportBranch({
     exam: payment.feeRecord?.exam,
     examId,
@@ -260,12 +260,15 @@ function dueReportBranch(
   record: ExamFeeRecord,
   eligibleStudents: (EligibleExamStudent & { examId: number })[],
 ) {
+  const examId = record.examId ?? undefined;
   return resolveReportBranch({
     exam: record.exam,
-    examId: record.examId,
+    examId,
     rollNumber: record.studentRollNumber,
     applicationBranch: record.application?.studentBranch,
-    eligibleBranch: findEligibleBranch(eligibleStudents, record.examId, record.studentRollNumber),
+    eligibleBranch: examId == null
+      ? undefined
+      : findEligibleBranch(eligibleStudents, examId, record.studentRollNumber),
   });
 }
 
@@ -311,16 +314,14 @@ function paymentReportBatch(
   payment: Payment,
   eligibleStudents: (EligibleExamStudent & { examId: number })[],
 ) {
-  const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId;
+  const examId = payment.feeRecord?.exam?.id ?? payment.feeRecord?.examId ?? undefined;
   return resolveReportBatch({
     exam: payment.feeRecord?.exam,
     examId,
     rollNumber: payment.feeRecord?.studentRollNumber,
-    eligibleBatch: findEligibleBatch(
-      eligibleStudents,
-      examId,
-      payment.feeRecord?.studentRollNumber,
-    ),
+    eligibleBatch: examId == null
+      ? undefined
+      : findEligibleBatch(eligibleStudents, examId, payment.feeRecord?.studentRollNumber),
   });
 }
 
@@ -328,11 +329,14 @@ function dueReportBatch(
   record: ExamFeeRecord,
   eligibleStudents: (EligibleExamStudent & { examId: number })[],
 ) {
+  const examId = record.examId ?? undefined;
   return resolveReportBatch({
     exam: record.exam,
-    examId: record.examId,
+    examId,
     rollNumber: record.studentRollNumber,
-    eligibleBatch: findEligibleBatch(eligibleStudents, record.examId, record.studentRollNumber),
+    eligibleBatch: examId == null
+      ? undefined
+      : findEligibleBatch(eligibleStudents, examId, record.studentRollNumber),
   });
 }
 
@@ -693,7 +697,7 @@ export default function ReportsPage() {
 
     for (const record of filteredDueRecords) {
       const batch = dueReportBatch(record, eligibleStudents);
-      const examId = record.examId;
+      const examId = record.examId ?? 0;
       const exam = record.exam ?? exams.find((e) => e.id === examId) ?? null;
       const display = getFeeRecordDisplayValues(record, exam);
 

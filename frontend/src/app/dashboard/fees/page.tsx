@@ -29,6 +29,7 @@ type ListStudent = {
   batch: string | null;
   currentYear: number;
   currentSemester: number;
+  feeStatus?: string;
 };
 
 const PAGE_SIZE = 25;
@@ -78,6 +79,10 @@ export default function FeesPage() {
   const [loadingExams, setLoadingExams] = useState(true);
   const [examsError, setExamsError] = useState('');
   const [examId, setExamId] = useState('');
+  const [collectionType, setCollectionType] = useState<'EXAM' | 'REVALUATION'>('EXAM');
+  const [revaluationId, setRevaluationId] = useState('');
+  const [revaluations, setRevaluations] = useState<Array<{ id: number; title: string; regulationCode: string; status: string }>>([]);
+  const [revaluationStudents, setRevaluationStudents] = useState<ListStudent[]>([]);
 
   const [eligible, setEligible] = useState<EligibleExamStudent[]>([]);
   const [searchResults, setSearchResults] = useState<ListStudent[]>([]);
@@ -126,6 +131,18 @@ export default function FeesPage() {
         );
       })
       .finally(() => setLoadingExams(false));
+  }, []);
+
+  useEffect(() => {
+    api.getRevaluationNotifications()
+      .then((rows) => setRevaluations(rows.filter((row) => row.status === 'published')))
+      .catch(() => setRevaluations([]));
+  }, []);
+
+  useEffect(() => {
+    api.getRevaluationNotifications()
+      .then((rows) => setRevaluations(rows.filter((row) => row.status === 'published')))
+      .catch(() => setRevaluations([]));
   }, []);
 
   const loadEligible = useCallback(async () => {
@@ -222,9 +239,9 @@ export default function FeesPage() {
     setRecordsError('');
     try {
       setRecords(
-        await api.getFeeRecords(
-          examId ? { examId: parseInt(examId, 10) } : {},
-        ),
+        await api.getFeeRecords(collectionType === 'REVALUATION'
+          ? { feeType: 'REVALUATION', revaluationNotificationId: revaluationId ? Number(revaluationId) : undefined }
+          : examId ? { examId: parseInt(examId, 10), feeType: 'EXAM' } : { feeType: 'EXAM' }),
       );
     } catch (err) {
       setRecords([]);
@@ -234,42 +251,51 @@ export default function FeesPage() {
     } finally {
       setLoadingRecords(false);
     }
-  }, [examId]);
+  }, [examId, collectionType, revaluationId]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    if (collectionType !== 'REVALUATION' || !revaluationId) {
+      setRevaluationStudents([]);
+      return;
+    }
+    api.getRevaluationStudents(Number(revaluationId))
+      .then((rows) => setRevaluationStudents(rows.map((row) => ({ id: row.id, name: row.name, rollNumber: row.rollNumber, admissionNumber: row.admissionNumber, section: row.section, studentStatus: row.studentStatus, feeStatus: row.feeStatus, college: row.college, course: row.course, branch: row.branch, batch: row.batch, currentYear: row.currentYear, currentSemester: row.currentSemester }))))
+      .catch(() => setRevaluationStudents([]));
+  }, [collectionType, revaluationId]);
 
   useEffect(() => {
     void loadRecords();
   }, [loadRecords]);
 
   const scopedBranches = useMemo(() => {
-    if (!selectedExam) return [] as string[];
-    const fromScopes = (selectedExam.scopes ?? [])
+    const fromScopes = selectedExam ? (selectedExam.scopes ?? [])
       .map((s) => s.branch)
-      .filter(Boolean);
-    const fromStudents = eligible
+      .filter(Boolean) : [];
+    const fromStudents = (collectionType === 'REVALUATION' ? revaluationStudents : eligible)
       .map((s) => s.branch)
       .filter((b): b is string => Boolean(b));
     const set = new Set<string>([
       ...fromScopes,
       ...fromStudents,
-      ...(selectedExam.branch ? [selectedExam.branch] : []),
+      ...(selectedExam?.branch ? [selectedExam.branch] : []),
     ]);
     return [...set].sort((a, b) => a.localeCompare(b));
-  }, [selectedExam, eligible]);
+  }, [selectedExam, eligible, collectionType, revaluationStudents]);
 
   const scopedSections = useMemo(() => {
-    if (!selectedExam) return [] as string[];
-    const fromScopes = (selectedExam.scopes ?? [])
+    const fromScopes = selectedExam ? (selectedExam.scopes ?? [])
       .filter((s) => !branch || s.branch === branch)
       .map((s) => s.section)
-      .filter((s): s is string => Boolean(s));
-    const fromStudents = eligible
+      .filter((s): s is string => Boolean(s)) : [];
+    const fromStudents = (collectionType === 'REVALUATION' ? revaluationStudents : eligible)
       .filter((s) => !branch || s.branch === branch)
       .map((s) => s.section)
       .filter((s): s is string => Boolean(s));
     return [...new Set([...fromScopes, ...fromStudents])].sort((a, b) =>
       a.localeCompare(b),
     );
-  }, [selectedExam, eligible, branch]);
+  }, [selectedExam, eligible, branch, collectionType, revaluationStudents]);
 
   const filteredEligible = useMemo(() => {
     const q = debouncedSearch.toLowerCase();
@@ -288,19 +314,31 @@ export default function FeesPage() {
 
   const examMode = Boolean(examId);
   const searchingFreely = !examMode && Boolean(debouncedSearch);
+  const filteredRevaluationStudents = revaluationStudents.filter((student) => {
+    if (branch && student.branch !== branch) return false;
+    if (section && student.section !== section) return false;
+    const query = debouncedSearch.toLowerCase();
+    return !query || [student.name, student.rollNumber, student.admissionNumber || ''].join(' ').toLowerCase().includes(query);
+  });
 
-  const total = examMode
+  const total = collectionType === 'REVALUATION'
+    ? filteredRevaluationStudents.length
+    : examMode
     ? filteredEligible.length
     : searchingFreely
       ? searchTotal
       : 0;
-  const totalPages = examMode
+  const totalPages = collectionType === 'REVALUATION'
+    ? Math.max(1, Math.ceil(total / PAGE_SIZE))
+    : examMode
     ? Math.max(1, Math.ceil(total / PAGE_SIZE))
     : searchingFreely
       ? searchTotalPages
       : 1;
   const safePage = Math.min(page, totalPages);
-  const pageStudents = examMode
+  const pageStudents = collectionType === 'REVALUATION'
+    ? filteredRevaluationStudents.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+    : examMode
     ? filteredEligible.slice(
         (safePage - 1) * PAGE_SIZE,
         safePage * PAGE_SIZE,
@@ -381,8 +419,8 @@ export default function FeesPage() {
         .join(' · ')
     : '';
 
-  const showStudentList = examMode || searchingFreely;
-  const listNoun = examMode ? 'eligible student' : 'student';
+  const showStudentList = collectionType === 'REVALUATION' || examMode || searchingFreely;
+  const listNoun = collectionType === 'REVALUATION' ? 'revaluation student' : examMode ? 'eligible student' : 'student';
 
   return (
     <div className="space-y-8">
@@ -407,11 +445,21 @@ export default function FeesPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-slate-600">Fee type</span>
+              <select value={collectionType} onChange={(e) => { setCollectionType(e.target.value as 'EXAM' | 'REVALUATION'); setExamId(''); setRevaluationId(''); setEligible([]); setPage(1); }} className={selectClass}>
+                <option value="EXAM">Examination</option>
+                <option value="REVALUATION">Revaluation</option>
+              </select>
+            </label>
             <label className="block space-y-1.5 lg:col-span-1">
               <span className="text-xs font-medium text-slate-600">
-                Examination
+                {collectionType === 'REVALUATION' ? 'Revaluation' : 'Examination'}
               </span>
-              <select
+              {collectionType === 'REVALUATION' ? <select value={revaluationId} onChange={(e) => setRevaluationId(e.target.value)} className={selectClass}>
+                <option value="">All revaluations</option>
+                {revaluations.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.regulationCode}</option>)}
+              </select> : <select
                 value={examId}
                 onChange={(e) => onExamChange(e.target.value)}
                 className={selectClass}
@@ -427,7 +475,7 @@ export default function FeesPage() {
                     {examLabel(exam)}
                   </option>
                 ))}
-              </select>
+              </select>}
             </label>
 
             <label className="block space-y-1.5">
@@ -648,7 +696,13 @@ export default function FeesPage() {
                             Y{s.currentYear} / S{s.currentSemester}
                           </td>
                           <td className="px-4 py-3.5 text-xs text-slate-600">
-                            {s.studentStatus || '—'}
+                            {collectionType === 'REVALUATION'
+                              ? s.feeStatus === 'paid'
+                                ? 'Paid'
+                                : s.feeStatus === 'pending'
+                                  ? 'Pending'
+                                  : 'Not applied'
+                              : s.studentStatus || '—'}
                           </td>
                           <td className="px-4 py-3.5 text-right">
                             <Button

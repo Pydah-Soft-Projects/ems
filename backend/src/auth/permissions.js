@@ -58,6 +58,15 @@ const PRIVILEGE_GROUPS = [
     ],
   },
   {
+    id: 'revaluations',
+    label: 'Revaluations',
+    privileges: [
+      { key: 'revaluations:read', label: 'View revaluation notifications and applications' },
+      { key: 'revaluations:write', label: 'Create, edit, and publish revaluation notifications' },
+      { key: 'revaluations:collect', label: 'Apply and collect revaluation fees' },
+    ],
+  },
+  {
     id: 'duplicate_hall_tickets',
     label: 'Duplicate hall tickets',
     privileges: [

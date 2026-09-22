@@ -9,7 +9,10 @@ const ExamFeeRecord = new EntitySchema({
   tableName: 'exam_fee_records',
   columns: {
     id: { type: 'int', primary: true, generated: true },
-    examId: { type: 'int' },
+    examId: { type: 'int', nullable: true },
+    feeType: { type: 'varchar', length: 30, default: 'EXAM' },
+    feeLabel: { type: 'varchar', length: 200, nullable: true },
+    revaluationNotificationId: { type: 'int', nullable: true },
     examType: { type: 'varchar', length: 30, default: ExamType.REGULAR },
     studentRollNumber: { type: 'varchar', length: 50 },
     studentName: { type: 'varchar', length: 150 },

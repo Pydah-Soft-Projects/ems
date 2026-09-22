@@ -2470,7 +2470,7 @@ class ExamService {
         return false;
     }
 
-    async listFeeRecords(examId, rollNumber, status, page, limit) {
+    async listFeeRecords(examId, rollNumber, status, page, limit, feeType, revaluationNotificationId) {
         const qb = this.feeRecordRepo
             .createQueryBuilder('fr')
             .leftJoinAndSelect('fr.exam', 'exam')
@@ -2492,6 +2492,8 @@ class ExamService {
         if (status) {
             qb.andWhere('fr.status = :status', { status });
         }
+        if (feeType) qb.andWhere('fr.feeType = :feeType', { feeType });
+        if (revaluationNotificationId) qb.andWhere('fr.revaluationNotificationId = :revaluationNotificationId', { revaluationNotificationId });
         if (limit && limit > 0) {
             const take = Math.min(limit, 1000);
             const skip = Math.max((Math.max(page || 1, 1) - 1) * take, 0);

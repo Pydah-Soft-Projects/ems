@@ -365,6 +365,8 @@ function createFeesRoutes(services) {
           status,
           page,
           limit,
+          req.query.feeType ? String(req.query.feeType) : undefined,
+          req.query.revaluationNotificationId ? parseInt(String(req.query.revaluationNotificationId), 10) : undefined,
         ),
       );
     }),

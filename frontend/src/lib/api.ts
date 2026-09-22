@@ -97,6 +97,28 @@ import {
   CreateEmsUserInput,
   UpdateEmsUserInput,
 } from '@/types/user-management';
+import type {
+  RevaluationNotification,
+  RevaluationStudentDetail,
+} from '@/types/revaluation';
+
+type RevaluationNotificationInput = {
+  regulationId: number;
+  title: string;
+  message: string;
+  startDate: string;
+  endDate: string;
+  selectedScopes: Array<{
+    collegeName: string;
+    courseName: string;
+    batch: string;
+  }>;
+  selectedYearSemesters: Array<{ yearOfStudy: number; semester: number }>;
+  excludedBatches: string[];
+  subjectIds: number[];
+  feesByCount: number[];
+  status: 'draft' | 'published';
+};
 
 export type ExamApplicationReportSummary = {
   totalEligible: number;
@@ -272,6 +294,86 @@ export const api = {
   getSubjects(regulationId?: number) {
     const query = regulationId ? `?regulationId=${regulationId}` : '';
     return request<Subject[]>(`/subjects${query}`);
+  },
+
+  getRevaluationNotifications() {
+    return request<RevaluationNotification[]>('/revaluations');
+  },
+
+  getRevaluationNotification(id: number) {
+    return request<RevaluationNotification>(`/revaluations/${id}`);
+  },
+
+  getRevaluationApplications(id: number) {
+    return request<Array<{
+      id: number;
+      studentRollNumber: string;
+      studentName: string;
+      selectedSubjectIds: number[];
+      feeAmount: number | string;
+      status: string;
+      feeRecordId: number | null;
+      feeRecord?: ExamFeeRecord;
+    }>>(`/revaluations/${id}/applications`);
+  },
+
+  getRevaluationStudents(id: number) {
+    return request<Array<{
+      id: number;
+      name: string;
+      rollNumber: string;
+      admissionNumber: string | null;
+      college: string | null;
+      course: string | null;
+      branch: string | null;
+      batch: string | null;
+      section: string | null;
+      currentYear: number;
+      currentSemester: number;
+      studentStatus: string | null;
+      feeRecordId: number | null;
+      feeStatus: string;
+      feeAmount: number | string | null;
+    }>>(`/revaluations/${id}/students`);
+  },
+
+  getRevaluationMappedSubjects(
+    regulationId: number,
+    selectedScopes: Array<{ collegeName: string; courseName: string; batch: string }>,
+    selectedYearSemesters: Array<{ yearOfStudy: number; semester: number }> = [],
+  ) {
+    return request<Array<{ id: number; code: string; name: string; yearOfStudy: number; semester: number }>>('/revaluations/subjects', {
+      method: 'POST',
+      body: JSON.stringify({ regulationId, selectedScopes, selectedYearSemesters }),
+    });
+  },
+
+  createRevaluationNotification(data: RevaluationNotificationInput) {
+    return request<RevaluationNotification>('/revaluations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateRevaluationNotification(id: number, data: RevaluationNotificationInput) {
+    return request<RevaluationNotification>(`/revaluations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getRevaluationStudent(notificationId: number, identifier: string) {
+    const query = new URLSearchParams({ identifier });
+    return request<RevaluationStudentDetail>(
+      `/revaluations/student/${notificationId}?${query.toString()}`,
+    );
+  },
+
+  applyRevaluation(notificationId: number, data: { studentIdentifier: string; selectedSubjectIds: number[] }) {
+    return request<{ id: number; feeAmount: number }>(`/revaluations/${notificationId}/applications`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 
   getSubject(id: number) {
@@ -719,6 +821,8 @@ export const api = {
       status?: 'pending' | 'paid';
       page?: number;
       limit?: number;
+      feeType?: 'EXAM' | 'REVALUATION';
+      revaluationNotificationId?: number;
     } = {},
   ) {
     const params = new URLSearchParams();
@@ -727,6 +831,8 @@ export const api = {
     if (filters.status) params.set('status', filters.status);
     if (filters.page) params.set('page', String(filters.page));
     if (filters.limit) params.set('limit', String(filters.limit));
+    if (filters.feeType) params.set('feeType', filters.feeType);
+    if (filters.revaluationNotificationId) params.set('revaluationNotificationId', String(filters.revaluationNotificationId));
     const query = params.toString() ? `?${params}` : '';
     return request<ExamFeeRecord[]>(`/fees/records${query}`);
   },

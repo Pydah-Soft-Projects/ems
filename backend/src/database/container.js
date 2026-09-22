@@ -6,6 +6,7 @@ const { UsersService } = require('../auth/users.service');
 const { RegulationsService } = require('../regulations/regulations.service');
 const { SubjectsService } = require('../subjects/subjects.service');
 const { ExamService } = require('../exam/exam.service');
+const { RevaluationService } = require('../revaluation/revaluation.service');
 const { createSdmsService } = require('../sdms/sdms.service');
 const { Regulation } = require('../regulations/schemas/regulation.schema');
 const { RegulationScope } = require('../regulations/schemas/regulation-scope.schema');
@@ -67,6 +68,10 @@ const {
   EmsUser,
   EmsAuditLog,
 } = require('../auth/schemas/ems-rbac.schema');
+const {
+  RevaluationNotification,
+  RevaluationApplication,
+} = require('../revaluation/schemas/revaluation-notification.schema');
 
 function createSdmsStub() {
   const unavailable = async () => {
@@ -89,6 +94,16 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(EmsRole),
     dataSource.getRepository(EmsUser),
     dataSource.getRepository(EmsAuditLog),
+  );
+
+  const revaluation = new RevaluationService(
+    dataSource.getRepository(RevaluationNotification),
+    dataSource.getRepository(RevaluationApplication),
+    dataSource.getRepository(Regulation),
+    dataSource.getRepository(Subject),
+    dataSource.getRepository(SubjectMappingEntry),
+    dataSource.getRepository(ExamFeeRecord),
+    sdms,
   );
 
   const regulations = new RegulationsService(
@@ -188,6 +203,7 @@ function createServices(dataSource, studentDataSource) {
   return {
     auth,
     users,
+    revaluation,
     regulations,
     subjects,
     exam,

@@ -290,6 +290,9 @@ class UsersService {
   }
 
   effectiveUserPrivileges(user) {
+    if (user?.role?.isSystemSuperAdmin) {
+      return ['*', ...ALL_PRIVILEGE_KEYS];
+    }
     const stored = Array.isArray(user?.privileges) ? user.privileges : [];
     if (stored.length > 0) return stored;
     // Legacy rows created before user-level privileges — fall back to role template.

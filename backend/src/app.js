@@ -11,6 +11,7 @@ const { requestLogger } = require('./common/logger');
 const { asyncHandler } = require('./common/asyncHandler');
 const { AppError } = require('./common/errors');
 const { createRegulationsRoutes } = require('./regulations/regulations.routes');
+const { createRevaluationRoutes } = require('./revaluation/revaluation.routes');
 const {
   createSubjectsRoutes,
   createSubjectMappingRoutes,
@@ -301,6 +302,7 @@ function createApp(services) {
   );
 
   api.use('/regulations', createRegulationsRoutes(services));
+  api.use('/revaluations', createRevaluationRoutes(services));
   api.use('/subjects', createSubjectsRoutes(services));
   api.use('/subject-mappings', createSubjectMappingRoutes(services));
   api.use('/exams', createExamRoutes(services));
