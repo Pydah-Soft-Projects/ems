@@ -220,16 +220,10 @@ class RevaluationService {
     if (!scopeMatches) throw AppError.badRequest('This student is outside the notification batch scope');
     const subjects = await this.subjectsForScopes(notification.regulationId, notification.selectedScopes ?? [], notification.selectedYearSemesters ?? []);
     const allowed = new Set((notification.subjectIds ?? []).map(Number));
-    const studentSubjects = await this.subjectsForScopes(notification.regulationId, (notification.selectedScopes ?? []).filter((scope) =>
-      String(scope.collegeName).trim().toLowerCase() === String(student.college ?? '').trim().toLowerCase() &&
-      String(scope.courseName).trim().toLowerCase() === String(student.course ?? '').trim().toLowerCase() &&
-      String(scope.batch).trim().toLowerCase() === String(student.batch ?? '').trim().toLowerCase(),
-    ), notification.selectedYearSemesters ?? []);
-    const studentSubjectSet = new Set(studentSubjects.map((subject) => subject.id));
     return {
       notification: await this.serialize(notification),
       student: { id: student.id, name: student.studentName, pinNo: student.pinNo, admissionNumber: student.admissionNumber, batch: student.batch, college: student.college, course: student.course, branch: student.branch },
-      subjects: subjects.filter((subject) => allowed.has(subject.id) && studentSubjectSet.has(subject.id)),
+      subjects: subjects.filter((subject) => allowed.has(subject.id)),
     };
   }
 
