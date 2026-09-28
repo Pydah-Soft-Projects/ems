@@ -272,20 +272,25 @@ class RevaluationService {
     const notification = await this.findNotification(notificationId);
     if (notification.status !== 'published') throw AppError.badRequest('This revaluation notification is not published');
     const byRoll = new Map();
-    const years = notification.selectedYearSemesters ?? [];
+    const excluded = (notification.excludedBatches ?? []).map((b) => String(b).trim().toLowerCase());
     for (const scope of notification.selectedScopes ?? []) {
-      for (const year of years) {
-        let page = 1;
-        let result;
-        do {
-          result = await this.sdms.listStudents({ college: scope.collegeName, course: scope.courseName, batch: scope.batch, currentYear: year.yearOfStudy, currentSemester: year.semester, page, limit: 200 });
-          for (const student of result.items) {
-            const roll = String(student.pinNo || student.admissionNumber || '').trim();
-            if (roll) byRoll.set(roll.toLowerCase(), student);
-          }
-          page += 1;
-        } while (page <= result.totalPages);
-      }
+      let page = 1;
+      let result;
+      do {
+        result = await this.sdms.listStudents({
+          college: scope.collegeName,
+          course: scope.courseName,
+          batch: scope.batch,
+          page,
+          limit: 200,
+        });
+        for (const student of result.items) {
+          if (excluded.includes(String(student.batch ?? '').trim().toLowerCase())) continue;
+          const roll = String(student.pinNo || student.admissionNumber || '').trim();
+          if (roll) byRoll.set(roll.toLowerCase(), student);
+        }
+        page += 1;
+      } while (page <= result.totalPages);
     }
     const records = await this.feeRecordRepo.find({ where: { revaluationNotificationId: notificationId } });
     const recordByRoll = new Map(records.map((record) => [record.studentRollNumber.toLowerCase(), record]));
