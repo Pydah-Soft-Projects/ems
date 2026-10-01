@@ -490,6 +490,7 @@ function createFeesRoutes(services) {
           req.query.feeRecordId
             ? parseInt(String(req.query.feeRecordId), 10)
             : undefined,
+          req.query.status ? String(req.query.status) : undefined,
         ),
       );
     }),

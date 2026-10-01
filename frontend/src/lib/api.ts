@@ -931,10 +931,11 @@ export const api = {
     });
   },
 
-  getPayments(feeRecordId?: number, rollNumber?: string) {
+  getPayments(feeRecordId?: number, rollNumber?: string, status?: string) {
     const params = new URLSearchParams();
     if (feeRecordId) params.set('feeRecordId', String(feeRecordId));
     if (rollNumber) params.set('rollNumber', rollNumber.trim());
+    if (status) params.set('status', status.trim());
     const query = params.toString() ? `?${params}` : '';
     return request<Payment[]>(`/fees/payments${query}`);
   },

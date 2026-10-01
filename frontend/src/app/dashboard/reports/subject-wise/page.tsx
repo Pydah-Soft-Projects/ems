@@ -14,9 +14,16 @@ function dateOnly(value?: string | null) {
 }
 
 function isPaid(payment: Payment) {
-  const paymentStatus = String(payment.status || '').toLowerCase();
-  const feeStatus = String(payment.feeRecord?.status || '').toLowerCase();
-  return ['success', 'paid'].includes(paymentStatus) || feeStatus === 'paid';
+  const paymentStatus = String(payment.status || '').toLowerCase().trim();
+  // Cancelled, voided, failed, expired, or refunded payments must NEVER be shown as paid in reports
+  if (['cancelled', 'voided', 'failed', 'expired', 'refunded'].includes(paymentStatus)) {
+    return false;
+  }
+  const feeStatus = String(payment.feeRecord?.status || '').toLowerCase().trim();
+  if (['cancelled', 'voided', 'failed'].includes(feeStatus)) {
+    return false;
+  }
+  return ['success', 'paid'].includes(paymentStatus) || (!paymentStatus && feeStatus === 'paid');
 }
 
 function branchMatches(subject: ExamSubject, branch: string) {
@@ -35,7 +42,7 @@ export default function SubjectWiseReportsPage() {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([api.getExams(), api.getPayments()])
+    Promise.all([api.getExams(), api.getPayments(undefined, undefined, 'active')])
       .then(([examRows, paymentRows]) => {
         if (!mounted) return;
         setExams(examRows || []);

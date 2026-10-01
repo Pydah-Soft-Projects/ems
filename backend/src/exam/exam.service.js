@@ -3363,7 +3363,7 @@ class ExamService {
             feeRecord: record,
         };
     }
-    listPayments(feeRecordId) {
+    listPayments(feeRecordId, status) {
         const qb = this.paymentRepo
             .createQueryBuilder('p')
             .leftJoinAndSelect('p.feeRecord', 'fr')
@@ -3372,6 +3372,23 @@ class ExamService {
             .orderBy('p.paidAt', 'DESC');
         if (feeRecordId) {
             qb.andWhere('p.feeRecordId = :feeRecordId', { feeRecordId });
+        }
+        if (status) {
+            const s = String(status).trim().toLowerCase();
+            if (s === 'active' || s === 'paid' || s === 'success') {
+                qb.andWhere(
+                    '((LOWER(p.status) IN (:...activeStatuses)) OR (p.status IS NULL AND LOWER(fr.status) = :frPaid)) AND (p.status IS NULL OR LOWER(p.status) NOT IN (:...cancelledStatuses))',
+                    {
+                        activeStatuses: ['success', 'paid'],
+                        frPaid: 'paid',
+                        cancelledStatuses: ['cancelled', 'voided', 'failed', 'expired', 'refunded'],
+                    }
+                );
+            } else if (s === 'cancelled') {
+                qb.andWhere('LOWER(p.status) = :cancelledStatus', { cancelledStatus: 'cancelled' });
+            } else {
+                qb.andWhere('LOWER(p.status) = :status', { status: s });
+            }
         }
         return qb.getMany();
     }
@@ -3547,7 +3564,10 @@ class ExamService {
             const totalAmount = Number(r.totalAmount || 0);
             const isPaid = String(r.status || '').toLowerCase() === 'paid';
             const isPaidLateFee = isPaid && lateFee > 0;
-            const successfulPayment = (r.payments || []).find((p) => String(p.status).toLowerCase() === 'success') || r.payments?.[0];
+            const successfulPayment =
+                (r.payments || []).find((p) => ['success', 'paid'].includes(String(p.status || '').toLowerCase())) ||
+                (r.payments || []).find((p) => !['cancelled', 'voided', 'failed', 'expired', 'refunded'].includes(String(p.status || '').toLowerCase())) ||
+                null;
 
             return {
                 id: r.id,

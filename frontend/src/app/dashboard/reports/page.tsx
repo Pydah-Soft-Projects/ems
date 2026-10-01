@@ -40,9 +40,17 @@ function paymentTimestamp(payment: Payment) {
 }
 
 function isPaidPayment(payment: Payment) {
-  const paymentStatus = String(payment.status || '').toLowerCase();
-  const feeStatus = String(payment.feeRecord?.status || '').toLowerCase();
-  return ['success', 'paid'].includes(paymentStatus) || feeStatus === 'paid';
+  const paymentStatus = String(payment.status || '').toLowerCase().trim();
+  // Cancelled, voided, failed, expired, or refunded payments must NEVER be shown as paid in reports
+  if (['cancelled', 'voided', 'failed', 'expired', 'refunded'].includes(paymentStatus)) {
+    return false;
+  }
+  const feeStatus = String(payment.feeRecord?.status || '').toLowerCase().trim();
+  if (['cancelled', 'voided', 'failed'].includes(feeStatus)) {
+    return false;
+  }
+  // Active payment status or legacy records where status is unset but feeRecord is marked paid
+  return ['success', 'paid'].includes(paymentStatus) || (!paymentStatus && feeStatus === 'paid');
 }
 
 function isSupplyExamType(type?: string | null) {
@@ -427,7 +435,7 @@ export default function ReportsPage() {
     let mounted = true;
     setLoading(true);
     api
-      .getPayments()
+      .getPayments(undefined, undefined, 'active')
       .then((rows) => {
         if (!mounted) return;
         // only paid payments or fee records marked as paid
@@ -592,6 +600,7 @@ export default function ReportsPage() {
 
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
+      if (!isPaidPayment(p)) return false;
       const paidAt = paymentTimestamp(p);
       if (tab !== 'due' && !paidAt) return false;
       if (tab === 'day' && fmtDateISO(paidAt as string) !== selectedDate) return false;
