@@ -829,6 +829,106 @@ class FeeManagementService {
     }
     return result;
   }
+
+  /**
+   * Find Fee Management transactions associated with an EMS fee record / payments.
+   */
+  async findTransactionsForFeeRecord(feeRecordId, paymentIds = [], receiptNumbers = []) {
+    if (!this.isEnabled()) return [];
+    const { Transaction } = this.getModels();
+    const conditions = [];
+    if (feeRecordId) {
+      conditions.push({ emsFeeRecordId: Number(feeRecordId) });
+    }
+    if (Array.isArray(paymentIds) && paymentIds.length > 0) {
+      const cleanIds = paymentIds.map(Number).filter((id) => Number.isFinite(id) && id > 0);
+      if (cleanIds.length > 0) {
+        conditions.push({ emsPaymentId: { $in: cleanIds } });
+      }
+    }
+    if (Array.isArray(receiptNumbers) && receiptNumbers.length > 0) {
+      const cleanReceipts = receiptNumbers.filter(Boolean).map(String);
+      if (cleanReceipts.length > 0) {
+        conditions.push({ receiptNumber: { $in: cleanReceipts } });
+      }
+    }
+    if (conditions.length === 0) return [];
+    return await Transaction.find({ $or: conditions }).lean();
+  }
+
+  /**
+   * Check if transactions for an EMS fee record are active, cancelled, or deleted in Fee Management DB.
+   */
+  async checkTransactionStatusForFeeRecord({ feeRecordId, paymentIds = [], receiptNumbers = [], hasPostedMetadata = false }) {
+    if (!this.isEnabled()) {
+      return { available: false, reason: 'fee_management_not_connected', shouldRollback: false };
+    }
+    const txns = await this.findTransactionsForFeeRecord(feeRecordId, paymentIds, receiptNumbers);
+    if (!txns || txns.length === 0) {
+      // If payment had Fee Management metadata or was recorded, but now 0 rows found in Mongo:
+      // The transaction was DELETED from Fee Management!
+      return {
+        available: true,
+        status: 'deleted',
+        activeCount: 0,
+        cancelledCount: 0,
+        totalCount: 0,
+        shouldRollback: Boolean(hasPostedMetadata || feeRecordId),
+        reason: 'transaction_deleted_from_fee_management',
+        transactions: [],
+      };
+    }
+    const activeTxns = txns.filter((t) => t.status !== 'cancelled');
+    const cancelledTxns = txns.filter((t) => t.status === 'cancelled');
+
+    if (activeTxns.length === 0 && cancelledTxns.length > 0) {
+      // All corresponding transactions were cancelled in Fee Management DB!
+      return {
+        available: true,
+        status: 'cancelled',
+        activeCount: 0,
+        cancelledCount: cancelledTxns.length,
+        totalCount: txns.length,
+        shouldRollback: true,
+        reason: 'transaction_cancelled_in_fee_management',
+        transactions: cancelledTxns,
+      };
+    }
+
+    return {
+      available: true,
+      status: 'active',
+      activeCount: activeTxns.length,
+      cancelledCount: cancelledTxns.length,
+      totalCount: txns.length,
+      shouldRollback: false,
+      transactions: activeTxns,
+    };
+  }
+
+  /**
+   * Cancel transaction(s) in Fee Management DB.
+   */
+  async cancelTransactionInFeeManagement(feeRecordId, { cancelledBy, cancellationReason } = {}) {
+    if (!this.isEnabled()) {
+      return { skipped: true, reason: 'fee_management_not_connected' };
+    }
+    const { Transaction } = this.getModels();
+    const update = {
+      status: 'cancelled',
+      cancelledAt: new Date(),
+      cancelledBy: cancelledBy || 'ems_system',
+      cancellationReason: cancellationReason || 'Cancelled from EMS',
+    };
+    const result = await Transaction.updateMany(
+      { emsFeeRecordId: Number(feeRecordId), status: { $ne: 'cancelled' } },
+      { $set: update },
+    );
+    return {
+      success: true,
+      modifiedCount: result.modifiedCount || 0,
+    };
+  }
 }
 
 module.exports = {

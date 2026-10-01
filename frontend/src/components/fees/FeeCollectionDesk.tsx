@@ -87,6 +87,8 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
   const [revaluationSelection, setRevaluationSelection] = useState<Record<number, number[]>>({});
   const [applyingRevaluation, setApplyingRevaluation] = useState<number | null>(null);
   const [revaluationPopup, setRevaluationPopup] = useState<RevaluationStudentDetail | null>(null);
+  const [syncingFeeDb, setSyncingFeeDb] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   // Fee Head Application State
   const [feeHeadsList, setFeeHeadsList] = useState<FeeHead[]>([]);
@@ -199,6 +201,26 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       setRevaluationDetails([]);
     }
   };
+
+  async function handleSyncWithFeeDb() {
+    setSyncingFeeDb(true);
+    setSyncMessage('');
+    try {
+      const res = await api.syncFeeTransactions({ rollNumber });
+      if (res.rolledBackCount > 0) {
+        setSyncMessage(`Synced with Fee Management: ${res.rolledBackCount} cancelled transaction(s) rolled back to unpaid.`);
+      } else {
+        setSyncMessage('Synced with Fee Management: All transactions up to date.');
+      }
+      await load();
+      await loadRevaluations(rollNumber);
+      if (sdms?.id) await loadEligibleExams(sdms.id);
+    } catch (err) {
+      setSyncMessage(err instanceof Error ? err.message : 'Failed to sync with Fee Management database.');
+    } finally {
+      setSyncingFeeDb(false);
+    }
+  }
 
   async function applyRevaluation(detail: RevaluationStudentDetail) {
     const selected = revaluationSelection[detail.notification.id] ?? [];
@@ -726,7 +748,31 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
             Collect examination fees for this student
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleSyncWithFeeDb}
+            loading={syncingFeeDb}
+          >
+            ↻ Sync with Fee DB
+          </Button>
+        </div>
       </div>
+
+      {syncMessage ? (
+        <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-medium text-blue-800 shadow-sm">
+          <span>{syncMessage}</span>
+          <button
+            type="button"
+            onClick={() => setSyncMessage('')}
+            className="text-blue-500 hover:text-blue-700 ml-3 font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4 min-w-0">
@@ -916,6 +962,18 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                               >
                                 Apply
                               </Button>
+                            ) : exam.applications.some((a) => a.feeStatus === 'pending') ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="warning">Unpaid</Badge>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => setApplyExam(exam)}
+                                >
+                                  Re-apply
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-xs font-semibold text-[var(--success)]">
                                 Fully applied
@@ -930,8 +988,54 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               )}
               </> : <div className="p-5">
                 <h3 className="font-semibold text-slate-900">Eligible revaluations</h3>
-                <p className="mt-1 text-xs text-[var(--muted)]">Published revaluation notifications matching this student&apos;s programme, batch, year, and semester.</p>
-                {revaluationDetails.length === 0 ? <p className="py-5 text-sm text-[var(--muted)]">No published revaluations match this student.</p> : <div className="mt-4 space-y-3">{revaluationDetails.map((detail) => { const selected = revaluationSelection[detail.notification.id] ?? []; const existing = records.find((record) => record.feeType === 'REVALUATION' && record.revaluationNotificationId === detail.notification.id); return <div key={detail.notification.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-4"><div><p className="font-semibold text-slate-900">{detail.notification.title}</p><p className="text-xs text-[var(--muted)]">{detail.notification.regulationCode} · {detail.notification.startDate} → {detail.notification.endDate}</p></div><div className="flex items-center gap-2">{existing ? <Badge variant={existing.status === 'paid' ? 'success' : 'warning'}>{existing.status}</Badge> : <Button size="sm" onClick={() => setRevaluationPopup(detail)}>Apply</Button>}</div></div>; })}</div>}
+                {revaluationDetails.length === 0 ? (
+                  <p className="py-5 text-sm text-[var(--muted)]">
+                    No published revaluations match this student.
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {revaluationDetails.map((detail) => {
+                      const selected =
+                        revaluationSelection[detail.notification.id] ?? [];
+                      const existing = records.find(
+                        (record) =>
+                          record.feeType === 'REVALUATION' &&
+                          record.revaluationNotificationId === detail.notification.id,
+                      );
+                      const isPaid = existing?.status === 'paid';
+                      return (
+                        <div
+                          key={detail.notification.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] p-4"
+                        >
+                          <div>
+                            <p className="font-semibold text-slate-900">{detail.notification.title}</p>
+                            <p className="text-xs text-[var(--muted)]">{detail.notification.regulationCode} · {detail.notification.startDate} → {detail.notification.endDate}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isPaid ? (
+                              <Badge variant="success">Paid</Badge>
+                            ) : (
+                              <>
+                                {existing ? (
+                                  <Badge variant="warning">
+                                    {existing.status === 'pending' ? 'Unpaid' : existing.status}
+                                  </Badge>
+                                ) : null}
+                                <Button
+                                  size="sm"
+                                  onClick={() => setRevaluationPopup(detail)}
+                                >
+                                  {existing ? 'Re-apply' : 'Apply'}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>}
             </div>
           )}

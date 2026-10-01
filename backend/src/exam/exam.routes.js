@@ -384,6 +384,45 @@ function createFeesRoutes(services) {
       res.json(await services.exam.lookupForCollection(rollNumber));
     }),
   );
+  router.post(
+    '/sync-transactions',
+    requireStaff,
+    requirePrivilege('fees:collect'),
+    asyncHandler(async (req, res) => {
+      const filters = {
+        studentRollNumber: req.body?.rollNumber || req.query?.rollNumber,
+        feeRecordId: req.body?.feeRecordId || req.query?.feeRecordId,
+        examId: req.body?.examId || req.query?.examId,
+        revaluationNotificationId: req.body?.revaluationNotificationId || req.query?.revaluationNotificationId,
+      };
+      res.json(await services.exam.syncTransactionsWithFeeManagement(filters));
+    }),
+  );
+  router.post(
+    '/records/:id/sync',
+    requireStaff,
+    requirePrivilege('fees:collect'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.exam.syncTransactionsWithFeeManagement({
+          feeRecordId: parseId(req.params.id),
+        }),
+      );
+    }),
+  );
+  router.post(
+    '/records/:id/unpaid',
+    requireStaff,
+    requirePrivilege('fees:collect'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.exam.markFeeUnpaid(parseId(req.params.id), {
+          cancelledBy: req.user?.username || req.user?.email || 'staff',
+          reason: req.body?.reason,
+        }),
+      );
+    }),
+  );
   router.get(
     '/students/:studentId/exams',
     requireStaff,

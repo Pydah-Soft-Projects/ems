@@ -248,6 +248,26 @@ export default function RevaluationsPage() {
     } catch { setPaidApplications([]); }
   }
 
+  async function syncNotificationTransactions() {
+    if (!applicationNotificationId) return;
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await api.syncRevaluationTransactions(Number(applicationNotificationId));
+      if (res.rolledBackCount > 0) {
+        setSuccess(`Synced with Fee Management: ${res.rolledBackCount} cancelled transaction(s) rolled back to unpaid.`);
+      } else {
+        setSuccess('Synced with Fee Management: All transactions up to date.');
+      }
+      await loadPaidApplications(applicationNotificationId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to sync transactions.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function publishNotification(notification: RevaluationNotification) {
     setSaving(true);
     setError('');
@@ -340,7 +360,11 @@ export default function RevaluationsPage() {
       : null}
 
       {!editorOpen && notifications.some((notification) => notification.status === 'published') ? <Card>
-        <CardHeader title="Apply revaluation for a student" description="The student is checked against the notification batches, not against an EMS examination." />
+        <CardHeader
+          title="Apply revaluation for a student"
+          description="The student is checked against the notification batches, not against an EMS examination."
+          action={applicationNotificationId ? <Button variant="secondary" size="sm" onClick={() => void syncNotificationTransactions()} loading={saving}>↻ Sync Fee DB</Button> : undefined}
+        />
         <CardBody className="space-y-4"><div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]"><select value={applicationNotificationId} onChange={(event) => { setApplicationNotificationId(event.target.value); setStudentDetail(null); void loadPaidApplications(event.target.value); }} className="h-10 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Select published notification</option>{notifications.filter((notification) => notification.status === 'published').map((notification) => <option key={notification.id} value={notification.id}>{notification.title} · {notification.regulationCode}</option>)}</select><input value={studentIdentifier} onChange={(event) => setStudentIdentifier(event.target.value)} placeholder="PIN or admission number" className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /><Button variant="secondary" onClick={() => void findStudent()} disabled={!applicationNotificationId}>Find student</Button></div>{studentDetail ? <><div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">{studentDetail.student.name} · {studentDetail.student.college} · {studentDetail.student.course} · Batch {studentDetail.student.batch}</div><div className="grid gap-2 md:grid-cols-2">{studentDetail.subjects.map((subject) => <label key={subject.id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm"><input type="checkbox" checked={studentSubjectIds.includes(subject.id)} onChange={() => setStudentSubjectIds((current) => current.includes(subject.id) ? current.filter((id) => id !== subject.id) : [...current, subject.id])} />{subject.code} - {subject.name}</label>)}</div><p className="text-sm font-semibold text-slate-800">Amount: Rs. {Number(studentDetail.notification.feesByCount[studentSubjectIds.length - 1] ?? 0).toFixed(2)}</p><Button onClick={() => void applyStudent()} loading={saving} disabled={!studentSubjectIds.length}>Create application</Button></> : null}{paidApplications.length ? <div><h3 className="text-sm font-semibold text-slate-900">Paid students</h3><div className="mt-2 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs text-slate-500"><th className="py-2">Student</th><th>Roll number</th><th>Subjects</th><th>Amount</th></tr></thead><tbody>{paidApplications.map((row) => <tr key={row.id} className="border-b border-slate-100"><td className="py-2">{row.studentName}</td><td>{row.studentRollNumber}</td><td>{row.selectedSubjectIds.length}</td><td>Rs. {Number(row.feeAmount).toFixed(2)}</td></tr>)}</tbody></table></div></div> : null}</CardBody>
       </Card> : null}
     </div>

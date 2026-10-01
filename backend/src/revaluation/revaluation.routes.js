@@ -41,6 +41,9 @@ function createRevaluationRoutes(services) {
   router.post('/:id/applications', requirePrivilege('revaluations:collect'), asyncHandler(async (req, res) => {
     res.status(201).json(await services.revaluation.apply(parseId(req.params.id), req.body));
   }));
+  router.post('/:id/sync', requirePrivilege('revaluations:collect'), asyncHandler(async (req, res) => {
+    res.json(await services.revaluation.syncTransactions(parseId(req.params.id), req.query?.rollNumber || req.body?.rollNumber));
+  }));
   return router;
 }
 

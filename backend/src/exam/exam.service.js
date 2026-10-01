@@ -1409,6 +1409,7 @@ class ExamService {
         });
         const inScope = exams.filter((e) => this.studentMatchesExam(e, student));
         const roll = this.resolveRoll(student);
+        await this.syncTransactionsWithFeeManagement({ studentRollNumber: roll }).catch(() => undefined);
         const appsByExam = new Map();
         if (inScope.length > 0) {
             const allApps = await this.applicationRepo
@@ -1427,7 +1428,8 @@ class ExamService {
         return inScope.map((exam) => {
             const apps = appsByExam.get(exam.id) ?? [];
             const allowedTypes = this.eligibleTypesForStudent(exam, student);
-            const openTypes = apps.length === 0 ? allowedTypes : [];
+            const hasPaidApp = apps.some((a) => a.feeRecord?.status === FeeStatus.PAID);
+            const openTypes = hasPaidApp ? [] : allowedTypes;
             return {
                 id: exam.id,
                 name: exam.name,
@@ -1446,7 +1448,7 @@ class ExamService {
                 packageFee: this.packageFeeForScope(exam, student.branch, student.section),
                 supplyFeeByCount: this.supplyFeeForScope(exam, student.branch),
                 subjectCount: this.examSubjectsForBranch(exam, student.branch, student.section).length,
-                alreadyApplied: openTypes.length === 0,
+                alreadyApplied: hasPaidApp,
                 openTypes,
                 applications: apps.map((a) => ({
                     id: a.id,
@@ -1469,6 +1471,7 @@ class ExamService {
             throw AppError.forbidden('You are not in the scope of this examination');
         }
         const roll = this.resolveRoll(student);
+        await this.syncTransactionsWithFeeManagement({ studentRollNumber: roll, examId }).catch(() => undefined);
         const applications = await this.applicationRepo
             .createQueryBuilder('a')
             .leftJoinAndSelect('a.feeRecord', 'fee')
@@ -1476,7 +1479,8 @@ class ExamService {
             .andWhere('LOWER(a.studentRollNumber) = LOWER(:roll)', { roll })
             .getMany();
         const allowedTypes = this.eligibleTypesForStudent(exam, student);
-        const openTypes = applications.length === 0 ? allowedTypes : [];
+        const hasPaidApp = applications.some((a) => a.feeRecord?.status === FeeStatus.PAID);
+        const openTypes = hasPaidApp ? [] : allowedTypes;
         const branchSubjects = this.examSubjectsForBranch(exam, student.branch, student.section);
         const supplyStatuses = allowedTypes.includes(ExamType.SUPPLY)
             ? await this.supplyResultStatus(exam, roll, branchSubjects)
@@ -1559,21 +1563,21 @@ class ExamService {
         });
         const examType = this.resolveEnrollmentType(eligibleTypes, dto.examType);
         const roll = this.resolveRoll(student);
+        await this.syncTransactionsWithFeeManagement({ studentRollNumber: roll, examId }).catch(() => undefined);
         const existing = await this.applicationRepo
             .createQueryBuilder('a')
+            .leftJoinAndSelect('a.feeRecord', 'fee')
             .where('a.examId = :examId', { examId })
             .andWhere('LOWER(a.studentRollNumber) = LOWER(:roll)', { roll })
             .getOne();
-        if (existing) {
-            throw AppError.badRequest(`You have already applied for this examination as ${this.typeLabel(existing.examType)}. Another enrollment type requires a separate examination`);
-        }
         const existingFee = await this.feeRecordRepo
             .createQueryBuilder('f')
             .where('f.examId = :examId', { examId })
             .andWhere('LOWER(f.studentRollNumber) = LOWER(:roll)', { roll })
             .getOne();
-        if (existingFee) {
-            throw AppError.badRequest('A fee record already exists for this examination');
+
+        if (existing?.fee?.status === FeeStatus.PAID || existingFee?.status === FeeStatus.PAID) {
+            throw AppError.badRequest(`You have already applied and paid for this examination as ${this.typeLabel(existing?.examType || existingFee?.examType || examType)}.`);
         }
         // Students only sit for the papers grouped under their own branch
         // (and section, when papers are section-specific).
@@ -1625,33 +1629,61 @@ class ExamService {
             saved = await this.applicationRepo.manager.transaction(async (manager) => {
                 const feeRepo = manager.getRepository('ExamFeeRecord');
                 const appRepo = manager.getRepository('ExamApplication');
-                const savedFee = await feeRepo.save(feeRepo.create({
-                examId,
-                examType,
-                studentRollNumber: roll,
-                studentName: student.studentName,
-                selectedSubjectIds,
-                feeBreakdown: breakdown,
-                baseFee,
-                lateFee: 0,
-                totalAmount: baseFee,
-                status: FeeStatus.PENDING,
-                dueDate: exam.applicationEndDate,
-                }));
-                const savedApplication = await appRepo.save(appRepo.create({
-                examId,
-                examType,
-                studentRollNumber: roll,
-                studentName: student.studentName,
-                studentBranch: student.branch ?? null,
-                studentSection: student.section ?? null,
-                selectedSubjectIds,
-                feeBreakdown: breakdown,
-                declarationAccepted: true,
-                consentAccepted: true,
-                feeRecordId: savedFee.id,
-                }));
-                return { feeRecord: savedFee, application: savedApplication };
+
+                let targetFee = existingFee || (existing?.feeRecordId ? await feeRepo.findOne({ where: { id: existing.feeRecordId } }) : null);
+                if (targetFee) {
+                    targetFee.examType = examType;
+                    targetFee.selectedSubjectIds = selectedSubjectIds;
+                    targetFee.feeBreakdown = breakdown;
+                    targetFee.baseFee = baseFee;
+                    targetFee.lateFee = 0;
+                    targetFee.totalAmount = baseFee;
+                    targetFee.status = FeeStatus.PENDING;
+                    targetFee.dueDate = exam.applicationEndDate;
+                    await feeRepo.save(targetFee);
+                } else {
+                    targetFee = await feeRepo.save(feeRepo.create({
+                        examId,
+                        examType,
+                        studentRollNumber: roll,
+                        studentName: student.studentName,
+                        selectedSubjectIds,
+                        feeBreakdown: breakdown,
+                        baseFee,
+                        lateFee: 0,
+                        totalAmount: baseFee,
+                        status: FeeStatus.PENDING,
+                        dueDate: exam.applicationEndDate,
+                    }));
+                }
+
+                let targetApp = existing;
+                if (targetApp) {
+                    targetApp.examType = examType;
+                    targetApp.studentBranch = student.branch ?? null;
+                    targetApp.studentSection = student.section ?? null;
+                    targetApp.selectedSubjectIds = selectedSubjectIds;
+                    targetApp.feeBreakdown = breakdown;
+                    targetApp.declarationAccepted = true;
+                    targetApp.consentAccepted = true;
+                    targetApp.feeRecordId = targetFee.id;
+                    await appRepo.save(targetApp);
+                } else {
+                    targetApp = await appRepo.save(appRepo.create({
+                        examId,
+                        examType,
+                        studentRollNumber: roll,
+                        studentName: student.studentName,
+                        studentBranch: student.branch ?? null,
+                        studentSection: student.section ?? null,
+                        selectedSubjectIds,
+                        feeBreakdown: breakdown,
+                        declarationAccepted: true,
+                        consentAccepted: true,
+                        feeRecordId: targetFee.id,
+                    }));
+                }
+                return { feeRecord: targetFee, application: targetApp };
             });
         }
         catch (error) {
@@ -2543,6 +2575,9 @@ class ExamService {
         const roll = rollNumber.trim();
         if (!roll)
             throw AppError.badRequest('Roll number is required');
+        await this.syncTransactionsWithFeeManagement({ studentRollNumber: roll }).catch((err) => {
+            log.warn({ err, roll }, 'Auto-sync with Fee Management failed during fee lookup');
+        });
         const records = await this.listFeeRecords(undefined, roll);
         return {
             rollNumber: roll,
@@ -2640,6 +2675,128 @@ class ExamService {
             await this.paymentRepo.save(payment).catch(() => undefined);
             return { error: err.message };
         }
+    }
+
+    /**
+     * Synchronize transaction status from Fee Management MongoDB back to EMS.
+     * When transactions are cancelled or deleted in Fee Management, rolls back
+     * the fee record status from 'paid' to 'pending' (unpaid), cancels the SQL
+     * payments, and rolls back any associated RevaluationApplication or ExamApplication.
+     */
+    async syncTransactionsWithFeeManagement(filters = {}) {
+        if (!this.feeManagement?.isEnabled?.()) {
+            return { skipped: true, reason: 'fee_management_not_connected' };
+        }
+
+        const qb = this.feeRecordRepo
+            .createQueryBuilder('fr')
+            .leftJoinAndSelect('fr.payments', 'payments')
+            .leftJoinAndSelect('fr.exam', 'exam')
+            .where('fr.status = :status', { status: FeeStatus.PAID });
+
+        if (filters.feeRecordId) {
+            qb.andWhere('fr.id = :id', { id: Number(filters.feeRecordId) });
+        }
+        if (filters.studentRollNumber?.trim()) {
+            qb.andWhere('LOWER(fr.studentRollNumber) = LOWER(:roll)', {
+                roll: filters.studentRollNumber.trim(),
+            });
+        }
+        if (filters.examId) {
+            qb.andWhere('fr.examId = :examId', { examId: Number(filters.examId) });
+        }
+        if (filters.revaluationNotificationId) {
+            qb.andWhere('fr.revaluationNotificationId = :revalId', {
+                revalId: Number(filters.revaluationNotificationId),
+            });
+        }
+
+        const paidRecords = await qb.getMany();
+        const rolledBackRecords = [];
+
+        for (const record of paidRecords) {
+            const payments = record.payments || [];
+            const paymentIds = payments.map((p) => p.id);
+            const receiptNumbers = payments
+                .map((p) => p.receiptNumber)
+                .filter(Boolean);
+
+            const hasPostedMetadata = payments.some((p) => {
+                const gw = this.parseGateway(p.gatewayResponse);
+                return Boolean(gw?.feeManagement || p.receiptNumber);
+            });
+
+            const check = await this.feeManagement.checkTransactionStatusForFeeRecord({
+                feeRecordId: record.id,
+                paymentIds,
+                receiptNumbers,
+                hasPostedMetadata,
+            });
+
+            if (check.shouldRollback) {
+                log.info(
+                    {
+                        feeRecordId: record.id,
+                        rollNumber: record.studentRollNumber,
+                        reason: check.reason,
+                    },
+                    'Rolling back fee record to unpaid because Fee Management transaction was cancelled or deleted',
+                );
+
+                record.status = FeeStatus.PENDING;
+                await this.feeRecordRepo.update(record.id, {
+                    status: FeeStatus.PENDING,
+                });
+
+                for (const payment of payments) {
+                    if (payment.status !== 'cancelled') {
+                        payment.status = 'cancelled';
+                        const gw = this.parseGateway(payment.gatewayResponse) || {};
+                        payment.gatewayResponse = JSON.stringify({
+                            ...gw,
+                            feeManagementSync: {
+                                rolledBackToUnpaid: true,
+                                reason: check.reason,
+                                syncedAt: new Date().toISOString(),
+                            },
+                        });
+                        await this.paymentRepo.save(payment);
+                    }
+                }
+
+                // If linked to RevaluationApplication, roll back application to pending
+                try {
+                    const revalAppRepo = this.feeRecordRepo.manager.getRepository('RevaluationApplication');
+                    const revalApps = await revalAppRepo.find({
+                        where: [
+                            { feeRecordId: record.id },
+                            ...(record.revaluationNotificationId && record.studentRollNumber
+                                ? [{ notificationId: record.revaluationNotificationId, studentRollNumber: record.studentRollNumber }]
+                                : []),
+                        ],
+                    });
+                    for (const app of revalApps) {
+                        app.status = 'pending';
+                        await revalAppRepo.save(app);
+                    }
+                } catch (err) {
+                    log.warn({ err, feeRecordId: record.id }, 'Error updating linked RevaluationApplication on rollback');
+                }
+
+                rolledBackRecords.push({
+                    feeRecordId: record.id,
+                    studentRollNumber: record.studentRollNumber,
+                    feeType: record.feeType,
+                    reason: check.reason,
+                });
+            }
+        }
+
+        return {
+            syncedCount: paidRecords.length,
+            rolledBackCount: rolledBackRecords.length,
+            rolledBackRecords,
+        };
     }
 
     async payOnline(_feeRecordId, _dto) {
@@ -3139,10 +3296,72 @@ class ExamService {
             'Voiding or modifying payments is not allowed. Transactions are final in EMS and Fee Management.',
         );
     }
-    async markFeeUnpaid(_feeRecordId, _opts = {}) {
-        throw AppError.badRequest(
-            'Marking fees unpaid is not allowed. Transactions are final in EMS and Fee Management.',
-        );
+    async markFeeUnpaid(feeRecordId, opts = {}) {
+        const id = Number(feeRecordId);
+        if (!Number.isFinite(id) || id <= 0) {
+            throw AppError.badRequest('Valid feeRecordId is required');
+        }
+        const record = await this.feeRecordRepo.findOne({
+            where: { id },
+            relations: ['payments'],
+        });
+        if (!record) {
+            throw AppError.notFound('Fee record not found');
+        }
+        if (record.status !== FeeStatus.PAID) {
+            return { success: true, message: 'Fee record is already unpaid', feeRecord: record };
+        }
+
+        // Cancel in Fee Management if connected
+        if (this.feeManagement?.isEnabled?.()) {
+            await this.feeManagement.cancelTransactionInFeeManagement(record.id, {
+                cancelledBy: opts.cancelledBy || 'ems_staff',
+                cancellationReason: opts.reason || 'Marked unpaid by EMS staff',
+            }).catch((err) => {
+                log.warn({ err, feeRecordId: id }, 'Failed to cancel transaction in Fee Management during markFeeUnpaid');
+            });
+        }
+
+        record.status = FeeStatus.PENDING;
+        await this.feeRecordRepo.update(record.id, { status: FeeStatus.PENDING });
+
+        for (const payment of record.payments || []) {
+            payment.status = 'cancelled';
+            const gw = this.parseGateway(payment.gatewayResponse) || {};
+            payment.gatewayResponse = JSON.stringify({
+                ...gw,
+                manualUnpaid: {
+                    reason: opts.reason || 'Marked unpaid by staff',
+                    unpaidAt: new Date().toISOString(),
+                    by: opts.cancelledBy || null,
+                },
+            });
+            await this.paymentRepo.save(payment);
+        }
+
+        try {
+            const revalAppRepo = this.feeRecordRepo.manager.getRepository('RevaluationApplication');
+            const revalApps = await revalAppRepo.find({
+                where: [
+                    { feeRecordId: record.id },
+                    ...(record.revaluationNotificationId && record.studentRollNumber
+                        ? [{ notificationId: record.revaluationNotificationId, studentRollNumber: record.studentRollNumber }]
+                        : []),
+                ],
+            });
+            for (const app of revalApps) {
+                app.status = 'pending';
+                await revalAppRepo.save(app);
+            }
+        } catch (err) {
+            log.warn({ err, feeRecordId: id }, 'Error updating linked RevaluationApplication on markFeeUnpaid');
+        }
+
+        return {
+            success: true,
+            message: 'Fee record successfully rolled back to unpaid',
+            feeRecord: record,
+        };
     }
     listPayments(feeRecordId) {
         const qb = this.paymentRepo

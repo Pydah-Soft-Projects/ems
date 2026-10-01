@@ -949,10 +949,50 @@ export const api = {
     );
   },
 
-  markFeeUnpaid(_feeRecordId: number, _reason?: string) {
-    return Promise.reject(
-      new ApiError('Marking fees unpaid is not allowed', 400),
+  markFeeUnpaid(feeRecordId: number, reason?: string) {
+    return request<{ success: boolean; message: string }>(
+      `/fees/records/${feeRecordId}/unpaid`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      },
     );
+  },
+
+  syncFeeTransactions(filters?: {
+    rollNumber?: string;
+    feeRecordId?: number;
+    examId?: number;
+    revaluationNotificationId?: number;
+  }) {
+    return request<{
+      syncedCount: number;
+      rolledBackCount: number;
+      rolledBackRecords: Array<{
+        feeRecordId: number;
+        studentRollNumber: string;
+        feeType: string;
+        reason: string;
+      }>;
+    }>('/fees/sync-transactions', {
+      method: 'POST',
+      body: JSON.stringify(filters || {}),
+    });
+  },
+
+  syncRevaluationTransactions(notificationId: number, rollNumber?: string) {
+    return request<{
+      syncedCount: number;
+      rolledBackCount: number;
+      rolledBackRecords: Array<{
+        feeRecordId: number;
+        studentRollNumber: string;
+        reason: string;
+      }>;
+    }>(`/revaluations/${notificationId}/sync`, {
+      method: 'POST',
+      body: JSON.stringify({ rollNumber }),
+    });
   },
 
   studentLogin(pinNo: string, password: string) {

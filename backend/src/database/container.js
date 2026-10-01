@@ -96,6 +96,8 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(EmsAuditLog),
   );
 
+  const feeManagement = new FeeManagementService(sdms);
+
   const revaluation = new RevaluationService(
     dataSource.getRepository(RevaluationNotification),
     dataSource.getRepository(RevaluationApplication),
@@ -104,6 +106,7 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(SubjectMappingEntry),
     dataSource.getRepository(ExamFeeRecord),
     sdms,
+    feeManagement,
   );
 
   const regulations = new RegulationsService(
@@ -135,7 +138,6 @@ function createServices(dataSource, studentDataSource) {
   canaraSettings.canaraVpas = canaraVpas;
   settings.setCanaraSettings(canaraSettings);
 
-  const feeManagement = new FeeManagementService(sdms);
   const feeHeads = new FeeHeadsService(
     dataSource.getRepository(FeeHeadEntity),
     feeManagement,

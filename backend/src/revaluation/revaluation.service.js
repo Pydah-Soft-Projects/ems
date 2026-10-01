@@ -4,7 +4,7 @@ const { AppError } = require('../common/errors');
 const { RegulationStatus } = require('../regulations/schemas/regulation-status.enum');
 
 class RevaluationService {
-  constructor(notificationRepo, applicationRepo, regulationRepo, subjectRepo, mappingRepo, feeRecordRepo, sdms) {
+  constructor(notificationRepo, applicationRepo, regulationRepo, subjectRepo, mappingRepo, feeRecordRepo, sdms, feeManagement = null) {
     this.notificationRepo = notificationRepo;
     this.applicationRepo = applicationRepo;
     this.regulationRepo = regulationRepo;
@@ -12,6 +12,7 @@ class RevaluationService {
     this.mappingRepo = mappingRepo;
     this.feeRecordRepo = feeRecordRepo;
     this.sdms = sdms;
+    this.feeManagement = feeManagement;
   }
 
   async findNotification(id) {
@@ -227,6 +228,88 @@ class RevaluationService {
     };
   }
 
+  async syncTransactions(notificationId, rollNumber) {
+    if (!this.feeManagement?.isEnabled?.()) {
+      return { skipped: true, reason: 'fee_management_not_connected' };
+    }
+    const where = { feeType: 'REVALUATION', status: 'paid' };
+    if (notificationId) where.revaluationNotificationId = Number(notificationId);
+    if (rollNumber) where.studentRollNumber = String(rollNumber).trim();
+
+    const paidRecords = await this.feeRecordRepo.find({
+      where,
+      relations: ['payments'],
+    });
+
+    const paymentRepo = this.feeRecordRepo.manager.getRepository('Payment');
+    const rolledBackRecords = [];
+
+    for (const record of paidRecords) {
+      const payments = record.payments || [];
+      const paymentIds = payments.map((p) => p.id);
+      const receiptNumbers = payments.map((p) => p.receiptNumber).filter(Boolean);
+      const hasPostedMetadata = payments.some((p) => {
+        let gw;
+        try { gw = JSON.parse(p.gatewayResponse || '{}'); } catch { gw = {}; }
+        return Boolean(gw?.feeManagement || p.receiptNumber);
+      });
+
+      const check = await this.feeManagement.checkTransactionStatusForFeeRecord({
+        feeRecordId: record.id,
+        paymentIds,
+        receiptNumbers,
+        hasPostedMetadata,
+      });
+
+      if (check.shouldRollback) {
+        record.status = 'pending';
+        await this.feeRecordRepo.update(record.id, { status: 'pending' });
+
+        for (const p of payments) {
+          if (p.status !== 'cancelled') {
+            p.status = 'cancelled';
+            let gw = {};
+            try { gw = JSON.parse(p.gatewayResponse || '{}'); } catch { gw = {}; }
+            p.gatewayResponse = JSON.stringify({
+              ...gw,
+              feeManagementSync: {
+                rolledBackToUnpaid: true,
+                reason: check.reason,
+                syncedAt: new Date().toISOString(),
+              },
+            });
+            await paymentRepo.save(p);
+          }
+        }
+
+        const app = await this.applicationRepo.findOne({
+          where: [
+            { feeRecordId: record.id },
+            ...(record.revaluationNotificationId && record.studentRollNumber
+              ? [{ notificationId: record.revaluationNotificationId, studentRollNumber: record.studentRollNumber }]
+              : []),
+          ],
+        });
+        if (app) {
+          app.status = 'pending';
+          await this.applicationRepo.save(app);
+        }
+
+        rolledBackRecords.push({
+          feeRecordId: record.id,
+          studentRollNumber: record.studentRollNumber,
+          reason: check.reason,
+        });
+      }
+    }
+
+    return {
+      syncedCount: paidRecords.length,
+      rolledBackCount: rolledBackRecords.length,
+      rolledBackRecords,
+    };
+  }
+
   async apply(id, dto) {
     const detail = await this.getStudent(id, dto.studentIdentifier);
     const selected = [...new Set((dto.selectedSubjectIds ?? []).map(Number).filter(Number.isInteger))];
@@ -235,8 +318,61 @@ class RevaluationService {
     const fee = Number(detail.notification.feesByCount[selected.length - 1]);
     if (!Number.isFinite(fee)) throw AppError.badRequest('Fee is not configured for this subject count');
     const roll = detail.student.pinNo || detail.student.admissionNumber;
+
+    // Check if there is an active paid application
+    await this.syncTransactions(id, roll).catch(() => undefined);
     const existing = await this.applicationRepo.findOne({ where: { notificationId: id, studentRollNumber: roll } });
-    if (existing) throw AppError.badRequest('Revaluation has already been applied for this student');
+    let existingRecord = existing?.feeRecordId
+      ? await this.feeRecordRepo.findOne({ where: { id: existing.feeRecordId } })
+      : null;
+    if (!existingRecord && existing) {
+      existingRecord = await this.feeRecordRepo.findOne({
+        where: { revaluationNotificationId: id, studentRollNumber: roll },
+        order: { createdAt: 'DESC' },
+      });
+    }
+
+    if (existing && existingRecord && existingRecord.status === 'paid') {
+      throw AppError.badRequest('Revaluation has already been applied and paid for this student');
+    }
+
+    const feeBreakdown = detail.subjects
+      .filter((subject) => selected.includes(subject.id))
+      .map((subject) => ({ subjectId: subject.id, subjectCode: subject.code, subjectName: subject.name }));
+
+    if (existing) {
+      // Re-apply / update the existing unpaid or rolled-back application
+      if (existingRecord) {
+        existingRecord.selectedSubjectIds = selected;
+        existingRecord.feeBreakdown = feeBreakdown;
+        existingRecord.baseFee = fee;
+        existingRecord.lateFee = 0;
+        existingRecord.totalAmount = fee;
+        existingRecord.status = 'pending';
+        await this.feeRecordRepo.save(existingRecord);
+      } else {
+        existingRecord = await this.feeRecordRepo.save(this.feeRecordRepo.create({
+          examId: null,
+          feeType: 'REVALUATION',
+          feeLabel: detail.notification.title,
+          revaluationNotificationId: id,
+          studentRollNumber: roll,
+          studentName: detail.student.name,
+          selectedSubjectIds: selected,
+          feeBreakdown,
+          baseFee: fee,
+          lateFee: 0,
+          totalAmount: fee,
+          status: 'pending',
+        }));
+        existing.feeRecordId = existingRecord.id;
+      }
+      existing.selectedSubjectIds = selected;
+      existing.feeAmount = fee;
+      existing.status = 'pending';
+      return this.applicationRepo.save(existing);
+    }
+
     const feeRecord = await this.feeRecordRepo.save(this.feeRecordRepo.create({
       examId: null,
       feeType: 'REVALUATION',
@@ -245,7 +381,7 @@ class RevaluationService {
       studentRollNumber: roll,
       studentName: detail.student.name,
       selectedSubjectIds: selected,
-      feeBreakdown: detail.subjects.filter((subject) => selected.includes(subject.id)).map((subject) => ({ subjectId: subject.id, subjectCode: subject.code, subjectName: subject.name })),
+      feeBreakdown,
       baseFee: fee,
       lateFee: 0,
       totalAmount: fee,
@@ -255,6 +391,7 @@ class RevaluationService {
   }
 
   async listApplications(notificationId) {
+    await this.syncTransactions(notificationId).catch(() => undefined);
     return this.applicationRepo.find({
       where: { notificationId },
       relations: ['feeRecord', 'feeRecord.payments'],
@@ -265,6 +402,7 @@ class RevaluationService {
   async listEligibleStudents(notificationId) {
     const notification = await this.findNotification(notificationId);
     if (notification.status !== 'published') throw AppError.badRequest('This revaluation notification is not published');
+    await this.syncTransactions(notificationId).catch(() => undefined);
     const byRoll = new Map();
     const excluded = (notification.excludedBatches ?? []).map((b) => String(b).trim().toLowerCase());
     for (const scope of notification.selectedScopes ?? []) {
