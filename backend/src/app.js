@@ -29,6 +29,7 @@ const {
 } = require('./remuneration/remuneration.routes');
 const { createUsersRoutes } = require('./auth/users.routes');
 const { createFeeHeadsRoutes } = require('./fee-management/fee-heads.routes');
+const { createMarksRoutes } = require('./exam/marks.routes');
 
 function createApp(services) {
   const app = express();
@@ -309,6 +310,7 @@ function createApp(services) {
   api.use('/fees/fee-heads', createFeeHeadsRoutes(services));
   api.use('/fees', createFeesRoutes(services));
   api.use('/results', createResultsRoutes(services));
+  api.use('/marks', createMarksRoutes(services));
   api.use('/sdms', createSdmsRoutes(services));
   api.use('/settings', createSettingsRoutes(services));
   api.use('/professionals', createProfessionalsRoutes(services));

@@ -101,6 +101,15 @@ import type {
   RevaluationNotification,
   RevaluationStudentDetail,
 } from '@/types/revaluation';
+import type {
+  MarksNotificationResponse,
+  NotificationDetailsResponse,
+  ParseDocumentResponse,
+  ParsedMarkRow,
+  UploadMarksResult,
+  MarksHistoryResponse,
+  ConsolidatedResultsResponse,
+} from '@/types/marks-upload';
 
 type RevaluationNotificationInput = {
   regulationId: number;
@@ -1573,5 +1582,64 @@ export const api = {
       page: number;
       limit: number;
     }>(`/user-management/audit-logs${qs ? `?${qs}` : ''}`);
+  },
+
+  getMarksNotifications() {
+    return request<MarksNotificationResponse>('/marks/notifications');
+  },
+
+  async parseMarksFile(formData: FormData) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('ems_token') : null;
+    const res = await fetch(`${API_URL}/marks/parse`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Parsing failed' }));
+      throw new ApiError(err.message || 'Parsing failed', res.status);
+    }
+    return res.json() as Promise<ParseDocumentResponse>;
+  },
+
+  uploadMarks(
+    category: 'INTERNAL' | 'EXTERNAL' | 'RESULT' | 'REVALUATION',
+    notificationId: number,
+    payload: { rows: ParsedMarkRow[]; subjectCode?: string; fileName?: string },
+  ) {
+    return request<UploadMarksResult>(`/marks/upload/${category}/${notificationId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getMarksHistory(
+    category: 'INTERNAL' | 'EXTERNAL' | 'RESULT' | 'REVALUATION',
+    notificationId: number,
+  ) {
+    return request<MarksHistoryResponse>(`/marks/history/${category}/${notificationId}`);
+  },
+
+  getNotificationDetails(type: 'EXAM' | 'REVALUATION', id: number) {
+    return request<NotificationDetailsResponse>(`/marks/notification-details/${type}/${id}`);
+  },
+
+  getConsolidatedResults(params?: {
+    examId?: number;
+    revaluationId?: number;
+    rollNumber?: string;
+    search?: string;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.examId) q.set('examId', String(params.examId));
+    if (params?.revaluationId) q.set('revaluationId', String(params.revaluationId));
+    if (params?.rollNumber) q.set('rollNumber', params.rollNumber);
+    if (params?.search) q.set('search', params.search);
+    const qs = q.toString();
+    return request<ConsolidatedResultsResponse>(
+      `/marks/consolidated-results${qs ? `?${qs}` : ''}`
+    );
   },
 };

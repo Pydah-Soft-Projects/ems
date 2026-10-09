@@ -92,12 +92,17 @@ export interface ResultAttempt {
 export interface StudentSubjectResult {
   subjectCode: string;
   subjectName: string;
-  grade: string;
+  grade: string | null;
   gradePoints: number | null;
-  passed: boolean;
+  passed: boolean | null;
   credits: number;
   attemptCount: number;
   attempts: ResultAttempt[];
+  internalMarks?: number | null;
+  maxInternalMarks?: number | null;
+  internalStatus?: string | null;
+  remarks?: string | null;
+  isInternalOnly?: boolean;
 }
 
 export interface StudentSemesterResult {

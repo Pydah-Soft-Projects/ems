@@ -28,7 +28,9 @@ const {
   MerchantStatementTxn,
 } = require('../exam/schemas/merchant-statement.schema');
 const { ResultUpload, SubjectResult } = require('../exam/schemas/result.schema');
+const { StudentMark } = require('../exam/schemas/student-mark.schema');
 const { ResultsService } = require('../exam/results.service');
+const { MarksService } = require('../exam/marks.service');
 const { SelfOnlineService } = require('../exam/self-online.service');
 const { CanaraQrService } = require('../exam/canara/canara-qr.service');
 const {
@@ -183,6 +185,19 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(Exam),
     dataSource.getRepository(ExamApplication),
     sdms,
+    dataSource.getRepository(StudentMark),
+    dataSource.getRepository(Subject),
+  );
+
+  const marks = new MarksService(
+    dataSource.getRepository(StudentMark),
+    dataSource.getRepository(Exam),
+    dataSource.getRepository(RevaluationNotification),
+    dataSource.getRepository(ExamApplication),
+    dataSource.getRepository(SubjectResult),
+    dataSource.getRepository(ResultUpload),
+    dataSource.getRepository(ExamFeeRecord),
+    sdms,
   );
 
   const auth = new AuthService(sdms, users);
@@ -218,6 +233,7 @@ function createServices(dataSource, studentDataSource) {
     feeManagement,
     feeHeads,
     results,
+    marks,
     professionals,
     remuneration,
   };

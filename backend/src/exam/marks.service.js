@@ -1,0 +1,1451 @@
+'use strict';
+
+const xlsx = require('xlsx');
+const pdfParse = require('pdf-parse');
+const { AppError } = require('../common/errors');
+const { ExamStatus } = require('./schemas/exam.enums');
+
+const FAIL_GRADES = new Set(['F', 'AB', 'ABSENT', 'FAIL', 'WH', 'MP']);
+
+function normalizeResultFlag(raw, grade) {
+  const v = String(raw ?? '').trim().toUpperCase();
+  if (['P', 'PASS', 'PASSED', 'Y', 'YES', 'TRUE'].includes(v)) return true;
+  if (['F', 'FAIL', 'FAILED', 'N', 'NO', 'FALSE', 'AB', 'ABSENT'].includes(v)) return false;
+  if (v !== '') return null;
+  return !FAIL_GRADES.has(String(grade ?? '').trim().toUpperCase());
+}
+
+/** Utility to clean and extract key-value mappings from headers */
+function normalizeHeaderName(str) {
+  if (!str) return '';
+  return String(str)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+async function extractTextFromPdfBuffer(buffer) {
+  if (!buffer || buffer.length === 0) return '';
+  const pdfParsePkg = require('pdf-parse');
+
+  if (typeof pdfParsePkg === 'function') {
+    const res = await pdfParsePkg(buffer);
+    return typeof res === 'string' ? res : res?.text || '';
+  }
+
+  const PDFParseClass = pdfParsePkg.PDFParse || pdfParsePkg.default || pdfParsePkg;
+  if (typeof PDFParseClass === 'function') {
+    const parser = new PDFParseClass({ data: buffer });
+    try {
+      const parsed = await parser.getText();
+      return typeof parsed === 'string' ? parsed : String(parsed?.text || '');
+    } finally {
+      await parser.destroy?.().catch?.(() => undefined);
+    }
+  }
+
+  const raw = buffer.toString('utf8');
+  if (raw.includes('PIN:') || raw.includes('JAWAHARLAL') || raw.includes('SubCode')) {
+    return raw;
+  }
+
+  throw new Error('PDF parser engine could not be initialized');
+}
+
+class MarksService {
+  constructor(
+    studentMarkRepo,
+    examRepo,
+    revalNotificationRepo,
+    applicationRepo,
+    subjectResultRepo,
+    resultUploadRepo,
+    feeRecordRepo,
+    sdms,
+  ) {
+    this.markRepo = studentMarkRepo;
+    this.examRepo = examRepo;
+    this.revalRepo = revalNotificationRepo;
+    this.applicationRepo = applicationRepo;
+    this.subjectResultRepo = subjectResultRepo;
+    this.resultUploadRepo = resultUploadRepo;
+    this.feeRecordRepo = feeRecordRepo;
+    this.sdms = sdms;
+  }
+
+  /**
+   * List all examination notifications (Regular/Supply) and Revaluation notifications
+   * to select on the marks upload page.
+   */
+  async getNotifications() {
+    const [exams, revaluations] = await Promise.all([
+      this.examRepo.find({
+        relations: ['regulation', 'examSubjects', 'examSubjects.subject'],
+        order: { createdAt: 'DESC' },
+      }),
+      this.revalRepo ? this.revalRepo.find({ order: { createdAt: 'DESC' } }) : [],
+    ]);
+
+    const examNotifications = exams.map((e) => ({
+      id: e.id,
+      notificationType: 'EXAM',
+      title: e.name,
+      type: e.type, // REGULAR / SUPPLEMENTARY
+      course: e.course,
+      branch: e.branch,
+      batch: e.batch,
+      yearOfStudy: e.yearOfStudy,
+      semester: e.semester,
+      regulationId: e.regulationId,
+      regulationCode: e.regulation?.code ?? null,
+      status: e.status,
+      subjectCount: e.examSubjects?.length ?? 0,
+      createdAt: e.createdAt,
+    }));
+
+    const revalNotifications = (revaluations || []).map((r) => ({
+      id: r.id,
+      notificationType: 'REVALUATION',
+      title: r.title,
+      type: 'REVALUATION',
+      regulationCode: r.regulationCode,
+      academicYear: r.academicYear,
+      semester: r.semester,
+      status: r.status,
+      subjectCount: r.scopes?.length ?? 0,
+      createdAt: r.createdAt,
+    }));
+
+    return {
+      exams: examNotifications,
+      revaluations: revalNotifications,
+    };
+  }
+
+  /**
+   * Get enrolled students, branches, and paper subjects for a given notification ID
+   */
+  async getNotificationDetails(notificationType, id) {
+    const isReval = String(notificationType).toUpperCase() === 'REVALUATION';
+    if (isReval) {
+      const reval = await this.revalRepo.findOne({ where: { id } });
+      if (!reval) throw AppError.notFound('Revaluation notification not found');
+
+      // Fetch students from mark records or reval scope
+      const revalMarks = await this.markRepo.find({ where: { revaluationId: id } });
+      const studentMapByRoll = new Map();
+      const branchesSet = new Set();
+
+      for (const m of revalMarks) {
+        const roll = m.studentRollNumber?.trim();
+        if (!roll) continue;
+        const rKey = roll.toLowerCase();
+        const b = m.studentBranch || 'GENERAL';
+        branchesSet.add(b);
+
+        if (!studentMapByRoll.has(rKey)) {
+          studentMapByRoll.set(rKey, {
+            rollNumber: roll,
+            name: m.studentName || '',
+            examType: 'REVALUATION',
+            branch: b,
+            section: null,
+            feeStatus: 'paid',
+          });
+        }
+      }
+
+      return {
+        notification: {
+          id: reval.id,
+          notificationType: 'REVALUATION',
+          title: reval.title,
+          regulationCode: reval.regulationCode,
+          academicYear: reval.academicYear,
+          semester: reval.semester,
+        },
+        branches: [...branchesSet],
+        subjects: (reval.scopes || []).map((s) => ({
+          code: s.subjectCode || `SUB-${s.id}`,
+          name: s.subjectName || 'Revaluation Subject',
+          type: 'THEORY',
+        })),
+        students: [...studentMapByRoll.values()],
+      };
+    }
+
+    const exam = await this.examRepo.findOne({
+      where: { id },
+      relations: ['examSubjects', 'examSubjects.subject'],
+    });
+    if (!exam) throw AppError.notFound('Examination not found');
+
+    const subjectsMap = new Map();
+    for (const es of exam.examSubjects || []) {
+      const code = es.subject?.code?.trim() || `SUB-${es.subjectId}`;
+      if (code && !subjectsMap.has(code.toLowerCase())) {
+        const rawType = String(es.subject?.type || '').toLowerCase();
+        const rawName = String(es.subject?.name || '').toLowerCase();
+        const rawCode = String(code).toLowerCase();
+        const isLab =
+          ['lab', 'laboratory', 'practical', 'p'].includes(rawType) ||
+          rawName.includes('lab') ||
+          rawName.includes('practical') ||
+          rawName.includes('workshop') ||
+          rawName.includes('seminar') ||
+          rawName.includes('project') ||
+          rawCode.endsWith('l') ||
+          rawCode.endsWith('p');
+
+        subjectsMap.set(code.toLowerCase(), {
+          id: es.subjectId,
+          code,
+          name: es.subject?.name || '',
+          type: es.subject?.type || (isLab ? 'LAB' : 'THEORY'),
+          internalMarks: Number(es.subject?.internalMarks ?? 30),
+          externalMarks: Number(es.subject?.externalMarks ?? 70),
+          totalMarks: Number(es.subject?.totalMarks ?? 100),
+        });
+      }
+    }
+    const subjects = [...subjectsMap.values()];
+
+    const applications = await this.applicationRepo.find({ where: { examId: id } });
+    const feeRecords = this.feeRecordRepo ? await this.feeRecordRepo.find({ where: { examId: id } }) : [];
+    const markRecords = await this.markRepo.find({ where: { examId: id } });
+
+    const studentMapByRoll = new Map();
+    const branchesSet = new Set();
+
+    const addBranch = (b) => {
+      if (!b) return;
+      const parts = String(b).split(',').map((x) => x.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (p.toUpperCase() !== 'ALL') branchesSet.add(p);
+      }
+    };
+
+    addBranch(exam.branch);
+    if (exam.scopes) {
+      for (const s of exam.scopes) {
+        addBranch(s.branch);
+      }
+    }
+
+    // 1. Applications
+    for (const a of applications) {
+      const roll = a.studentRollNumber?.trim();
+      if (!roll) continue;
+      const rKey = roll.toLowerCase();
+      const b = a.studentBranch || (exam.branch && !exam.branch.includes(',') ? exam.branch : 'GENERAL');
+      addBranch(b);
+
+      studentMapByRoll.set(rKey, {
+        rollNumber: roll,
+        name: a.studentName || '',
+        examType: a.examType,
+        branch: b,
+        section: a.studentSection || null,
+        feeStatus: 'paid',
+      });
+    }
+
+    // 2. Fee Records
+    for (const f of feeRecords) {
+      const roll = f.studentRollNumber?.trim();
+      if (!roll) continue;
+      const rKey = roll.toLowerCase();
+      const existing = studentMapByRoll.get(rKey);
+      const b = (exam.branch && !exam.branch.includes(',') ? exam.branch : 'GENERAL');
+      addBranch(b);
+
+      if (existing) {
+        existing.feeStatus = f.status || existing.feeStatus;
+      } else {
+        studentMapByRoll.set(rKey, {
+          rollNumber: roll,
+          name: f.studentName || '',
+          examType: f.examType || 'REGULAR',
+          branch: b,
+          section: null,
+          feeStatus: f.status || 'pending',
+        });
+      }
+    }
+
+    // 3. Mark Records (Previously added/uploaded marks)
+    for (const m of markRecords) {
+      const roll = m.studentRollNumber?.trim();
+      if (!roll) continue;
+      const rKey = roll.toLowerCase();
+      const existing = studentMapByRoll.get(rKey);
+      const b = (exam.branch && !exam.branch.includes(',') ? exam.branch : 'GENERAL');
+      addBranch(b);
+
+      if (!existing) {
+        studentMapByRoll.set(rKey, {
+          rollNumber: roll,
+          name: m.studentName || '',
+          examType: 'REGULAR',
+          branch: b,
+          section: null,
+          feeStatus: 'paid',
+        });
+      } else if (!existing.name && m.studentName) {
+        existing.name = m.studentName;
+      }
+    }
+
+    // 4. SDMS Students Database (if connected)
+    if (this.sdms && typeof this.sdms.listStudents === 'function') {
+      try {
+        const branchList = (exam.branch || '')
+          .split(',')
+          .map((b) => b.trim())
+          .filter((b) => b && b.toUpperCase() !== 'ALL');
+
+        let sdmsStudents = [];
+        if (branchList.length > 1) {
+          for (const b of branchList) {
+            const res = await this.sdms.listStudents({
+              course: exam.course,
+              branch: b,
+              batch: exam.batch,
+              limit: 500,
+            });
+            if (Array.isArray(res)) sdmsStudents.push(...res);
+          }
+        } else {
+          sdmsStudents = await this.sdms.listStudents({
+            course: exam.course,
+            branch: branchList[0] || undefined,
+            batch: exam.batch,
+            limit: 500,
+          });
+        }
+
+        if (Array.isArray(sdmsStudents)) {
+          for (const s of sdmsStudents) {
+            const roll = (s.pinNo || s.admissionNumber || '').trim();
+            if (!roll) continue;
+            const rKey = roll.toLowerCase();
+            const existing = studentMapByRoll.get(rKey);
+            const b = s.branch || (branchList.length === 1 ? branchList[0] : exam.branch) || 'GENERAL';
+            addBranch(b);
+
+            if (!existing) {
+              studentMapByRoll.set(rKey, {
+                rollNumber: roll,
+                name: s.studentName || '',
+                examType: 'REGULAR',
+                branch: b,
+                section: s.section || null,
+                feeStatus: 'unpaid',
+              });
+            } else if (!existing.name && s.studentName) {
+              existing.name = s.studentName;
+            }
+          }
+        }
+      } catch (sdmsErr) {
+        // SDMS query optional
+      }
+    }
+
+    const students = [...studentMapByRoll.values()];
+
+    return {
+      notification: {
+        id: exam.id,
+        notificationType: 'EXAM',
+        title: exam.name,
+        type: exam.type,
+        course: exam.course,
+        branch: exam.branch,
+        batch: exam.batch,
+        semester: exam.semester,
+        yearOfStudy: exam.yearOfStudy,
+      },
+      branches: [...branchesSet].filter(Boolean),
+      subjects,
+      students,
+    };
+  }
+
+  /**
+   * Parse uploaded Excel (.xlsx, .xls, .csv) or PDF (.pdf) file buffer / text
+   */
+  async parseDocument({ buffer, fileName, mimeType, textContent, notificationId, notificationType, branch, subjectCode, activeTab, courseCategory }) {
+    if (!buffer && !textContent) {
+      throw AppError.badRequest('No file uploaded or file content is empty.');
+    }
+
+    let notificationDetails = null;
+    if (notificationId) {
+      notificationDetails = await this.getNotificationDetails(notificationType || 'EXAM', notificationId).catch(() => null);
+    }
+
+    const fileExt = (fileName || '').split('.').pop()?.toLowerCase() || '';
+
+    let parsedResult;
+    if (fileExt === 'pdf' || mimeType === 'application/pdf' || textContent) {
+      parsedResult = await this.parsePdfContent(buffer, textContent, {
+        notificationDetails,
+        selectedSubjectCode: subjectCode,
+        activeTab,
+        branch,
+      });
+    } else {
+      parsedResult = this.parseExcelContent(buffer);
+    }
+
+    // 0. Enforce student matching validation against selected examination notification
+    if (notificationId && parsedResult && Array.isArray(parsedResult.rows) && parsedResult.rows.length > 0) {
+      try {
+        const details = await this.getNotificationDetails(notificationType || 'EXAM', notificationId);
+        const enrolledStudents = details?.students || [];
+
+        if (enrolledStudents.length > 0) {
+          const enrolledMap = new Map();
+          for (const s of enrolledStudents) {
+            if (s.rollNumber) {
+              const normRoll = String(s.rollNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              enrolledMap.set(normRoll, s);
+            }
+          }
+
+          if (enrolledMap.size > 0) {
+            const matchingRows = [];
+            const nonMatchingRolls = [];
+
+            for (const row of parsedResult.rows) {
+              const rawRoll = String(row.rollNumber || row.roll || row.pinNo || '').trim();
+              const normRoll = rawRoll.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+              if (normRoll && enrolledMap.has(normRoll)) {
+                const enrolledStudent = enrolledMap.get(normRoll);
+                if (!row.studentName && enrolledStudent.name) {
+                  row.studentName = enrolledStudent.name;
+                }
+                if (!row.branch && enrolledStudent.branch) {
+                  row.branch = enrolledStudent.branch;
+                }
+                matchingRows.push(row);
+              } else if (rawRoll) {
+                nonMatchingRolls.push(rawRoll);
+              }
+            }
+
+            if (matchingRows.length === 0) {
+              const samples = nonMatchingRolls.slice(0, 3).join(', ');
+              throw AppError.badRequest(
+                `The student PINs/Roll numbers in the uploaded document (${samples}${nonMatchingRolls.length > 3 ? '...' : ''}) do not match any enrolled students for the selected examination notification.`
+              );
+            }
+
+            // Filter to keep matching rows for the selected examination notification
+            parsedResult.rows = matchingRows;
+            parsedResult.rowCount = matchingRows.length;
+          }
+        }
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+      }
+    }
+
+    // Apply active UI filters post-processing on parsed rows
+    if (parsedResult && Array.isArray(parsedResult.rows)) {
+      let rows = parsedResult.rows;
+
+      // 1. Filter or populate subjectCode
+      if (subjectCode && subjectCode !== 'ALL') {
+        const targetSubNorm = String(subjectCode).toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        rows = rows.filter((row) => {
+          if (!row.subjectCode || String(row.subjectCode).trim() === '') {
+            row.subjectCode = subjectCode;
+            return true;
+          }
+          const rowSubNorm = String(row.subjectCode).toUpperCase().replace(/[^A-Z0-9]/g, '');
+          return rowSubNorm === targetSubNorm;
+        });
+
+        // Ensure subjectCode is assigned to all remaining rows
+        rows.forEach((row) => {
+          if (!row.subjectCode) row.subjectCode = subjectCode;
+        });
+      }
+
+      // 2. Filter or populate branch if specified
+      if (branch && branch !== 'ALL') {
+        const targetBranchNorm = String(branch).toUpperCase().trim();
+
+        rows = rows.filter((row) => {
+          if (row.branch) {
+            return String(row.branch).toUpperCase().trim() === targetBranchNorm;
+          }
+          row.branch = branch;
+          return true;
+        });
+      }
+
+      // 3. Format marks fields according to activeTab if appropriate
+      if (activeTab) {
+        rows.forEach((row) => {
+          const m = row.marks !== undefined && row.marks !== '' ? row.marks : null;
+          if (m !== null) {
+            if (activeTab === 'INTERNAL' && (row.internalMarks === undefined || row.internalMarks === '')) {
+              row.internalMarks = m;
+            } else if (activeTab === 'EXTERNAL' && (row.externalMarks === undefined || row.externalMarks === '')) {
+              row.externalMarks = m;
+            } else if (activeTab === 'RESULT' && (row.totalMarks === undefined || row.totalMarks === '')) {
+              row.totalMarks = m;
+            } else if (activeTab === 'REVALUATION' && (row.updatedMarks === undefined || row.updatedMarks === '')) {
+              row.updatedMarks = m;
+            }
+          }
+        });
+      }
+
+      parsedResult.rows = rows;
+      parsedResult.rowCount = rows.length;
+    }
+
+    return parsedResult;
+  }
+
+  /** Parse Excel spreadsheets */
+  parseExcelContent(buffer) {
+    try {
+      const workbook = xlsx.read(buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        throw AppError.badRequest('Excel file is empty');
+      }
+      const sheet = workbook.Sheets[sheetName];
+      const rawRows = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (rawRows.length === 0) {
+        return { success: true, rows: [], headers: [], rowCount: 0 };
+      }
+
+      const headers = Object.keys(rawRows[0]);
+      const rows = rawRows.map((row) => {
+        const item = {};
+        for (const key of headers) {
+          const normKey = normalizeHeaderName(key);
+          const val = row[key] !== undefined && row[key] !== null ? String(row[key]).trim() : '';
+
+          // Smart Auto-Mapping for 2-column & multi-column layouts
+          if (['rollnumber', 'rollno', 'pin', 'pinno', 'htno', 'hallticket', 'studentid', 'studentrollnumber', 'hallticketnumber'].includes(normKey)) {
+            item.rollNumber = val;
+          } else if (['studentname', 'name', 'candidate', 'student'].includes(normKey)) {
+            item.studentName = val;
+          } else if (['subjectcode', 'subcode', 'code', 'papercode', 'subject'].includes(normKey)) {
+            item.subjectCode = val;
+          } else if (['subjectname', 'subname', 'papername'].includes(normKey)) {
+            item.subjectName = val;
+          } else if (['internalmarks', 'internal', 'midmarks', 'intmarks', 'mid1', 'mid2', 'cie', 'marks', 'mark', 'score', 'marksabsent'].includes(normKey)) {
+            item.internalMarks = val;
+            item.externalMarks = val;
+            item.marks = val;
+            if (['AB', 'ABSENT'].includes(val.toUpperCase())) {
+              item.isAbsent = true;
+            }
+          } else if (['maxinternalmarks', 'maxinternal', 'maxmid', 'maxint'].includes(normKey)) {
+            item.maxInternalMarks = val;
+          } else if (['externalmarks', 'external', 'extmarks', 'see', 'theorymarks'].includes(normKey)) {
+            item.externalMarks = val;
+            item.marks = val;
+            if (['AB', 'ABSENT'].includes(val.toUpperCase())) {
+              item.isAbsent = true;
+            }
+          } else if (['maxexternalmarks', 'maxexternal', 'maxext', 'maxsee'].includes(normKey)) {
+            item.maxExternalMarks = val;
+          } else if (['totalmarks', 'total', 'totmarks', 'obtainedmarks'].includes(normKey)) {
+            item.totalMarks = val;
+          } else if (['maxtotalmarks', 'maxtotal', 'maxmarks'].includes(normKey)) {
+            item.maxTotalMarks = val;
+          } else if (['grade', 'lettergrade'].includes(normKey)) {
+            item.grade = val;
+          } else if (['gradepoints', 'gp', 'points'].includes(normKey)) {
+            item.gradePoints = val;
+          } else if (['credits', 'credit'].includes(normKey)) {
+            item.credits = val;
+          } else if (['result', 'passed', 'status', 'passfail', 'pf'].includes(normKey)) {
+            item.result = val;
+          } else if (['absent', 'isabsent', 'ab'].includes(normKey)) {
+            item.isAbsent = val === '1' || val.toLowerCase() === 'true' || val.toLowerCase() === 'ab' || val.toLowerCase() === 'yes';
+          } else if (['originalgrade', 'origgrade', 'oldgrade'].includes(normKey)) {
+            item.originalGrade = val;
+          } else if (['updatedgrade', 'revisedgrade', 'newgrade'].includes(normKey)) {
+            item.updatedGrade = val;
+          } else if (['originalmarks', 'origmarks', 'oldmarks'].includes(normKey)) {
+            item.originalMarks = val;
+          } else if (['updatedmarks', 'revisedmarks', 'newmarks'].includes(normKey)) {
+            item.updatedMarks = val;
+          } else if (['remarks', 'comment', 'note'].includes(normKey)) {
+            item.remarks = val;
+          } else {
+            // Keep original key as fallback
+            item[key] = val;
+          }
+        }
+        return item;
+      });
+
+      return {
+        success: true,
+        headers,
+        rows,
+        rowCount: rows.length,
+      };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw AppError.badRequest(`Failed to parse Excel file: ${err.message}`);
+    }
+  }
+
+  /** Parse PDF documents (JNTUK & standard result sheets) containing student tabular marks */
+  async parsePdfContent(buffer, providedText, options = {}) {
+    let text = providedText || '';
+    if (!text && buffer) {
+      try {
+        text = await extractTextFromPdfBuffer(buffer);
+      } catch (err) {
+        throw AppError.badRequest(`Failed to parse PDF document: ${err.message}`);
+      }
+    }
+
+    if (!text || !text.trim()) {
+      return { success: true, rows: [], rowCount: 0, textSample: '' };
+    }
+
+    const enrolledStudents = options.notificationDetails?.students || [];
+    const paperSubjects = options.notificationDetails?.subjects || [];
+    const targetSubjectCode = options.selectedSubjectCode && options.selectedSubjectCode !== 'ALL' ? options.selectedSubjectCode : '';
+
+    const enrolledRollMap = new Map();
+    for (const s of enrolledStudents) {
+      if (s.rollNumber) {
+        const normR = String(s.rollNumber).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        enrolledRollMap.set(normR, s);
+      }
+    }
+
+    const paperSubjectCodes = paperSubjects.map((s) => String(s.code || '').toUpperCase().trim()).filter(Boolean);
+
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rows = [];
+    let currentRoll = '';
+    let currentName = '';
+
+    // 1. PIN / Roll Number Header regex (e.g. "PIN: 112233", "PIN: 11234", "HTNO: 236T1A0401", "1 . 236T1A0402")
+    const pinHeaderRegex = /(?:PIN|HTNO|ROLL|HALLTICKET|STUDENT|REGNO)[\:\s\-]+([A-Z0-9]{3,20})/i;
+    const studentHeaderPattern = /^\s*(?:\d+\s*[\.\-\)]\s*)?([0-9]{2}[A-Z0-9]{4,12})\b/i;
+
+    // 2. Exact tabular row regex for the provided PDF format:
+    // e.g. "1  TS01  TESTING SUB 1  F  0  0.0  F"
+    // e.g. "2  TS02  TESTING SUB 2  E  5  3.0  P"
+    const pinResultRowRegex = /^\s*(?:(\d+)\s+)?([A-Z0-9]{3,15})\s+(.+?)\s+([O|S|A\+|A|B\+|B|C|D|E|F|P|AB|ABSENT]+)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+([P|F|PASS|FAIL|AB]+)\s*$/i;
+
+    // 3. RegEx pattern for JNTUK style subject data row (Int, Ext, Tot, Result, Grade, Credits)
+    const jntuSubjectRegex = /^\s*(?:(\d+)\s+)?([A-Z0-9]{4,12})\s+(.+?)\s+([\d]{1,3}|AB|\-)(?:\s+([\d]{1,3}|AB|\-))?(?:\s+([\d]{1,3}|AB|\-))?\s+([PF])\s+([A-Z\+\-]+|AB)\s+(\d+(?:\.\d+)?)\s*$/i;
+
+    // Fallback general pattern for Roll Numbers, Subject Codes, and Marks/Grades
+    const rollPattern = /\b([0-9]{2,5}[A-Z0-9]{3,8}|[A-Z0-9]{10,12})\b/i;
+    const subjectCodePattern = /\b([A-Z0-9]{3,8}-[A-Z0-9]{1,5}|[A-Z]{2,4}[0-9]{3,5}|[0-9]{2}[A-Z]{2,4}[0-9]{2,4})\b/i;
+    const gradePattern = /\b(O|A\+|A|B\+|B|C|D|E|F|AB|ABSENT|PASS|FAIL|P)\b/i;
+
+    const computeGradePoints = (grade) => {
+      const g = String(grade || '').toUpperCase().trim();
+      if (['O', 'S'].includes(g)) return 10.0;
+      if (['A+'].includes(g)) return 9.0;
+      if (['A'].includes(g)) return 8.0;
+      if (['B+'].includes(g)) return 7.0;
+      if (['B'].includes(g)) return 6.0;
+      if (['C'].includes(g)) return 6.0;
+      if (['D', 'E', 'P'].includes(g)) return 5.0;
+      return 0.0;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // A. Check for split PIN header (e.g. "PIN:" on line i, "112233" on line i+1)
+      if (line.toUpperCase() === 'PIN:' || line.toUpperCase() === 'PIN' || line.toUpperCase() === 'HTNO:' || line.toUpperCase() === 'ROLL NO:') {
+        if (lines[i + 1] && /^[A-Z0-9]{3,20}$/i.test(lines[i + 1])) {
+          currentRoll = lines[i + 1].trim().toUpperCase();
+          const normR = currentRoll.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (enrolledRollMap.has(normR)) {
+            currentName = enrolledRollMap.get(normR).name || '';
+          }
+          i++;
+          continue;
+        }
+      }
+
+      // B. Check for PIN Header (e.g. "PIN: 112233" or "PIN: 11234")
+      const pinMatch = line.match(pinHeaderRegex);
+      if (pinMatch) {
+        currentRoll = pinMatch[1].toUpperCase();
+        const normR = currentRoll.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (enrolledRollMap.has(normR)) {
+          currentName = enrolledRollMap.get(normR).name || '';
+        }
+        continue;
+      }
+
+      // C. Check if line is a Student Header (e.g. "1 . 236T1A0402")
+      const headerMatch = line.match(studentHeaderPattern);
+      if (headerMatch && !line.includes('UNIVERSITY') && !line.includes('COLLEGE') && !line.includes('SubCode')) {
+        currentRoll = headerMatch[1].toUpperCase();
+        const normR = currentRoll.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (enrolledRollMap.has(normR)) {
+          currentName = enrolledRollMap.get(normR).name || '';
+        }
+        continue;
+      }
+
+      // D. Check for Tabular PIN Result Row (e.g. "1  TS01  TESTING SUB 1  F  0  0.0  F")
+      const pinResultMatch = line.match(pinResultRowRegex);
+      if (pinResultMatch && currentRoll) {
+        const subCode = pinResultMatch[2].toUpperCase();
+        const subName = pinResultMatch[3].trim();
+        const gradeVal = pinResultMatch[4].toUpperCase();
+        const gpVal = parseFloat(pinResultMatch[5]) || computeGradePoints(gradeVal);
+        const creditsVal = parseFloat(pinResultMatch[6]) || 0;
+        const resVal = pinResultMatch[7].toUpperCase();
+        const isAb = gradeVal === 'AB' || resVal === 'AB';
+
+        rows.push({
+          rollNumber: currentRoll,
+          studentName: currentName,
+          subjectCode: subCode,
+          subjectName: subName,
+          grade: gradeVal,
+          gradePoints: gpVal,
+          credits: creditsVal,
+          result: resVal,
+          passed: resVal === 'P' || resVal === 'PASS' || (resVal !== 'F' && resVal !== 'FAIL' && gradeVal !== 'F' && gradeVal !== 'AB'),
+          isAbsent: isAb,
+          rawLine: line,
+        });
+        continue;
+      }
+
+      // E. Check if line matches JNTUK subject row layout (Int, Ext, Tot, Result, Grade, Credits)
+      const jntuMatch = line.match(jntuSubjectRegex);
+      if (jntuMatch && currentRoll) {
+        const subCode = jntuMatch[2].toUpperCase();
+        const subName = jntuMatch[3].trim();
+        const m1 = jntuMatch[4].toUpperCase();
+        const m2 = jntuMatch[5] ? jntuMatch[5].toUpperCase() : '';
+        const m3 = jntuMatch[6] ? jntuMatch[6].toUpperCase() : '';
+        const resVal = jntuMatch[7].toUpperCase();
+        const gradeVal = jntuMatch[8].toUpperCase();
+        const creditsVal = parseFloat(jntuMatch[9]) || 0;
+
+        let intMarks = '';
+        let extMarks = '';
+        let totMarks = '';
+        const isAb = m1 === 'AB' || gradeVal === 'AB';
+
+        if (m3) {
+          intMarks = m1;
+          extMarks = m2;
+          totMarks = m3;
+        } else {
+          intMarks = isAb ? '0' : m1;
+          totMarks = isAb ? '0' : m1;
+        }
+
+        rows.push({
+          rollNumber: currentRoll,
+          studentName: currentName,
+          subjectCode: subCode,
+          subjectName: subName,
+          internalMarks: intMarks,
+          externalMarks: extMarks,
+          totalMarks: totMarks,
+          marks: intMarks || extMarks,
+          result: resVal,
+          grade: gradeVal,
+          credits: creditsVal,
+          gradePoints: computeGradePoints(gradeVal),
+          isAbsent: isAb,
+          rawLine: line,
+        });
+        continue;
+      }
+
+      // F. Check if line contains an enrolled student PIN or general Roll Number
+      let lineRoll = '';
+      if (enrolledRollMap.size > 0) {
+        for (const [normR, student] of enrolledRollMap.entries()) {
+          const rawPattern = new RegExp(`\\b${student.rollNumber}\\b`, 'i');
+          if (rawPattern.test(line)) {
+            lineRoll = student.rollNumber;
+            currentRoll = lineRoll;
+            currentName = student.name || '';
+            break;
+          }
+        }
+      }
+
+      if (!lineRoll) {
+        const rollMatch = line.match(rollPattern);
+        if (rollMatch && !line.includes('UNIVERSITY') && !line.includes('COLLEGE') && !line.includes('SubCode')) {
+          currentRoll = rollMatch[1].toUpperCase();
+          lineRoll = currentRoll;
+        }
+      }
+
+      // G. Check if line contains a Subject Code
+      const subMatch = line.match(subjectCodePattern);
+      let foundSubCode = subMatch ? subMatch[1].toUpperCase() : '';
+
+      if (!foundSubCode && paperSubjectCodes.length > 0) {
+        for (const sc of paperSubjectCodes) {
+          if (new RegExp(`\\b${sc}\\b`, 'i').test(line)) {
+            foundSubCode = sc;
+            break;
+          }
+        }
+      }
+
+      const activeRoll = lineRoll || currentRoll;
+
+      if (activeRoll) {
+        const tokens = line.split(/\s+/);
+        const numbers = [];
+        let gradeVal = '';
+        let isAb = false;
+
+        tokens.forEach((t) => {
+          const upper = t.toUpperCase().trim();
+          if (upper === 'AB' || upper === 'ABSENT') {
+            isAb = true;
+          }
+          const num = parseFloat(t);
+          if (!isNaN(num) && num >= 0 && num <= 100) {
+            numbers.push(num);
+          }
+          const gMatch = t.match(gradePattern);
+          if (gMatch && !gradeVal && !['P', 'F'].includes(gMatch[1].toUpperCase())) {
+            gradeVal = gMatch[1].toUpperCase();
+          }
+        });
+
+        if (numbers.length > 0 || isAb || gradeVal) {
+          let intMarks = '';
+          let extMarks = '';
+          let totMarks = '';
+
+          if (isAb) {
+            intMarks = 'AB';
+            extMarks = 'AB';
+            totMarks = 'AB';
+          } else if (numbers.length >= 3) {
+            intMarks = String(numbers[0]);
+            extMarks = String(numbers[1]);
+            totMarks = String(numbers[2]);
+          } else if (numbers.length === 2) {
+            intMarks = String(numbers[0]);
+            extMarks = String(numbers[1]);
+          } else if (numbers.length === 1) {
+            totMarks = String(numbers[0]);
+            intMarks = String(numbers[0]);
+            extMarks = String(numbers[0]);
+          }
+
+          const finalSubCode = foundSubCode || targetSubjectCode || (paperSubjectCodes.length > 0 ? paperSubjectCodes[0] : '');
+
+          rows.push({
+            rollNumber: activeRoll,
+            studentName: currentName,
+            subjectCode: finalSubCode,
+            internalMarks: intMarks,
+            externalMarks: extMarks,
+            totalMarks: totMarks,
+            marks: isAb ? 'AB' : (intMarks || extMarks || totMarks),
+            grade: gradeVal,
+            gradePoints: computeGradePoints(gradeVal),
+            isAbsent: isAb,
+            rawLine: line,
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      rows,
+      rowCount: rows.length,
+      textSample: lines.slice(0, 15).join('\n'),
+    };
+  }
+
+  /**
+   * Upload and persist marks into DB according to tab category
+   * Category: 'INTERNAL' | 'EXTERNAL' | 'RESULT' | 'REVALUATION'
+   */
+  async uploadMarks(category, notificationId, dto, uploadedBy) {
+    const cat = String(category || '').toUpperCase();
+    if (!['INTERNAL', 'EXTERNAL', 'RESULT', 'REVALUATION'].includes(cat)) {
+      throw AppError.badRequest('Invalid marks upload category');
+    }
+
+    const rows = Array.isArray(dto?.rows) ? dto.rows : [];
+    if (rows.length === 0) {
+      throw AppError.badRequest('No mark records to process');
+    }
+    if (rows.length > 5000) {
+      throw AppError.badRequest('Maximum 5000 records allowed per upload');
+    }
+
+    let exam = null;
+    let reval = null;
+
+    if (cat === 'REVALUATION') {
+      reval = await this.revalRepo.findOne({ where: { id: notificationId } });
+      if (!reval) throw AppError.notFound('Revaluation notification not found');
+    } else {
+      exam = await this.examRepo.findOne({
+        where: { id: notificationId },
+        relations: ['examSubjects', 'examSubjects.subject'],
+      });
+      if (!exam) throw AppError.notFound('Examination notification not found');
+    }
+
+    // Load available subjects for subject code validation
+    const subjectMap = new Map();
+    if (exam && exam.examSubjects) {
+      for (const es of exam.examSubjects) {
+        const code = es.subject?.code?.trim();
+        if (code) {
+          subjectMap.set(code.toLowerCase(), {
+            code,
+            name: es.subject?.name ?? '',
+            internalMarks: es.subject?.internalMarks ?? 30,
+            externalMarks: es.subject?.externalMarks ?? 70,
+            totalMarks: es.subject?.totalMarks ?? 100,
+          });
+        }
+      }
+    }
+
+    // Load enrolled student applications if exam
+    const appsByRoll = new Map();
+    if (notificationId) {
+      try {
+        const details = await this.getNotificationDetails(cat === 'REVALUATION' ? 'REVALUATION' : 'EXAM', notificationId);
+        for (const s of details.students || []) {
+          if (s.rollNumber) {
+            appsByRoll.set(s.rollNumber.trim().toLowerCase(), {
+              roll: s.rollNumber,
+              name: s.name,
+              examType: s.examType || 'REGULAR',
+            });
+          }
+        }
+      } catch (e) {
+        // Fallback to direct application query if needed
+      }
+    }
+
+    const errors = [];
+    const normalized = [];
+    const seenKeys = new Set();
+
+    rows.forEach((row, idx) => {
+      const lineNum = idx + 2;
+      const roll = String(row.rollNumber || row.roll || row.pinNo || '').trim();
+      let code = String(row.subjectCode || row.code || '').trim();
+
+      if (!code && (cat === 'INTERNAL' || cat === 'EXTERNAL')) {
+        if (exam && exam.examSubjects && exam.examSubjects.length > 0) {
+          code = exam.examSubjects[0].subject?.code || 'MAIN';
+        } else {
+          code = 'MAIN';
+        }
+      }
+
+      if (!roll) {
+        errors.push({ row: lineNum, message: 'Student Roll Number / PIN is required' });
+        return;
+      }
+      if (!code) {
+        errors.push({ row: lineNum, message: `Subject code is required for student ${roll}` });
+        return;
+      }
+
+      const dupKey = `${roll.toLowerCase()}|${code.toLowerCase()}`;
+      if (seenKeys.has(dupKey)) {
+        errors.push({ row: lineNum, message: `Duplicate entry for ${roll} / ${code} in this upload` });
+        return;
+      }
+      seenKeys.add(dupKey);
+
+      const knownSub = subjectMap.get(code.toLowerCase());
+      const studentApp = appsByRoll.get(roll.toLowerCase());
+
+      const normRow = {
+        category: cat,
+        examId: exam ? exam.id : null,
+        revaluationId: reval ? reval.id : null,
+        studentRollNumber: roll,
+        studentName: String(row.studentName || studentApp?.name || '').trim() || null,
+        subjectCode: knownSub ? knownSub.code : code,
+        subjectName: String(row.subjectName || knownSub?.name || '').trim() || null,
+        uploadedBy: uploadedBy || null,
+      };
+
+      if (cat === 'INTERNAL') {
+        const rawVal = row.internalMarks !== undefined ? row.internalMarks : row.marks;
+        const isAb = row.isAbsent || String(rawVal).toUpperCase() === 'AB' || String(rawVal).toUpperCase() === 'ABSENT';
+        normRow.isAbsent = !!isAb;
+
+        if (!isAb) {
+          const intMarks = parseFloat(rawVal);
+          if (isNaN(intMarks) || intMarks < 0) {
+            errors.push({ row: lineNum, message: `Invalid internal marks "${rawVal}" for ${roll}` });
+            return;
+          }
+          const maxInt = parseFloat(row.maxInternalMarks || knownSub?.internalMarks || 30);
+          if (intMarks > maxInt) {
+            errors.push({ row: lineNum, message: `Internal marks (${intMarks}) exceed max marks (${maxInt}) for ${roll}` });
+            return;
+          }
+          normRow.internalMarks = intMarks;
+          normRow.maxInternalMarks = maxInt;
+        } else {
+          normRow.internalMarks = 0;
+          normRow.maxInternalMarks = parseFloat(row.maxInternalMarks || knownSub?.internalMarks || 30);
+        }
+        normRow.remarks = row.remarks || null;
+      } else if (cat === 'EXTERNAL') {
+        const rawVal = row.externalMarks !== undefined ? row.externalMarks : row.marks;
+        const isAb = row.isAbsent || String(rawVal).toUpperCase() === 'AB' || String(rawVal).toUpperCase() === 'ABSENT';
+        normRow.isAbsent = !!isAb;
+
+        if (!isAb) {
+          const extMarks = parseFloat(rawVal);
+          if (isNaN(extMarks) || extMarks < 0) {
+            errors.push({ row: lineNum, message: `Invalid external marks "${rawVal}" for ${roll}` });
+            return;
+          }
+          const maxExt = parseFloat(row.maxExternalMarks || knownSub?.externalMarks || 70);
+          if (extMarks > maxExt) {
+            errors.push({ row: lineNum, message: `External marks (${extMarks}) exceed max marks (${maxExt}) for ${roll}` });
+            return;
+          }
+          normRow.externalMarks = extMarks;
+          normRow.maxExternalMarks = maxExt;
+        } else {
+          normRow.externalMarks = 0;
+          normRow.maxExternalMarks = parseFloat(row.maxExternalMarks || knownSub?.externalMarks || 70);
+        }
+        normRow.remarks = row.remarks || null;
+      } else if (cat === 'RESULT') {
+        const grade = String(row.grade || '').trim().toUpperCase();
+        if (!grade) {
+          errors.push({ row: lineNum, message: `Grade is required for ${roll} / ${code}` });
+          return;
+        }
+        const passed = normalizeResultFlag(row.result || row.passed, grade);
+        if (passed === null) {
+          errors.push({ row: lineNum, message: `Result flag must be Pass (P) or Fail (F) for ${roll} / ${code}` });
+          return;
+        }
+
+        normRow.grade = grade;
+        normRow.passed = passed;
+        normRow.gradePoints = row.gradePoints !== undefined && row.gradePoints !== '' ? parseFloat(row.gradePoints) : null;
+        normRow.credits = row.credits !== undefined && row.credits !== '' ? parseFloat(row.credits) : 0;
+        normRow.internalMarks = row.internalMarks !== undefined && row.internalMarks !== '' ? parseFloat(row.internalMarks) : null;
+        normRow.externalMarks = row.externalMarks !== undefined && row.externalMarks !== '' ? parseFloat(row.externalMarks) : null;
+        normRow.totalMarks = row.totalMarks !== undefined && row.totalMarks !== '' ? parseFloat(row.totalMarks) : null;
+        normRow.status = passed ? 'PASSED' : 'FAILED';
+      } else if (cat === 'REVALUATION') {
+        const updatedGrade = String(row.updatedGrade || row.grade || '').trim().toUpperCase();
+        normRow.originalGrade = String(row.originalGrade || '').trim().toUpperCase() || null;
+        normRow.updatedGrade = updatedGrade || null;
+        normRow.originalMarks = row.originalMarks !== undefined && row.originalMarks !== '' ? parseFloat(row.originalMarks) : null;
+        normRow.updatedMarks = row.updatedMarks !== undefined && row.updatedMarks !== '' ? parseFloat(row.updatedMarks) : null;
+        normRow.status = String(row.status || (normRow.originalGrade !== normRow.updatedGrade ? 'GRADE_CHANGED' : 'NO_CHANGE')).toUpperCase();
+        normRow.passed = normalizeResultFlag(row.result || row.passed, updatedGrade) ?? true;
+        normRow.remarks = row.remarks || null;
+      }
+
+      normalized.push(normRow);
+    });
+
+    if (errors.length > 0) {
+      return { success: false, errors, totalRows: rows.length, validRows: normalized.length };
+    }
+
+    // Save records to DB
+    let inserted = 0;
+    let updated = 0;
+
+    const existingRecords = await this.markRepo.find({
+      where: cat === 'REVALUATION' ? { category: cat, revaluationId: notificationId } : { category: cat, examId: notificationId },
+    });
+
+    const existingMap = new Map(
+      existingRecords.map((r) => [`${r.studentRollNumber.toLowerCase()}|${r.subjectCode.toLowerCase()}`, r]),
+    );
+
+    const toSave = normalized.map((item) => {
+      const key = `${item.studentRollNumber.toLowerCase()}|${item.subjectCode.toLowerCase()}`;
+      const prior = existingMap.get(key);
+      if (prior) {
+        updated++;
+        return this.markRepo.merge(prior, item);
+      }
+      inserted++;
+      return this.markRepo.create(item);
+    });
+
+    await this.markRepo.save(toSave, { chunk: 200 });
+
+    // Sync with SubjectResult if RESULT or REVALUATION upload for exam
+    if ((cat === 'RESULT' || cat === 'REVALUATION') && exam) {
+      try {
+        const resultsDto = {
+          fileName: dto.fileName || `${cat}_upload.xlsx`,
+          rows: normalized.map((n) => ({
+            rollNumber: n.studentRollNumber,
+            subjectCode: n.subjectCode,
+            subjectName: n.subjectName,
+            grade: n.updatedGrade || n.grade,
+            gradePoints: n.gradePoints,
+            credits: n.credits,
+            result: n.passed ? 'P' : 'F',
+          })),
+        };
+        // Sync results
+        await this.syncToSubjectResults(exam.id, resultsDto, uploadedBy);
+      } catch (syncErr) {
+        console.warn('SubjectResult sync note:', syncErr.message);
+      }
+    }
+
+    return {
+      success: true,
+      category: cat,
+      notificationId,
+      inserted,
+      updated,
+      totalRows: normalized.length,
+      passCount: normalized.filter((n) => n.passed).length,
+      failCount: normalized.filter((n) => n.passed === false).length,
+    };
+  }
+
+  /** Sync helper for student results */
+  async syncToSubjectResults(examId, resultsDto, uploadedBy) {
+    if (!this.subjectResultRepo || !this.resultUploadRepo) return;
+    const exam = await this.examRepo.findOne({ where: { id: examId } });
+    if (!exam) return;
+
+    const upload = await this.resultUploadRepo.save(
+      this.resultUploadRepo.create({
+        examId,
+        fileName: resultsDto.fileName,
+        uploadedBy: uploadedBy || 'Marks Upload Desk',
+        rowCount: resultsDto.rows.length,
+        studentCount: new Set(resultsDto.rows.map((r) => r.rollNumber)).size,
+      }),
+    );
+
+    const existing = await this.subjectResultRepo.find({ where: { examId } });
+    const existingMap = new Map(
+      existing.map((r) => [`${r.studentRollNumber.toLowerCase()}|${r.subjectCode.toLowerCase()}`, r]),
+    );
+
+    const toSave = resultsDto.rows.map((r) => {
+      const key = `${r.rollNumber.toLowerCase()}|${r.subjectCode.toLowerCase()}`;
+      const prior = existingMap.get(key);
+      const passed = normalizeResultFlag(r.result, r.grade);
+
+      if (prior) {
+        return this.subjectResultRepo.merge(prior, {
+          uploadId: upload.id,
+          grade: r.grade,
+          gradePoints: r.gradePoints ?? prior.gradePoints,
+          passed,
+          credits: r.credits ?? prior.credits,
+        });
+      }
+      return this.subjectResultRepo.create({
+        uploadId: upload.id,
+        examId,
+        studentRollNumber: r.rollNumber,
+        studentName: r.studentName ?? null,
+        subjectCode: r.subjectCode,
+        subjectName: r.subjectName || r.subjectCode,
+        grade: r.grade,
+        gradePoints: r.gradePoints ?? null,
+        passed,
+        credits: r.credits ?? 0,
+        yearOfStudy: exam.yearOfStudy,
+        semester: exam.semester,
+        attemptNumber: 1,
+      });
+    });
+
+    await this.subjectResultRepo.save(toSave, { chunk: 200 });
+  }
+
+  /** Retrieve uploaded mark records for a notification & category */
+  async getUploadedMarks(category, notificationId) {
+    const cat = String(category || '').toUpperCase();
+    const isReval = cat === 'REVALUATION';
+
+    const records = await this.markRepo.find({
+      where: isReval
+        ? { category: cat, revaluationId: notificationId }
+        : { category: cat, examId: notificationId },
+      order: { studentRollNumber: 'ASC', subjectCode: 'ASC' },
+    });
+
+    const students = new Set(records.map((r) => r.studentRollNumber)).size;
+    const passCount = records.filter((r) => r.passed === true).length;
+    const failCount = records.filter((r) => r.passed === false).length;
+    const absentCount = records.filter((r) => r.isAbsent === true).length;
+
+    return {
+      category: cat,
+      notificationId,
+      totalRecords: records.length,
+      studentCount: students,
+      stats: {
+        passCount,
+        failCount,
+        absentCount,
+      },
+      records,
+    };
+  }
+
+  /**
+   * Get consolidated student-wise results report across Internals, Externals, Main Results & Revaluations
+   */
+  async getConsolidatedResults({ examId, revaluationId, rollNumber, search }) {
+    const qb = this.markRepo.createQueryBuilder('m')
+      .leftJoinAndSelect('m.exam', 'exam')
+      .leftJoinAndSelect('exam.regulation', 'regulation')
+      .leftJoinAndSelect('m.revaluationNotification', 'reval');
+
+    if (examId) {
+      qb.where('(m.examId = :examId OR m.examId IS NULL)', { examId });
+    }
+    if (revaluationId) {
+      qb.andWhere('m.revaluationId = :revaluationId', { revaluationId });
+    }
+    if (rollNumber) {
+      qb.andWhere('LOWER(m.studentRollNumber) = LOWER(:rollNumber)', { rollNumber });
+    }
+
+    const allMarks = await qb
+      .orderBy('m.studentRollNumber', 'ASC')
+      .addOrderBy('m.subjectCode', 'ASC')
+      .getMany();
+
+    const studentMap = new Map();
+
+    for (const m of allMarks) {
+      const roll = m.studentRollNumber.trim();
+      const s = studentMap.get(roll.toLowerCase()) || {
+        rollNumber: roll,
+        studentName: m.studentName || '',
+        examGroupsMap: new Map(),
+      };
+
+      if (!s.studentName && m.studentName) s.studentName = m.studentName;
+
+      // Group key by notification / exam / regulation
+      const notificationTitle = m.exam?.name || m.revaluationNotification?.title || 'General Examination';
+      const examType = m.exam?.type || (m.revaluationNotification ? 'REVALUATION' : 'REGULAR');
+      const regulationCode = m.exam?.regulation?.code || m.revaluationNotification?.regulationCode || 'N/A';
+      const semester = m.exam?.semester
+        ? (m.exam?.yearOfStudy ? `${m.exam.yearOfStudy}-${m.exam.semester}` : String(m.exam.semester))
+        : (m.revaluationNotification?.semester || 'N/A');
+      const groupKey = `${m.examId ? 'E_' + m.examId : (m.revaluationId ? 'R_' + m.revaluationId : 'OTHERS')}`;
+
+      const group = s.examGroupsMap.get(groupKey) || {
+        examId: m.examId || null,
+        revaluationId: m.revaluationId || null,
+        notificationTitle,
+        examType,
+        regulationCode,
+        semester,
+        academicYear: m.revaluationNotification?.academicYear || null,
+        subjectsMap: new Map(),
+      };
+
+      const subCode = m.subjectCode.trim();
+      const sub = group.subjectsMap.get(subCode.toLowerCase()) || {
+        subjectCode: subCode,
+        subjectName: m.subjectName || subCode,
+        examId: m.examId,
+        examTitle: notificationTitle,
+        examType,
+        regulationCode,
+        semester,
+        internalMarks: null,
+        maxInternalMarks: 30,
+        externalMarks: null,
+        maxExternalMarks: 70,
+        totalMarks: null,
+        maxTotalMarks: 100,
+        grade: null,
+        gradePoints: null,
+        credits: 0,
+        passed: null,
+        isAbsent: false,
+        revaluation: null,
+      };
+
+      const cat = String(m.category ?? '').toUpperCase();
+
+      if (cat === 'INTERNAL' || m.internalMarks != null) {
+        sub.internalMarks = m.internalMarks != null ? Number(m.internalMarks) : sub.internalMarks;
+        sub.maxInternalMarks = m.maxInternalMarks != null ? Number(m.maxInternalMarks) : (sub.maxInternalMarks || 30);
+      } else if (cat === 'EXTERNAL') {
+        sub.externalMarks = m.externalMarks != null ? Number(m.externalMarks) : null;
+        sub.maxExternalMarks = m.maxExternalMarks != null ? Number(m.maxExternalMarks) : 70;
+        sub.isAbsent = !!m.isAbsent;
+      } else if (m.category === 'RESULT') {
+        sub.grade = m.grade || sub.grade;
+        sub.gradePoints = m.gradePoints != null ? Number(m.gradePoints) : sub.gradePoints;
+        sub.credits = m.credits != null ? Number(m.credits) : sub.credits;
+        sub.passed = m.passed != null ? !!m.passed : sub.passed;
+        if (m.internalMarks != null) sub.internalMarks = Number(m.internalMarks);
+        if (m.externalMarks != null) sub.externalMarks = Number(m.externalMarks);
+        if (m.totalMarks != null) sub.totalMarks = Number(m.totalMarks);
+      } else if (m.category === 'REVALUATION') {
+        sub.revaluation = {
+          originalGrade: m.originalGrade,
+          updatedGrade: m.updatedGrade,
+          originalMarks: m.originalMarks != null ? Number(m.originalMarks) : null,
+          updatedMarks: m.updatedMarks != null ? Number(m.updatedMarks) : null,
+          status: m.status || 'GRADE_CHANGED',
+        };
+        if (m.updatedGrade) {
+          sub.grade = m.updatedGrade;
+        }
+      }
+
+      if (sub.totalMarks == null && sub.internalMarks != null && sub.externalMarks != null) {
+        sub.totalMarks = sub.internalMarks + sub.externalMarks;
+      }
+
+      group.subjectsMap.set(subCode.toLowerCase(), sub);
+      s.examGroupsMap.set(groupKey, group);
+      studentMap.set(roll.toLowerCase(), s);
+    }
+
+    const studentList = [...studentMap.values()].map((s) => {
+      const examGroups = [...s.examGroupsMap.values()].map((g) => {
+        const subjects = [...g.subjectsMap.values()];
+        let totalCredits = 0;
+        let totalGradePointsCredits = 0;
+        let backlogs = 0;
+        let passedCount = 0;
+
+        subjects.forEach((sub) => {
+          const isPass = sub.passed !== false && sub.grade !== 'F' && sub.grade !== 'AB';
+          if (isPass) passedCount++;
+          else backlogs++;
+
+          const cr = sub.credits || 0;
+          const gp = sub.gradePoints || 0;
+          totalCredits += cr;
+          totalGradePointsCredits += gp * cr;
+        });
+
+        const sgpa = totalCredits > 0 ? (totalGradePointsCredits / totalCredits).toFixed(2) : '0.00';
+
+        return {
+          examId: g.examId,
+          revaluationId: g.revaluationId,
+          notificationTitle: g.notificationTitle,
+          examType: g.examType,
+          regulationCode: g.regulationCode,
+          semester: g.semester,
+          academicYear: g.academicYear,
+          subjectCount: subjects.length,
+          passedCount,
+          backlogs,
+          totalCredits,
+          sgpa: Number(sgpa),
+          status: backlogs === 0 ? 'PASSED' : 'BACKLOGS',
+          subjects,
+        };
+      });
+
+      // Flat subjects list across all exam groups for backwards compatibility
+      const allSubjects = examGroups.flatMap((g) => g.subjects);
+      let overallCredits = 0;
+      let overallGradePointsCredits = 0;
+      let overallBacklogs = 0;
+      let overallPassed = 0;
+
+      allSubjects.forEach((sub) => {
+        const isPass = sub.passed !== false && sub.grade !== 'F' && sub.grade !== 'AB';
+        if (isPass) overallPassed++;
+        else overallBacklogs++;
+
+        const cr = sub.credits || 0;
+        const gp = sub.gradePoints || 0;
+        overallCredits += cr;
+        overallGradePointsCredits += gp * cr;
+      });
+
+      const overallSgpa = overallCredits > 0 ? (overallGradePointsCredits / overallCredits).toFixed(2) : '0.00';
+
+      return {
+        rollNumber: s.rollNumber,
+        studentName: s.studentName,
+        examId: examGroups[0]?.examId || null,
+        revaluationId: examGroups[0]?.revaluationId || null,
+        subjectCount: allSubjects.length,
+        passedCount: overallPassed,
+        backlogs: overallBacklogs,
+        totalCredits: overallCredits,
+        sgpa: Number(overallSgpa),
+        status: overallBacklogs === 0 ? 'PASSED' : 'BACKLOGS',
+        examGroups,
+        subjects: allSubjects,
+      };
+    });
+
+    let finalStudents = studentList;
+    if (search) {
+      const q = search.toLowerCase();
+      finalStudents = studentList.filter(
+        (s) =>
+          s.rollNumber.toLowerCase().includes(q) ||
+          (s.studentName && s.studentName.toLowerCase().includes(q)) ||
+          s.subjects.some(
+            (sub) =>
+              sub.subjectCode.toLowerCase().includes(q) ||
+              (sub.regulationCode && sub.regulationCode.toLowerCase().includes(q)) ||
+              (sub.examTitle && sub.examTitle.toLowerCase().includes(q))
+          )
+      );
+    }
+
+    return {
+      totalStudents: finalStudents.length,
+      allClearCount: finalStudents.filter((s) => s.status === 'PASSED').length,
+      backlogCount: finalStudents.filter((s) => s.status === 'BACKLOGS').length,
+      students: finalStudents,
+    };
+  }
+}
+
+module.exports = { MarksService };

@@ -139,6 +139,7 @@ export default function StudentResultsPage() {
                         <tr>
                           <th className="px-3 py-2 font-semibold">Code</th>
                           <th className="px-3 py-2 font-semibold">Subject</th>
+                          <th className="px-3 py-2 font-semibold">Internal Marks</th>
                           <th className="px-3 py-2 font-semibold">Grade</th>
                           <th className="px-3 py-2 font-semibold">Result</th>
                           <th className="px-3 py-2 font-semibold">Credits</th>
@@ -156,19 +157,39 @@ export default function StudentResultsPage() {
                                   {sub.subjectCode}
                                 </td>
                                 <td className="px-3 py-2">{sub.subjectName}</td>
+                                <td className="px-3 py-2">
+                                  {sub.internalMarks !== null && sub.internalMarks !== undefined ? (
+                                    <span>
+                                      <strong className="font-semibold text-slate-800">
+                                        {sub.internalMarks}
+                                      </strong>{' '}
+                                      <span className="text-[11px] text-[var(--muted)]">
+                                        / {sub.maxInternalMarks || 30}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[var(--muted)]">-</span>
+                                  )}
+                                </td>
                                 <td className="px-3 py-2 font-semibold">
-                                  {sub.grade}
+                                  {sub.grade || '-'}
                                 </td>
                                 <td className="px-3 py-2">
-                                  <span
-                                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                      sub.passed
-                                        ? 'bg-[var(--success-soft)] text-[var(--success)]'
-                                        : 'bg-rose-50 text-rose-700'
-                                    }`}
-                                  >
-                                    {sub.passed ? 'Pass' : 'Fail'}
-                                  </span>
+                                  {sub.isInternalOnly ? (
+                                    <span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                                      Forwarded
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                        sub.passed
+                                          ? 'bg-[var(--success-soft)] text-[var(--success)]'
+                                          : 'bg-rose-50 text-rose-700'
+                                      }`}
+                                    >
+                                      {sub.passed ? 'Pass' : 'Fail'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2">{sub.credits}</td>
                                 <td className="px-3 py-2">
@@ -182,13 +203,13 @@ export default function StudentResultsPage() {
                                       {open ? '▴' : '▾'}
                                     </button>
                                   ) : (
-                                    '1'
+                                    sub.attemptCount === 0 ? '-' : '1'
                                   )}
                                 </td>
                               </tr>
                               {open ? (
                                 <tr className="border-t border-dashed border-[var(--border)] bg-slate-50/60">
-                                  <td colSpan={6} className="px-3 py-2">
+                                  <td colSpan={7} className="px-3 py-2">
                                     <AttemptHistory subject={sub} />
                                   </td>
                                 </tr>

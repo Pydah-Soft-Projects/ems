@@ -58,6 +58,7 @@ const {
   RevaluationNotification,
   RevaluationApplication,
 } = require('../revaluation/schemas/revaluation-notification.schema');
+const { StudentMark } = require('../exam/schemas/student-mark.schema');
 
 const entities = [
   Regulation,
@@ -76,6 +77,7 @@ const entities = [
   MerchantStatementTxn,
   ResultUpload,
   SubjectResult,
+  StudentMark,
   PaymentGatewaySettings,
   CanaraPaymentSettings,
   CanaraVPA,

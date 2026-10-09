@@ -18,12 +18,14 @@ function normalizeResultFlag(raw, grade) {
 }
 
 class ResultsService {
-  constructor(resultUploadRepo, subjectResultRepo, examRepo, applicationRepo, sdms) {
+  constructor(resultUploadRepo, subjectResultRepo, examRepo, applicationRepo, sdms, markRepo, subjectRepo) {
     this.uploadRepo = resultUploadRepo;
     this.resultRepo = subjectResultRepo;
     this.examRepo = examRepo;
     this.applicationRepo = applicationRepo;
     this.sdms = sdms;
+    this.markRepo = markRepo;
+    this.subjectRepo = subjectRepo;
   }
 
   async getExam(examId) {
@@ -111,20 +113,8 @@ class ResultsService {
         return;
       }
       const app = appsByRoll.get(roll.toLowerCase());
-      if (!app) {
-        errors.push({
-          row: line,
-          message: `${roll} has no application on this examination`,
-        });
-        return;
-      }
-      if (app.subjectIds.size > 0 && !app.subjectIds.has(subject.subjectId)) {
-        errors.push({
-          row: line,
-          message: `${roll} did not apply for subject ${subject.code}`,
-        });
-        return;
-      }
+      const studentName = app ? app.name : String(row.studentName || row.name || '').trim() || null;
+      const examType = app && app.examTypes.length === 1 ? app.examTypes[0] : null;
       const passed = normalizeResultFlag(row.result, grade);
       if (passed === null) {
         errors.push({
@@ -170,8 +160,8 @@ class ResultsService {
       seen.add(dupKey);
       normalized.push({
         roll,
-        studentName: app.name,
-        examType: app.examTypes.length === 1 ? app.examTypes[0] : null,
+        studentName,
+        examType,
         subject,
         subjectName: String(row.subjectName ?? '').trim() || subject.name,
         grade,
@@ -359,6 +349,8 @@ class ResultsService {
   async getStudentResultsByRoll(rollNumber) {
     const roll = String(rollNumber ?? '').trim();
     if (!roll) throw AppError.badRequest('Roll number is required');
+
+    // 1. Published results from subject_results table
     const results = await this.resultRepo
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.exam', 'exam')
@@ -369,7 +361,46 @@ class ResultsService {
       .addOrderBy('r.attemptNumber', 'ASC')
       .getMany();
 
+    // 2. Internal marks directly written/forwarded into student_marks table
+    let markRecords = [];
+    try {
+      const mRepo = this.markRepo || (this.resultRepo?.manager?.getRepository('StudentMark'));
+      if (mRepo) {
+        markRecords = await mRepo
+          .createQueryBuilder('m')
+          .where('LOWER(m.studentRollNumber) = LOWER(:roll)', { roll })
+          .getMany();
+      }
+    } catch (err) {
+      console.warn('Could not fetch student_marks in getStudentResultsByRoll:', err.message);
+    }
+
+    const internalMarksMap = new Map();
+    for (const m of markRecords) {
+      const sCode = String(m.subjectCode ?? '').trim().toLowerCase();
+      if (!sCode) continue;
+
+      const cat = String(m.category ?? '').toLowerCase();
+      const intVal = m.internalMarks != null ? Number(m.internalMarks) : null;
+      const maxIntVal = m.maxInternalMarks != null ? Number(m.maxInternalMarks) : 30;
+
+      if (!internalMarksMap.has(sCode) || cat === 'internal' || intVal != null) {
+        internalMarksMap.set(sCode, {
+          subjectCode: m.subjectCode,
+          subjectName: m.subjectName || null,
+          internalMarks: intVal,
+          maxInternalMarks: maxIntVal,
+          status: m.status ?? 'synced',
+          remarks: m.remarks ?? null,
+          uploadedBy: m.uploadedBy ?? null,
+          updatedAt: m.updatedAt ?? null,
+        });
+      }
+    }
+
     const semesters = new Map();
+    const seenSubjectCodes = new Set();
+
     for (const r of results) {
       const semKey = `${r.yearOfStudy}-${r.semester}`;
       const sem = semesters.get(semKey) ?? {
@@ -378,6 +409,8 @@ class ResultsService {
         subjects: new Map(),
       };
       const subKey = r.subjectCode.toLowerCase();
+      seenSubjectCodes.add(subKey);
+
       const sub = sem.subjects.get(subKey) ?? {
         subjectCode: r.subjectCode,
         subjectName: r.subjectName,
@@ -402,12 +435,75 @@ class ResultsService {
       semesters.set(semKey, sem);
     }
 
+    // Include internal-only subjects from student_marks if not yet published in subject_results
+    for (const [subKey, intInfo] of internalMarksMap.entries()) {
+      if (!seenSubjectCodes.has(subKey)) {
+        let yearOfStudy = 1;
+        let semester = 1;
+        let dbSubjectName = intInfo.subjectName;
+
+        try {
+          const sRepo = this.subjectRepo || (this.resultRepo?.manager?.getRepository('Subject'));
+          if (sRepo) {
+            const dbSub = await sRepo
+              .createQueryBuilder('s')
+              .where('LOWER(s.code) = LOWER(:code)', { code: intInfo.subjectCode })
+              .getOne();
+
+            if (dbSub) {
+              yearOfStudy = dbSub.yearOfStudy || 1;
+              semester = dbSub.semester || 1;
+              if (!dbSubjectName && dbSub.name) dbSubjectName = dbSub.name;
+            }
+          }
+        } catch (subErr) {
+          // ignore lookup error
+        }
+
+        const semKey = `${yearOfStudy}-${semester}`;
+        const sem = semesters.get(semKey) ?? {
+          yearOfStudy,
+          semester,
+          subjects: new Map(),
+        };
+
+        sem.subjects.set(subKey, {
+          subjectCode: intInfo.subjectCode,
+          subjectName: dbSubjectName || intInfo.subjectCode,
+          attempts: [],
+          isInternalOnly: true,
+        });
+        semesters.set(semKey, sem);
+      }
+    }
+
     let totalCreditsEarned = 0;
     let totalBacklogs = 0;
     const semesterList = [...semesters.values()]
       .sort((a, b) => a.yearOfStudy - b.yearOfStudy || a.semester - b.semester)
       .map((sem) => {
         const subjects = [...sem.subjects.values()].map((sub) => {
+          const subKey = sub.subjectCode.toLowerCase();
+          const intInfo = internalMarksMap.get(subKey);
+
+          if (sub.isInternalOnly) {
+            return {
+              subjectCode: sub.subjectCode,
+              subjectName: sub.subjectName,
+              grade: 'Internal Only',
+              gradePoints: null,
+              passed: null,
+              credits: 0,
+              attemptCount: 0,
+              attempts: [],
+              internalMarks: intInfo?.internalMarks ?? null,
+              maxInternalMarks: intInfo?.maxInternalMarks ?? 30,
+              internalStatus: intInfo?.status ?? 'synced',
+              remarks: intInfo?.remarks ?? 'Internal Marks Forwarded',
+              isInternalOnly: true,
+            };
+          }
+
           const attempts = [...sub.attempts].sort(
             (a, b) => a.attemptNumber - b.attemptNumber,
           );
@@ -421,18 +517,24 @@ class ResultsService {
             credits: latest.credits,
             attemptCount: attempts.length,
             attempts,
+            internalMarks: intInfo?.internalMarks ?? null,
+            maxInternalMarks: intInfo?.maxInternalMarks ?? 30,
+            internalStatus: intInfo?.status ?? null,
+            remarks: intInfo?.remarks ?? null,
           };
         });
-        const cleared = subjects.filter((s) => s.passed);
-        const backlogs = subjects.length - cleared.length;
+
+        const publishedSubjects = subjects.filter((s) => !s.isInternalOnly);
+        const cleared = publishedSubjects.filter((s) => s.passed);
+        const backlogs = publishedSubjects.length - cleared.length;
         const creditsEarned = cleared.reduce((sum, s) => sum + s.credits, 0);
         totalCreditsEarned += creditsEarned;
         totalBacklogs += backlogs;
+
         return {
           yearOfStudy: sem.yearOfStudy,
           semester: sem.semester,
-          // passed ONLY when every subject's latest attempt is a pass
-          status: backlogs === 0 ? 'passed' : 'backlogs',
+          status: publishedSubjects.length > 0 ? (backlogs === 0 ? 'passed' : 'backlogs') : 'passed',
           totalSubjects: subjects.length,
           cleared: cleared.length,
           backlogs,
@@ -443,10 +545,12 @@ class ResultsService {
         };
       });
 
+    const studentNameFromResults = results.find((r) => r.studentName)?.studentName ?? null;
+    const studentNameFromMarks = markRecords.find((m) => m.studentName)?.studentName ?? null;
+
     return {
       rollNumber: roll,
-      studentName:
-        results.find((r) => r.studentName)?.studentName ?? null,
+      studentName: studentNameFromResults || studentNameFromMarks || null,
       summary: {
         semesters: semesterList.length,
         semestersPassed: semesterList.filter((s) => s.status === 'passed').length,

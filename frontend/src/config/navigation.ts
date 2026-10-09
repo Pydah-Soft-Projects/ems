@@ -81,6 +81,20 @@ export const navigation: NavGroup[] = [
         privilege: 'revaluations:read',
       },
       {
+        href: '/dashboard/marks-upload',
+        label: 'Marks Uploading',
+        description: 'Import Internal, External, Main Exam & Revaluation marks via Excel & PDF',
+        icon: 'reports',
+        privilege: ['exams:results', 'exams:write', 'exams:read'],
+      },
+      {
+        href: '/dashboard/results',
+        label: 'Student Results',
+        description: 'Comprehensive student-wise result statement with internals, externals, semester & revaluations',
+        icon: 'reports',
+        privilege: ['exams:results', 'exams:read'],
+      },
+      {
         href: '/dashboard/duplicate-hall-tickets',
         label: 'Duplicate hall tickets',
         description: 'Raise request, collect fee, and print duplicate hall tickets',
