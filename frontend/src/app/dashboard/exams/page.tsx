@@ -76,7 +76,239 @@ export default function ExamsPage() {
     void loadExams();
   }, [loadExams]);
 
-  const counts = useMemo(() => ({ total: exams.length }), [exams]);
+  // Scope filters: College, Course, Branch, Year, Semester
+  const [selectedCollege, setSelectedCollege] = useState('all');
+  const [selectedCourse, setSelectedCourse] = useState('all');
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedSemester, setSelectedSemester] = useState('all');
+
+  // Available options derived from exams and regulations
+  const availableColleges = useMemo(() => {
+    const set = new Set<string>();
+    exams.forEach((e) => {
+      if (e.college?.trim()) set.add(e.college.trim());
+      e.scopes?.forEach((s) => {
+        if (s.college?.trim()) set.add(s.college.trim());
+      });
+    });
+    regulations.forEach((r) => {
+      r.scopes?.forEach((s) => {
+        if (s.collegeName?.trim()) set.add(s.collegeName.trim());
+      });
+    });
+    return Array.from(set).sort();
+  }, [exams, regulations]);
+
+  const availableCourses = useMemo(() => {
+    const set = new Set<string>();
+    const isTargetCollege = (c?: string | null) =>
+      !selectedCollege ||
+      selectedCollege === 'all' ||
+      c?.trim().toLowerCase() === selectedCollege.trim().toLowerCase();
+
+    exams.forEach((e) => {
+      if (isTargetCollege(e.college)) {
+        if (e.course?.trim()) set.add(e.course.trim());
+      }
+      e.scopes?.forEach((s) => {
+        if (isTargetCollege(s.college)) {
+          if (s.course?.trim()) set.add(s.course.trim());
+        }
+      });
+    });
+
+    regulations.forEach((r) => {
+      r.scopes?.forEach((s) => {
+        if (isTargetCollege(s.collegeName)) {
+          if (s.courseName?.trim()) set.add(s.courseName.trim());
+        }
+      });
+    });
+
+    return Array.from(set).sort();
+  }, [exams, regulations, selectedCollege]);
+
+  const availableBranches = useMemo(() => {
+    const set = new Set<string>();
+    const isTargetCollege = (c?: string | null) =>
+      !selectedCollege ||
+      selectedCollege === 'all' ||
+      c?.trim().toLowerCase() === selectedCollege.trim().toLowerCase();
+    const isTargetCourse = (c?: string | null) =>
+      !selectedCourse ||
+      selectedCourse === 'all' ||
+      c?.trim().toLowerCase() === selectedCourse.trim().toLowerCase();
+
+    const addBranches = (raw?: string | null) => {
+      if (!raw) return;
+      raw
+        .split(',')
+        .map((b) => b.trim())
+        .filter(Boolean)
+        .forEach((b) => set.add(b));
+    };
+
+    exams.forEach((e) => {
+      const matchCollege = isTargetCollege(e.college);
+      const matchCourse = isTargetCourse(e.course);
+      if (matchCollege && matchCourse) {
+        addBranches(e.branch);
+      }
+      e.scopes?.forEach((s) => {
+        const scCollegeMatch = isTargetCollege(s.college || e.college);
+        const scCourseMatch = isTargetCourse(s.course || e.course);
+        if (scCollegeMatch && scCourseMatch) {
+          addBranches(s.branch);
+        }
+      });
+    });
+
+    return Array.from(set).sort();
+  }, [exams, selectedCollege, selectedCourse]);
+
+  // Keep branch and course in sync if available options change
+  useEffect(() => {
+    if (selectedCourse !== 'all' && !availableCourses.includes(selectedCourse)) {
+      setSelectedCourse('all');
+    }
+  }, [availableCourses, selectedCourse]);
+
+  useEffect(() => {
+    if (selectedBranch !== 'all' && !availableBranches.includes(selectedBranch)) {
+      setSelectedBranch('all');
+    }
+  }, [availableBranches, selectedBranch]);
+
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    exams.forEach((e) => {
+      if (e.yearOfStudy) set.add(Number(e.yearOfStudy));
+      e.scopes?.forEach((s) => {
+        if (s.yearOfStudy) set.add(Number(s.yearOfStudy));
+      });
+    });
+    if (set.size === 0) {
+      return [1, 2, 3, 4];
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [exams]);
+
+  const availableSemesters = useMemo(() => {
+    const set = new Set<number>();
+    exams.forEach((e) => {
+      if (e.semester) set.add(Number(e.semester));
+      e.scopes?.forEach((s) => {
+        if (s.semester) set.add(Number(s.semester));
+      });
+    });
+    if (set.size === 0) {
+      return [1, 2];
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [exams]);
+
+  const filteredExams = useMemo(() => {
+    return exams.filter((exam) => {
+      // 1. College filter
+      if (selectedCollege && selectedCollege !== 'all') {
+        const target = selectedCollege.trim().toLowerCase();
+        const examCol = exam.college?.trim().toLowerCase();
+        const scCols =
+          exam.scopes
+            ?.map((s) => s.college?.trim().toLowerCase())
+            .filter(Boolean) || [];
+        if (examCol !== target && !scCols.includes(target)) {
+          return false;
+        }
+      }
+
+      // 2. Course filter
+      if (selectedCourse && selectedCourse !== 'all') {
+        const target = selectedCourse.trim().toLowerCase();
+        const examCourse = exam.course?.trim().toLowerCase();
+        const scCourses =
+          exam.scopes
+            ?.map((s) => s.course?.trim().toLowerCase())
+            .filter(Boolean) || [];
+        if (examCourse !== target && !scCourses.includes(target)) {
+          return false;
+        }
+      }
+
+      // 3. Branch filter
+      if (selectedBranch && selectedBranch !== 'all') {
+        const target = selectedBranch.trim().toLowerCase();
+        const rootBranches = (exam.branch || '')
+          .split(',')
+          .map((b) => b.trim().toLowerCase())
+          .filter(Boolean);
+        const scBranches =
+          exam.scopes?.flatMap((s) =>
+            (s.branch || '')
+              .split(',')
+              .map((b) => b.trim().toLowerCase())
+              .filter(Boolean),
+          ) || [];
+        const allExamBranches = [...rootBranches, ...scBranches];
+        if (!allExamBranches.includes(target)) {
+          return false;
+        }
+      }
+
+      // 4. Year filter
+      if (selectedYear && selectedYear !== 'all') {
+        const target = String(selectedYear);
+        const examYear = String(exam.yearOfStudy);
+        const scYears = exam.scopes?.map((s) => String(s.yearOfStudy)) || [];
+        if (examYear !== target && !scYears.includes(target)) {
+          return false;
+        }
+      }
+
+      // 5. Semester filter
+      if (selectedSemester && selectedSemester !== 'all') {
+        const target = String(selectedSemester);
+        const examSem = String(exam.semester);
+        const scSems = exam.scopes?.map((s) => String(s.semester)) || [];
+        if (examSem !== target && !scSems.includes(target)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    exams,
+    selectedCollege,
+    selectedCourse,
+    selectedBranch,
+    selectedYear,
+    selectedSemester,
+  ]);
+
+  const hasActiveScopeFilters =
+    selectedCollege !== 'all' ||
+    selectedCourse !== 'all' ||
+    selectedBranch !== 'all' ||
+    selectedYear !== 'all' ||
+    selectedSemester !== 'all';
+
+  const handleResetFilters = () => {
+    setSelectedCollege('all');
+    setSelectedCourse('all');
+    setSelectedBranch('all');
+    setSelectedYear('all');
+    setSelectedSemester('all');
+  };
+
+  const counts = useMemo(
+    () => ({
+      total: exams.length,
+      filtered: filteredExams.length,
+    }),
+    [exams.length, filteredExams.length],
+  );
 
   async function handleSyncCalendar() {
     setSyncingEvents(true);
@@ -261,6 +493,145 @@ export default function ExamsPage() {
         onChange={setStatusFilter}
       />
 
+      {/* Academic Filters: College, Course, Branch, Year, Semester */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <svg
+              className="h-4 w-4 text-[var(--primary)]"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+              />
+            </svg>
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Academic Filters
+            </span>
+            {hasActiveScopeFilters && (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                Filtered: {filteredExams.length} of {exams.length}
+              </span>
+            )}
+          </div>
+
+          {hasActiveScopeFilters && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="text-xs font-medium text-slate-500 hover:text-rose-600 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <span>✕</span> Reset filters
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* 1. College */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+              College
+            </label>
+            <select
+              value={selectedCollege}
+              onChange={(e) => setSelectedCollege(e.target.value)}
+              className="w-full h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all cursor-pointer truncate"
+              title={selectedCollege !== 'all' ? selectedCollege : 'All Colleges'}
+            >
+              <option value="all">All Colleges</option>
+              {availableColleges.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 2. Course */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+              Course
+            </label>
+            <select
+              value={selectedCourse}
+              onChange={(e) => setSelectedCourse(e.target.value)}
+              className="w-full h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all cursor-pointer truncate"
+              title={selectedCourse !== 'all' ? selectedCourse : 'All Courses'}
+            >
+              <option value="all">All Courses</option>
+              {availableCourses.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 3. Branch */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+              Branch
+            </label>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="w-full h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all cursor-pointer truncate"
+              title={selectedBranch !== 'all' ? selectedBranch : 'All Branches'}
+            >
+              <option value="all">All Branches</option>
+              {availableBranches.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. Year */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+              Year
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="w-full h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all cursor-pointer"
+            >
+              <option value="all">All Years</option>
+              {availableYears.map((y) => (
+                <option key={y} value={String(y)}>
+                  Year {y}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 5. Semester */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1">
+              Semester
+            </label>
+            <select
+              value={selectedSemester}
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              className="w-full h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-800 focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)] transition-all cursor-pointer"
+            >
+              <option value="all">All Semesters</option>
+              {availableSemesters.map((s) => (
+                <option key={s} value={String(s)}>
+                  Sem {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {actionError && !rejectOpen && !publishOpen ? (
         <Alert tone="danger">{actionError}</Alert>
       ) : null}
@@ -268,7 +639,11 @@ export default function ExamsPage() {
       <Card>
         <CardHeader
           title={statusFilter === 'published' ? 'Published examinations' : 'Examinations'}
-          description={`${counts.total} examination${counts.total !== 1 ? 's' : ''}`}
+          description={
+            hasActiveScopeFilters
+              ? `${filteredExams.length} of ${exams.length} examination${exams.length !== 1 ? 's' : ''} (filtered)`
+              : `${counts.total} examination${counts.total !== 1 ? 's' : ''}`
+          }
           action={
             statusFilter === 'published' && canWrite ? (
               <Button
@@ -297,7 +672,7 @@ export default function ExamsPage() {
         />
         <CardBody className="!p-0">
           <ExamTable
-            exams={exams}
+            exams={filteredExams}
             regulations={regulations}
             loading={loading}
             user={user}

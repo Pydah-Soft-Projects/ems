@@ -176,7 +176,7 @@ class MarksService {
 
     const exam = await this.examRepo.findOne({
       where: { id },
-      relations: ['examSubjects', 'examSubjects.subject'],
+      relations: ['examSubjects', 'examSubjects.subject', 'scopes'],
     });
     if (!exam) throw AppError.notFound('Examination not found');
 
@@ -296,32 +296,119 @@ class MarksService {
       }
     }
 
-    // 4. SDMS Students Database (if connected)
-    if (this.sdms && typeof this.sdms.listStudents === 'function') {
+    // 4. SDMS Students Database (Enrolled / Registered students matching this Exam scope)
+    if (this.sdms) {
       try {
-        const branchList = (exam.branch || '')
-          .split(',')
-          .map((b) => b.trim())
-          .filter((b) => b && b.toUpperCase() !== 'ALL');
+        const targetBranches = new Set();
+        const targetBatches = new Set();
+        const targetCourses = new Set();
+        const targetColleges = new Set();
+
+        const addBranchName = (b) => {
+          if (!b) return;
+          String(b)
+            .split(',')
+            .map((x) => x.trim())
+            .filter((x) => x && x.toUpperCase() !== 'ALL')
+            .forEach((x) => targetBranches.add(x));
+        };
+
+        addBranchName(exam.branch);
+        if (exam.batch) targetBatches.add(exam.batch.trim());
+        if (exam.course) targetCourses.add(exam.course.trim());
+        if (exam.college) targetColleges.add(exam.college.trim());
+
+        if (Array.isArray(exam.scopes)) {
+          for (const sc of exam.scopes) {
+            addBranchName(sc.branch);
+            if (sc.batch) targetBatches.add(sc.batch.trim());
+            if (sc.course) targetCourses.add(sc.course.trim());
+            if (sc.college) targetColleges.add(sc.college.trim());
+          }
+        }
 
         let sdmsStudents = [];
-        if (branchList.length > 1) {
-          for (const b of branchList) {
+
+        if (this.sdms.studentRepo) {
+          const qb = this.sdms.studentRepo
+            .createQueryBuilder('s')
+            .select([
+              's.id',
+              's.pinNo',
+              's.admissionNumber',
+              's.studentName',
+              's.college',
+              's.course',
+              's.branch',
+              's.batch',
+              's.section',
+              's.currentYear',
+              's.currentSemester',
+              's.studentStatus',
+            ]);
+
+          if (targetCourses.size > 0) {
+            qb.andWhere('s.course IN (:...courses)', { courses: Array.from(targetCourses) });
+          }
+          if (targetBranches.size > 0) {
+            qb.andWhere('s.branch IN (:...branches)', { branches: Array.from(targetBranches) });
+          }
+          if (targetBatches.size > 0) {
+            qb.andWhere('s.batch IN (:...batches)', { batches: Array.from(targetBatches) });
+          }
+          if (targetColleges.size > 0) {
+            qb.andWhere('s.college IN (:...colleges)', { colleges: Array.from(targetColleges) });
+          }
+
+          sdmsStudents = await qb.orderBy('s.pinNo', 'ASC').getMany();
+
+          // Fallback if 0 found with specific batch (e.g. unassigned batch) but year/sem matches
+          if (sdmsStudents.length === 0 && targetCourses.size > 0 && targetBranches.size > 0) {
+            const fallbackQb = this.sdms.studentRepo
+              .createQueryBuilder('s')
+              .select([
+                's.id',
+                's.pinNo',
+                's.admissionNumber',
+                's.studentName',
+                's.college',
+                's.course',
+                's.branch',
+                's.batch',
+                's.section',
+                's.currentYear',
+                's.currentSemester',
+                's.studentStatus',
+              ])
+              .where('s.course IN (:...courses)', { courses: Array.from(targetCourses) })
+              .andWhere('s.branch IN (:...branches)', { branches: Array.from(targetBranches) });
+
+            if (targetColleges.size > 0) {
+              fallbackQb.andWhere('s.college IN (:...colleges)', { colleges: Array.from(targetColleges) });
+            }
+            if (exam.yearOfStudy) {
+              fallbackQb.andWhere('s.current_year = :year', { year: exam.yearOfStudy });
+            }
+            if (exam.semester) {
+              fallbackQb.andWhere('s.current_semester = :sem', { sem: exam.semester });
+            }
+
+            const fallbackList = await fallbackQb.orderBy('s.pinNo', 'ASC').getMany();
+            if (fallbackList.length > 0) {
+              sdmsStudents = fallbackList;
+            }
+          }
+        } else if (typeof this.sdms.listStudents === 'function') {
+          for (const b of targetBranches) {
             const res = await this.sdms.listStudents({
               course: exam.course,
               branch: b,
               batch: exam.batch,
               limit: 500,
             });
-            if (Array.isArray(res)) sdmsStudents.push(...res);
+            const items = res?.items || (Array.isArray(res) ? res : []);
+            sdmsStudents.push(...items);
           }
-        } else {
-          sdmsStudents = await this.sdms.listStudents({
-            course: exam.course,
-            branch: branchList[0] || undefined,
-            batch: exam.batch,
-            limit: 500,
-          });
         }
 
         if (Array.isArray(sdmsStudents)) {
@@ -330,7 +417,7 @@ class MarksService {
             if (!roll) continue;
             const rKey = roll.toLowerCase();
             const existing = studentMapByRoll.get(rKey);
-            const b = s.branch || (branchList.length === 1 ? branchList[0] : exam.branch) || 'GENERAL';
+            const b = s.branch || (targetBranches.size === 1 ? Array.from(targetBranches)[0] : exam.branch) || 'GENERAL';
             addBranch(b);
 
             if (!existing) {
@@ -348,7 +435,7 @@ class MarksService {
           }
         }
       } catch (sdmsErr) {
-        // SDMS query optional
+        // SDMS query fallback
       }
     }
 
@@ -474,6 +561,54 @@ class MarksService {
         rows.forEach((row) => {
           if (!row.subjectCode) row.subjectCode = subjectCode;
         });
+      }
+
+      // 1.b Filter and validate by courseCategory (THEORY vs LAB)
+      if (courseCategory && notificationDetails?.subjects?.length) {
+        const isTargetLab = String(courseCategory).toUpperCase() === 'LAB';
+        const subMap = new Map();
+        for (const s of notificationDetails.subjects) {
+          const rawType = String(s.type || '').toLowerCase();
+          const rawName = String(s.name || '').toLowerCase();
+          const rawCode = String(s.code || '').toLowerCase();
+          const isLab =
+            ['lab', 'laboratory', 'practical', 'p'].includes(rawType) ||
+            rawType.includes('lab') ||
+            rawType.includes('practical') ||
+            rawName.includes('lab') ||
+            rawName.includes('practical') ||
+            rawName.includes('workshop') ||
+            rawName.includes('seminar') ||
+            rawName.includes('project') ||
+            rawName.includes('viva') ||
+            rawCode.endsWith('l') ||
+            rawCode.endsWith('p');
+          subMap.set(rawCode.replace(/[^a-z0-9]/g, ''), isLab);
+        }
+
+        const validRows = [];
+        const mismatchedSubjects = new Set();
+        for (const row of rows) {
+          const rowSub = String(row.subjectCode || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (rowSub && subMap.has(rowSub)) {
+            const isSubLab = subMap.get(rowSub);
+            if (isSubLab === isTargetLab) {
+              validRows.push(row);
+            } else {
+              mismatchedSubjects.add(row.subjectCode);
+            }
+          } else {
+            validRows.push(row);
+          }
+        }
+
+        if (mismatchedSubjects.size > 0 && validRows.length === 0) {
+          throw AppError.badRequest(
+            `The uploaded document only contains ${isTargetLab ? 'Theory' : 'Lab'} subject(s) (${[...mismatchedSubjects].join(', ')}), but current mode is ${isTargetLab ? 'Labs & Practical' : 'Theory Subjects'}. Please switch to the appropriate course type tab.`
+          );
+        } else if (validRows.length > 0) {
+          rows = validRows;
+        }
       }
 
       // 2. Filter or populate branch if specified
@@ -927,6 +1062,7 @@ class MarksService {
           subjectMap.set(code.toLowerCase(), {
             code,
             name: es.subject?.name ?? '',
+            type: es.subject?.type ?? '',
             internalMarks: es.subject?.internalMarks ?? 30,
             externalMarks: es.subject?.externalMarks ?? 70,
             totalMarks: es.subject?.totalMarks ?? 100,
@@ -989,6 +1125,32 @@ class MarksService {
 
       const knownSub = subjectMap.get(code.toLowerCase());
       const studentApp = appsByRoll.get(roll.toLowerCase());
+
+      if (dto?.courseCategory && knownSub) {
+        const isTargetLab = String(dto.courseCategory).toUpperCase() === 'LAB';
+        const rawType = String(knownSub.type || '').toLowerCase();
+        const rawName = String(knownSub.name || '').toLowerCase();
+        const rawCode = String(knownSub.code || '').toLowerCase();
+        const isSubLab =
+          ['lab', 'laboratory', 'practical', 'p'].includes(rawType) ||
+          rawType.includes('lab') ||
+          rawType.includes('practical') ||
+          rawName.includes('lab') ||
+          rawName.includes('practical') ||
+          rawName.includes('workshop') ||
+          rawName.includes('seminar') ||
+          rawName.includes('project') ||
+          rawName.includes('viva') ||
+          rawCode.endsWith('l') ||
+          rawCode.endsWith('p');
+        if (isSubLab !== isTargetLab) {
+          errors.push({
+            row: lineNum,
+            message: `Subject ${code} is a ${isSubLab ? 'Lab' : 'Theory'} subject and cannot be uploaded under ${isTargetLab ? 'Labs & Practical' : 'Theory Subjects'}.`,
+          });
+          return;
+        }
+      }
 
       const normRow = {
         category: cat,

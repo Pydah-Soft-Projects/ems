@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   /* Canvas / surfaces — navy / green / light palette */
   --background: #f1f5f9;

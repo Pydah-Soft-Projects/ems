@@ -221,10 +221,10 @@ export function FileUploadZone({
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900">
             Import Document (.xlsx, .xls, .csv, .pdf)
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500">
             Upload Excel sheet or PDF containing student marks and roll numbers.
           </p>
         </div>
@@ -233,7 +233,7 @@ export function FileUploadZone({
           <button
             type="button"
             onClick={() => downloadSampleTemplate('CSV')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 rounded-lg hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors shadow-xs"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -244,9 +244,9 @@ export function FileUploadZone({
           <button
             type="button"
             onClick={() => downloadSampleTemplate('PDF')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors shadow-xs"
           >
-            <svg className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
             Sample PDF Template
@@ -261,8 +261,8 @@ export function FileUploadZone({
           onDrop={handleDrop}
           className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
             isDragging
-              ? 'border-sky-500 bg-sky-50/50 dark:bg-sky-950/30'
-              : 'border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:border-slate-400 dark:hover:border-slate-700'
+              ? 'border-sky-500 bg-sky-50/70'
+              : 'border-slate-300 bg-slate-50/60 hover:border-slate-400 hover:bg-slate-50'
           }`}
         >
           <input
@@ -273,18 +273,18 @@ export function FileUploadZone({
           />
 
           <div className="flex flex-col items-center justify-center gap-2">
-            <div className="w-12 h-12 rounded-full bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
             </div>
 
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <p className="text-sm font-semibold text-slate-900">
                 Drag & Drop your marks file here, or{' '}
-                <span className="text-sky-600 dark:text-sky-400 underline">browse</span>
+                <span className="text-sky-600 underline">browse</span>
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Supports Excel (.xlsx, .xls, .csv) and PDF (.pdf) documents up to 10MB
               </p>
             </div>
@@ -300,13 +300,13 @@ export function FileUploadZone({
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold text-xs uppercase">
+            <div className="w-10 h-10 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center font-bold text-xs uppercase">
               {selectedFile.name.split('.').pop()}
             </div>
             <div>
-              <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <h4 className="text-sm font-semibold text-slate-900">
                 {selectedFile.name}
               </h4>
               <p className="text-xs text-slate-500">
@@ -317,7 +317,7 @@ export function FileUploadZone({
 
           <div className="flex items-center gap-2">
             {isLoading && (
-              <div className="flex items-center gap-2 text-xs font-medium text-sky-600 dark:text-sky-400">
+              <div className="flex items-center gap-2 text-xs font-medium text-sky-600">
                 <svg className="animate-spin h-4 w-4 text-sky-600" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -330,7 +330,7 @@ export function FileUploadZone({
               type="button"
               onClick={onClearFile}
               disabled={isLoading}
-              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition-colors"
               title="Remove file"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

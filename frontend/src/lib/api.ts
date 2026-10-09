@@ -1607,7 +1607,7 @@ export const api = {
   uploadMarks(
     category: 'INTERNAL' | 'EXTERNAL' | 'RESULT' | 'REVALUATION',
     notificationId: number,
-    payload: { rows: ParsedMarkRow[]; subjectCode?: string; fileName?: string },
+    payload: { rows: ParsedMarkRow[]; subjectCode?: string; fileName?: string; courseCategory?: string },
   ) {
     return request<UploadMarksResult>(`/marks/upload/${category}/${notificationId}`, {
       method: 'POST',

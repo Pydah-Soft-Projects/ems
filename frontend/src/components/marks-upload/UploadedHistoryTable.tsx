@@ -33,9 +33,9 @@ export function UploadedHistoryTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900">
             Imported Records Database
           </h3>
           <p className="text-xs text-slate-500">
@@ -49,24 +49,24 @@ export function UploadedHistoryTable({
             placeholder="Filter roll number, paper..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 w-48"
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 w-48"
           />
 
           <button
             type="button"
             onClick={onRefresh}
             disabled={isLoading}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Refresh
           </button>
         </div>
       </div>
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
         <div className="max-h-80 overflow-y-auto">
           <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+            <thead className="sticky top-0 bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2.5 px-3">#</th>
                 <th className="py-2.5 px-3">Roll Number / PIN</th>
@@ -104,7 +104,7 @@ export function UploadedHistoryTable({
                 <th className="py-2.5 px-3">Uploaded At</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
                   <td colSpan={10} className="py-8 text-center text-slate-500">
@@ -119,27 +119,27 @@ export function UploadedHistoryTable({
                 </tr>
               ) : (
                 filtered.map((r, idx) => (
-                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <tr key={r.id} className="hover:bg-slate-50/70">
                     <td className="py-2 px-3 text-slate-400 font-mono">{idx + 1}</td>
-                    <td className="py-2 px-3 font-mono font-medium text-slate-900 dark:text-slate-100">
+                    <td className="py-2 px-3 font-mono font-medium text-slate-900">
                       {r.studentRollNumber}
                     </td>
-                    <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                    <td className="py-2 px-3 text-slate-700">
                       {r.studentName || '-'}
                     </td>
-                    <td className="py-2 px-3 font-mono text-slate-700 dark:text-slate-300">
+                    <td className="py-2 px-3 font-mono text-slate-700">
                       {r.subjectCode}
                     </td>
 
                     {activeTab === 'INTERNAL' && (
-                      <td className="py-2 px-3 font-semibold text-slate-900 dark:text-slate-100">
+                      <td className="py-2 px-3 font-semibold text-slate-900">
                         {r.internalMarks} / {r.maxInternalMarks || 30}
                       </td>
                     )}
 
                     {activeTab === 'EXTERNAL' && (
                       <>
-                        <td className="py-2 px-3 font-semibold text-slate-900 dark:text-slate-100">
+                        <td className="py-2 px-3 font-semibold text-slate-900">
                           {r.isAbsent ? '0' : r.externalMarks} / {r.maxExternalMarks || 70}
                         </td>
                         <td className="py-2 px-3">
@@ -158,10 +158,10 @@ export function UploadedHistoryTable({
 
                     {activeTab === 'RESULT' && (
                       <>
-                        <td className="py-2 px-3 font-bold text-slate-900 dark:text-slate-100">
+                        <td className="py-2 px-3 font-bold text-slate-900">
                           {r.grade || '-'}
                         </td>
-                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                        <td className="py-2 px-3 text-slate-700">
                           {r.gradePoints ?? '-'}
                         </td>
                         <td className="py-2 px-3">

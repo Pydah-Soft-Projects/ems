@@ -251,7 +251,7 @@ export function StudentIndividualEntryGrid({
   return (
     <div className="space-y-4">
       {/* Search & Actions Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200">
         <div className="w-full sm:w-72">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -264,7 +264,7 @@ export function StudentIndividualEntryGrid({
               placeholder="Search PIN / Name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
           </div>
         </div>
@@ -273,14 +273,14 @@ export function StudentIndividualEntryGrid({
           <button
             type="button"
             onClick={handlePreFillMaxMarks}
-            className="px-3.5 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 rounded-lg hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors shadow-xs"
+            className="px-3.5 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg hover:bg-sky-100 transition-colors shadow-xs"
           >
             Fill Max Marks
           </button>
           <button
             type="button"
             onClick={handleClearInputs}
-            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shadow-xs"
+            className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors shadow-xs"
           >
             Clear Inputs
           </button>
@@ -288,11 +288,11 @@ export function StudentIndividualEntryGrid({
       </div>
 
       {/* Grid Information Banner */}
-      <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60">
-        <div className="text-xs text-slate-700 dark:text-slate-300">
-          Branch: <span className="font-bold text-sky-700 dark:text-sky-300">{!selectedBranch || selectedBranch === 'ALL' ? 'ALL BRANCHES' : selectedBranch}</span>
+      <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-sky-50/70 border border-sky-200">
+        <div className="text-xs text-slate-700">
+          Branch: <span className="font-bold text-sky-700">{!selectedBranch || selectedBranch === 'ALL' ? 'ALL BRANCHES' : selectedBranch}</span>
           {activeTab !== 'RESULT' && (
-            <> • Paper: <span className="font-bold text-sky-700 dark:text-sky-300">
+            <> • Paper: <span className="font-bold text-sky-700">
               {isAllSubjects || !selectedSubject
                 ? 'ALL SUBJECTS (Multi-subject)'
                 : `${selectedSubject.code} - ${selectedSubject.name}`}
@@ -300,16 +300,16 @@ export function StudentIndividualEntryGrid({
           )}
           {' '}• Students Count: <span className="font-bold">{filteredStudents.length}</span>
         </div>
-        <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+        <div className="text-xs font-semibold text-emerald-600">
           Entered: {enteredCount} / {filteredStudents.length}
         </div>
       </div>
 
       {/* Student Entry Table with Fee Status Column */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
         <div className="max-h-96 overflow-y-auto overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+            <thead className="sticky top-0 bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2.5 px-3">#</th>
                 <th className="py-2.5 px-3">Student PIN / Roll</th>
@@ -352,7 +352,7 @@ export function StudentIndividualEntryGrid({
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100">
               {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-slate-500">
@@ -365,25 +365,25 @@ export function StudentIndividualEntryGrid({
                   const feeStat = (s.feeStatus || 'paid').toLowerCase();
 
                   return (
-                    <tr key={s.rollNumber} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <tr key={s.rollNumber} className="hover:bg-slate-50/70">
                       <td className="py-2 px-3 text-slate-400 font-mono">{idx + 1}</td>
-                      <td className="py-2 px-3 font-mono font-semibold text-slate-900 dark:text-slate-100">
+                      <td className="py-2 px-3 font-mono font-semibold text-slate-900">
                         {s.rollNumber}
                       </td>
-                      <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                      <td className="py-2 px-3 text-slate-700">
                         {s.name || '-'}
                       </td>
-                      <td className="py-2 px-3 font-medium text-slate-600 dark:text-slate-400 uppercase">
+                      <td className="py-2 px-3 font-medium text-slate-600 uppercase">
                         {s.branch || 'GEN'}
                       </td>
                       <td className="py-2 px-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                             feeStat === 'paid' || feeStat === 'completed'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                              ? 'bg-emerald-100 text-emerald-800'
                               : feeStat === 'pending' || feeStat === 'unpaid'
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                              : 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-sky-100 text-sky-800'
                           }`}
                         >
                           {feeStat}
@@ -400,7 +400,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="Marks"
                               value={m.internalMarks ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'internalMarks', e.target.value)}
-                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500"
+                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 bg-white font-semibold text-slate-900 focus:ring-2 focus:ring-sky-500"
                             />
                           </td>
                           <td className="py-2 px-3 text-slate-500">{m.maxInternalMarks || defaultMaxInt}</td>
@@ -410,7 +410,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="Optional note"
                               value={m.remarks ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'remarks', e.target.value)}
-                              className="w-32 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                              className="w-32 px-2 py-1 text-xs rounded border border-slate-300 bg-white text-slate-900"
                             />
                           </td>
                         </>
@@ -427,7 +427,7 @@ export function StudentIndividualEntryGrid({
                               placeholder={m.isAbsent ? 'AB' : 'Marks'}
                               value={m.isAbsent ? '' : (m.externalMarks ?? '')}
                               onChange={(e) => handleCellChange(s.rollNumber, 'externalMarks', e.target.value)}
-                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 disabled:bg-slate-100"
+                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 bg-white font-semibold text-slate-900 focus:ring-2 focus:ring-sky-500 disabled:bg-slate-100"
                             />
                           </td>
                           <td className="py-2 px-3 text-slate-500">{m.maxExternalMarks || defaultMaxExt}</td>
@@ -448,7 +448,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="Optional note"
                               value={m.remarks ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'remarks', e.target.value)}
-                              className="w-32 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                              className="w-32 px-2 py-1 text-xs rounded border border-slate-300 bg-white text-slate-900"
                             />
                           </td>
                         </>
@@ -462,7 +462,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="Grade (e.g. A+)"
                               value={m.grade ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'grade', e.target.value)}
-                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold uppercase text-slate-900 dark:text-slate-100"
+                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 bg-white font-bold uppercase text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -472,7 +472,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="GP"
                               value={m.gradePoints ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'gradePoints', e.target.value)}
-                              className="w-16 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                              className="w-16 px-2 py-1 text-xs rounded border border-slate-300 bg-white text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -482,7 +482,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="Credits"
                               value={m.credits ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'credits', e.target.value)}
-                              className="w-16 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                              className="w-16 px-2 py-1 text-xs rounded border border-slate-300 bg-white text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -507,7 +507,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="Orig Grade"
                               value={m.originalGrade ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'originalGrade', e.target.value)}
-                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 uppercase"
+                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 bg-white uppercase text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -516,7 +516,7 @@ export function StudentIndividualEntryGrid({
                               placeholder="New Grade"
                               value={m.updatedGrade ?? ''}
                               onChange={(e) => handleCellChange(s.rollNumber, 'updatedGrade', e.target.value)}
-                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-sky-600 uppercase"
+                              className="w-20 px-2 py-1 text-xs rounded border border-slate-300 bg-white font-bold text-sky-600 uppercase"
                             />
                           </td>
                           <td className="py-2 px-3">

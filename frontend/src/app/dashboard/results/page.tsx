@@ -263,14 +263,14 @@ export default function StudentResultsPage() {
 
       {/* Summary Statistics Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Students</span>
-          <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">{stats.total}</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{stats.total}</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
-          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">All Clear (Passed)</span>
-          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+        <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-xs">
+          <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">All Clear (Passed)</span>
+          <p className="text-2xl font-bold text-emerald-700 mt-1">
             {stats.passed}{' '}
             <span className="text-xs font-normal text-slate-500">
               ({stats.total > 0 ? ((stats.passed / stats.total) * 100).toFixed(1) : 0}%)
@@ -278,9 +278,9 @@ export default function StudentResultsPage() {
           </p>
         </div>
 
-        <div className="p-4 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 shadow-xs">
-          <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">With Backlogs</span>
-          <p className="text-2xl font-bold text-rose-700 dark:text-rose-300 mt-1">
+        <div className="p-4 rounded-xl bg-rose-50/70 border border-rose-200 shadow-xs">
+          <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider">With Backlogs</span>
+          <p className="text-2xl font-bold text-rose-700 mt-1">
             {stats.backlogs}{' '}
             <span className="text-xs font-normal text-slate-500">
               ({stats.total > 0 ? ((stats.backlogs / stats.total) * 100).toFixed(1) : 0}%)
@@ -288,9 +288,9 @@ export default function StudentResultsPage() {
           </p>
         </div>
 
-        <div className="p-4 rounded-xl bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60 shadow-xs">
-          <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wider">Average SGPA</span>
-          <p className="text-2xl font-bold text-sky-700 dark:text-sky-300 mt-1">{stats.avgSgpa}</p>
+        <div className="p-4 rounded-xl bg-sky-50/70 border border-sky-200 shadow-xs">
+          <span className="text-xs font-semibold text-sky-600 uppercase tracking-wider">Average SGPA</span>
+          <p className="text-2xl font-bold text-sky-700 mt-1">{stats.avgSgpa}</p>
         </div>
       </div>
 
@@ -305,7 +305,7 @@ export default function StudentResultsPage() {
                 type="button"
                 onClick={handleExportCSV}
                 disabled={filteredStudents.length === 0}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-xs disabled:opacity-50"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all shadow-xs disabled:opacity-50"
               >
                 📥 Export CSV
               </button>
@@ -315,7 +315,7 @@ export default function StudentResultsPage() {
 
         <CardBody className="space-y-6">
           {/* Filters Bar */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
               {/* Exam Notification Filter */}
               <div className="w-full sm:w-72">
@@ -325,7 +325,7 @@ export default function StudentResultsPage() {
                 <select
                   value={selectedExamId}
                   onChange={(e) => setSelectedExamId(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-[var(--primary)]"
+                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[var(--primary)]"
                 >
                   <option value="">All Examinations</option>
                   {notifications.exams.map((exam) => (
@@ -344,7 +344,7 @@ export default function StudentResultsPage() {
                 <select
                   value={selectedRegulation}
                   onChange={(e) => setSelectedRegulation(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-[var(--primary)]"
+                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[var(--primary)]"
                 >
                   <option value="ALL">All Regulations</option>
                   {availableRegulations.map((reg) => (
@@ -365,21 +365,21 @@ export default function StudentResultsPage() {
                   placeholder="Search PIN, Student Name, Code..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-[var(--primary)]"
+                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[var(--primary)]"
                 />
               </div>
             </div>
 
             <div className="flex items-center gap-2 w-full md:w-auto justify-end">
               {/* Status Filter Toggle */}
-              <div className="flex rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-800">
+              <div className="flex rounded-lg border border-slate-300 p-0.5 bg-white">
                 <button
                   type="button"
                   onClick={() => setStatusFilter('ALL')}
                   className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                     statusFilter === 'ALL'
                       ? 'bg-[var(--primary)] text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   All ({students.length})
@@ -390,7 +390,7 @@ export default function StudentResultsPage() {
                   className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                     statusFilter === 'PASSED'
                       ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Passed ({stats.passed})
@@ -401,7 +401,7 @@ export default function StudentResultsPage() {
                   className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                     statusFilter === 'BACKLOGS'
                       ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Backlogs ({stats.backlogs})
@@ -409,14 +409,14 @@ export default function StudentResultsPage() {
               </div>
 
               {/* View Mode Toggle */}
-              <div className="flex rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-800">
+              <div className="flex rounded-lg border border-slate-300 p-0.5 bg-white">
                 <button
                   type="button"
                   onClick={() => setViewMode('STUDENT_WISE')}
                   className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                     viewMode === 'STUDENT_WISE'
                       ? 'bg-[var(--primary)] text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Student Cards
@@ -427,7 +427,7 @@ export default function StudentResultsPage() {
                   className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                     viewMode === 'MASTER_GRID'
                       ? 'bg-[var(--primary)] text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   Master Table
@@ -438,7 +438,7 @@ export default function StudentResultsPage() {
 
           {/* Error Message Alert */}
           {errorMsg && (
-            <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-xs">
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
               {errorMsg}
             </div>
           )}
@@ -449,8 +449,8 @@ export default function StudentResultsPage() {
               Loading student results ledger...
             </div>
           ) : filteredStudents.length === 0 ? (
-            <div className="py-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-400">No student results found</p>
+            <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-xl">
+              <p className="text-sm font-medium text-slate-600">No student results found</p>
               <p className="text-xs text-slate-400 mt-1">Upload marks or select a different notification/regulation filter.</p>
             </div>
           ) : viewMode === 'STUDENT_WISE' ? (
@@ -490,37 +490,37 @@ export default function StudentResultsPage() {
                 return (
                   <div
                     key={student.rollNumber}
-                    className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 transition-all hover:border-slate-300"
+                    className="border border-slate-200 rounded-xl overflow-hidden bg-white transition-all hover:border-slate-300"
                   >
                     {/* Student Card Summary Header */}
                     <div
                       onClick={() => toggleStudent(student.rollNumber)}
-                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100/60 dark:hover:bg-slate-800/50 transition-colors"
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer bg-slate-50/50 hover:bg-slate-100/60 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center font-mono shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center font-mono shrink-0">
                           {student.rollNumber.slice(-4)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            <h4 className="text-sm font-bold text-slate-900">
                               {student.rollNumber}
                             </h4>
                             {student.studentName && (
-                              <span className="text-xs text-slate-600 dark:text-slate-400">
+                              <span className="text-xs text-slate-600">
                                 ({student.studentName})
                               </span>
                             )}
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                 student.status === 'PASSED'
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
                               }`}
                             >
                               {student.status}
                             </span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-800">
                               {groups.length} Exam Notification(s)
                             </span>
                           </div>
@@ -533,7 +533,7 @@ export default function StudentResultsPage() {
                       <div className="flex items-center gap-4 text-xs font-semibold">
                         <div>
                           <span className="text-slate-400 block text-[10px] uppercase font-normal">Total Credits</span>
-                          <span className="text-slate-900 dark:text-slate-100">{student.totalCredits}</span>
+                          <span className="text-slate-900">{student.totalCredits}</span>
                         </div>
                         <div>
                           <span className="text-slate-400 block text-[10px] uppercase font-normal">Overall SGPA</span>
@@ -547,31 +547,31 @@ export default function StudentResultsPage() {
 
                     {/* Expandable Grouped Exam Notification Results */}
                     {isExpanded && (
-                      <div className="border-t border-slate-200 dark:border-slate-800 p-4 space-y-6 bg-slate-50/30 dark:bg-slate-900/40">
+                      <div className="border-t border-slate-200 p-4 space-y-6 bg-slate-50/30">
                         {groups.map((group, gIdx) => (
                           <div
                             key={gIdx}
-                            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden shadow-2xs"
+                            className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-2xs"
                           >
                             {/* Exam Notification & Regulation Group Header */}
-                            <div className="px-4 py-2.5 bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div className="px-4 py-2.5 bg-slate-100/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                                <span className="font-bold text-slate-900 text-xs">
                                   {group.notificationTitle}
                                 </span>
                                 <span
                                   className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                     group.examType === 'SUPPLEMENTARY'
-                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                      ? 'bg-amber-100 text-amber-800'
                                       : group.examType === 'REVALUATION'
-                                      ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
-                                      : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : 'bg-indigo-100 text-indigo-800'
                                   }`}
                                 >
                                   {group.examType}
                                 </span>
                                 {group.regulationCode && (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
                                     Reg: {group.regulationCode}
                                   </span>
                                 )}
@@ -589,8 +589,8 @@ export default function StudentResultsPage() {
                                 <span
                                   className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                     group.status === 'PASSED'
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-rose-100 text-rose-800'
                                   }`}
                                 >
                                   {group.status}
@@ -601,7 +601,7 @@ export default function StudentResultsPage() {
                             {/* Group Subject Marks Table */}
                             <div className="overflow-x-auto">
                               <table className="w-full text-left text-xs">
-                                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                                   <tr>
                                     <th className="py-2 px-3">Subject Code & Name</th>
                                     <th className="py-2 px-3">Internal</th>
@@ -614,7 +614,7 @@ export default function StudentResultsPage() {
                                     <th className="py-2 px-3">Revaluation</th>
                                   </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tbody className="divide-y divide-slate-100">
                                   {group.subjects.map((sub) => {
                                     const isPass =
                                       sub.passed !== false && sub.grade !== 'F' && sub.grade !== 'AB';
@@ -622,20 +622,20 @@ export default function StudentResultsPage() {
                                     return (
                                       <tr
                                         key={sub.subjectCode}
-                                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                                        className="hover:bg-slate-50/80"
                                       >
-                                        <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">
+                                        <td className="py-2 px-3 font-medium text-slate-900">
                                           <span className="font-mono font-bold text-sky-600 mr-2">
                                             {sub.subjectCode}
                                           </span>
                                           {sub.subjectName}
                                         </td>
-                                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                        <td className="py-2 px-3 text-slate-700">
                                           {sub.internalMarks !== null && sub.internalMarks !== undefined
                                             ? `${sub.internalMarks} / ${sub.maxInternalMarks || 30}`
                                             : '-'}
                                         </td>
-                                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                        <td className="py-2 px-3 text-slate-700">
                                           {sub.isAbsent ? (
                                             <span className="text-rose-600 font-bold">AB</span>
                                           ) : sub.externalMarks !== null && sub.externalMarks !== undefined ? (
@@ -644,18 +644,18 @@ export default function StudentResultsPage() {
                                             '-'
                                           )}
                                         </td>
-                                        <td className="py-2 px-3 font-semibold text-slate-900 dark:text-slate-100">
+                                        <td className="py-2 px-3 font-semibold text-slate-900">
                                           {sub.totalMarks !== null && sub.totalMarks !== undefined
                                             ? sub.totalMarks
                                             : '-'}
                                         </td>
                                         <td className="py-2 px-3 font-bold">{sub.grade || '-'}</td>
-                                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                        <td className="py-2 px-3 text-slate-700">
                                           {sub.gradePoints !== null && sub.gradePoints !== undefined
                                             ? sub.gradePoints
                                             : '-'}
                                         </td>
-                                        <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                        <td className="py-2 px-3 text-slate-700">
                                           {sub.credits}
                                         </td>
                                         <td className="py-2 px-3">
@@ -695,10 +695,10 @@ export default function StudentResultsPage() {
             </div>
           ) : (
             /* Mode 2: Master Tabular Grid of All Rows */
-            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
               <div className="max-h-[550px] overflow-y-auto overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                  <thead className="sticky top-0 bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Student PIN</th>
                       <th className="py-2.5 px-3">Student Name</th>
@@ -716,7 +716,7 @@ export default function StudentResultsPage() {
                       <th className="py-2.5 px-3">Revaluation</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                  <tbody className="divide-y divide-slate-200">
                     {filteredStudents.flatMap((s) => {
                       const groups = s.examGroups && s.examGroups.length > 0 ? s.examGroups : null;
 
@@ -729,15 +729,15 @@ export default function StudentResultsPage() {
                             return (
                               <tr
                                 key={`${s.rollNumber}-${g.examId || g.revaluationId}-${sub.subjectCode}`}
-                                className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                                className="hover:bg-slate-50"
                               >
-                                <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">
+                                <td className="py-2 px-3 font-mono font-bold text-slate-900">
                                   {s.rollNumber}
                                 </td>
-                                <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                <td className="py-2 px-3 text-slate-700">
                                   {s.studentName || '-'}
                                 </td>
-                                <td className="py-2 px-3 text-slate-800 dark:text-slate-200 font-medium">
+                                <td className="py-2 px-3 text-slate-800 font-medium">
                                   {g.notificationTitle}
                                 </td>
                                 <td className="py-2 px-3">
@@ -751,10 +751,10 @@ export default function StudentResultsPage() {
                                     {g.examType}
                                   </span>
                                 </td>
-                                <td className="py-2 px-3 font-semibold text-emerald-700 dark:text-emerald-400">
+                                <td className="py-2 px-3 font-semibold text-emerald-700">
                                   {g.regulationCode || 'N/A'}
                                 </td>
-                                <td className="py-2 px-3 text-slate-900 dark:text-slate-100">
+                                <td className="py-2 px-3 text-slate-900">
                                   <span className="font-mono font-bold text-sky-600 mr-1.5">
                                     {sub.subjectCode}
                                   </span>
@@ -774,18 +774,18 @@ export default function StudentResultsPage() {
                                     '-'
                                   )}
                                 </td>
-                                <td className="py-2 px-3 font-bold text-slate-900 dark:text-slate-100">
+                                <td className="py-2 px-3 font-bold text-slate-900">
                                   {sub.totalMarks !== null && sub.totalMarks !== undefined
                                     ? sub.totalMarks
                                     : '-'}
                                 </td>
                                 <td className="py-2 px-3 font-bold">{sub.grade || '-'}</td>
-                                <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                <td className="py-2 px-3 text-slate-700">
                                   {sub.gradePoints !== null && sub.gradePoints !== undefined
                                     ? sub.gradePoints
                                     : '-'}
                                 </td>
-                                <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                                <td className="py-2 px-3 text-slate-700">
                                   {sub.credits}
                                 </td>
                                 <td className="py-2 px-3">
@@ -820,15 +820,15 @@ export default function StudentResultsPage() {
                         return (
                           <tr
                             key={`${s.rollNumber}-${sub.subjectCode}`}
-                            className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                            className="hover:bg-slate-50"
                           >
-                            <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">
+                            <td className="py-2 px-3 font-mono font-bold text-slate-900">
                               {s.rollNumber}
                             </td>
-                            <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                            <td className="py-2 px-3 text-slate-700">
                               {s.studentName || '-'}
                             </td>
-                            <td className="py-2 px-3 text-slate-800 dark:text-slate-200 font-medium">
+                            <td className="py-2 px-3 text-slate-800 font-medium">
                               {sub.examTitle || 'General'}
                             </td>
                             <td className="py-2 px-3">
@@ -836,10 +836,10 @@ export default function StudentResultsPage() {
                                 {sub.examType || 'REGULAR'}
                               </span>
                             </td>
-                            <td className="py-2 px-3 font-semibold text-emerald-700 dark:text-emerald-400">
+                            <td className="py-2 px-3 font-semibold text-emerald-700">
                               {sub.regulationCode || 'N/A'}
                             </td>
-                            <td className="py-2 px-3 text-slate-900 dark:text-slate-100">
+                            <td className="py-2 px-3 text-slate-900">
                               <span className="font-mono font-bold text-sky-600 mr-1.5">
                                 {sub.subjectCode}
                               </span>
@@ -859,18 +859,18 @@ export default function StudentResultsPage() {
                                 '-'
                               )}
                             </td>
-                            <td className="py-2 px-3 font-bold text-slate-900 dark:text-slate-100">
+                            <td className="py-2 px-3 font-bold text-slate-900">
                               {sub.totalMarks !== null && sub.totalMarks !== undefined
                                 ? sub.totalMarks
                                 : '-'}
                             </td>
                             <td className="py-2 px-3 font-bold">{sub.grade || '-'}</td>
-                            <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                            <td className="py-2 px-3 text-slate-700">
                               {sub.gradePoints !== null && sub.gradePoints !== undefined
                                 ? sub.gradePoints
                                 : '-'}
                             </td>
-                            <td className="py-2 px-3 text-slate-700 dark:text-slate-300">
+                            <td className="py-2 px-3 text-slate-700">
                               {sub.credits}
                             </td>
                             <td className="py-2 px-3">

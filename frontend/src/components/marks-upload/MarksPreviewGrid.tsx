@@ -1,10 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { MarksTabType, ParsedMarkRow } from '@/types/marks-upload';
+import { CourseCategoryType, MarksTabType, NotificationSubjectItem, ParsedMarkRow } from '@/types/marks-upload';
+import { isLabSubject } from './NotificationDropdownSelector';
 
 interface MarksPreviewGridProps {
   activeTab: MarksTabType;
+  courseCategory?: CourseCategoryType;
+  subjects?: NotificationSubjectItem[];
   rows: ParsedMarkRow[];
   students?: Array<{ rollNumber: string; name: string }>;
   selectedBranch?: string;
@@ -18,6 +21,8 @@ interface MarksPreviewGridProps {
 
 export function MarksPreviewGrid({
   activeTab,
+  courseCategory = 'THEORY',
+  subjects = [],
   rows,
   students = [],
   selectedBranch = 'ALL',
@@ -58,6 +63,24 @@ export function MarksPreviewGrid({
         errs.push('Subject Code is mandatory when "All Subjects" is selected');
       }
 
+      // Validate subject against active courseCategory (Theory vs Lab)
+      if (code && subjects.length > 0 && courseCategory) {
+        const found = subjects.find(
+          (s) => s.code.trim().toUpperCase() === code.toUpperCase()
+        );
+        if (found) {
+          const isLab = isLabSubject(found);
+          const isTargetLab = courseCategory === 'LAB';
+          if (isLab !== isTargetLab) {
+            errs.push(
+              `Subject "${code}" is a ${isLab ? 'Lab' : 'Theory'} subject (current mode: ${
+                isTargetLab ? 'Labs & Practical' : 'Theory Subjects'
+              })`
+            );
+          }
+        }
+      }
+
       if (activeTab === 'INTERNAL') {
         const isAb = r.isAbsent || String(r.internalMarks ?? r.marks ?? '').toUpperCase() === 'AB';
         if (!isAb) {
@@ -83,7 +106,7 @@ export function MarksPreviewGrid({
         errors: errs,
       };
     });
-  }, [rows, activeTab]);
+  }, [rows, activeTab, courseCategory, subjects, selectedSubjectCode]);
 
   const stats = useMemo(() => {
     const total = validatedRows.length;
@@ -116,28 +139,28 @@ export function MarksPreviewGrid({
     <div className="space-y-4">
       {/* Stats Header Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200">
           <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Total Rows</p>
-          <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{stats.total}</p>
+          <p className="text-xl font-bold text-slate-900">{stats.total}</p>
         </div>
 
-        <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
-          <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Valid Rows</p>
-          <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">{stats.valid}</p>
+        <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200">
+          <p className="text-[11px] font-medium text-emerald-600 uppercase tracking-wider">Valid Rows</p>
+          <p className="text-xl font-bold text-emerald-700">{stats.valid}</p>
         </div>
 
-        <div className={`p-3 rounded-xl border ${stats.errors > 0 ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-          <p className={`text-[11px] font-medium uppercase tracking-wider ${stats.errors > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500'}`}>Rows with Errors</p>
-          <p className={`text-xl font-bold ${stats.errors > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-700 dark:text-slate-300'}`}>{stats.errors}</p>
+        <div className={`p-3 rounded-xl border ${stats.errors > 0 ? 'bg-rose-50/80 border-rose-200' : 'bg-slate-50/80 border-slate-200'}`}>
+          <p className={`text-[11px] font-medium uppercase tracking-wider ${stats.errors > 0 ? 'text-rose-600' : 'text-slate-500'}`}>Rows with Errors</p>
+          <p className={`text-xl font-bold ${stats.errors > 0 ? 'text-rose-700' : 'text-slate-700'}`}>{stats.errors}</p>
         </div>
 
-        <div className="p-3 rounded-xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/60">
-          <p className="text-[11px] font-medium text-sky-600 dark:text-sky-400 uppercase tracking-wider">Pass / Clear Preview</p>
-          <p className="text-xl font-bold text-sky-700 dark:text-sky-300">{stats.passes} <span className="text-xs font-normal text-slate-500">({stats.fails} Fail)</span></p>
+        <div className="p-3 rounded-xl bg-sky-50/80 border border-sky-200">
+          <p className="text-[11px] font-medium text-sky-600 uppercase tracking-wider">Pass / Clear Preview</p>
+          <p className="text-xl font-bold text-sky-700">{stats.passes} <span className="text-xs font-normal text-slate-500">({stats.fails} Fail)</span></p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
+      <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-xs text-slate-600">
         <div>
           Target Upload Branch: <span className="font-bold text-[var(--primary)]">{!selectedBranch || selectedBranch === 'ALL' ? 'ALL BRANCHES (All Data)' : `${selectedBranch} BRANCH`}</span>
         </div>
@@ -149,35 +172,35 @@ export function MarksPreviewGrid({
       </div>
 
       {/* Filter and Action Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <input
             type="text"
             placeholder="Search roll number, code..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 w-full sm:w-60"
+            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500 w-full sm:w-60"
           />
 
-          <div className="flex rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800 shrink-0">
+          <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-100 shrink-0">
             <button
               type="button"
               onClick={() => setFilter('ALL')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md ${filter === 'ALL' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs' : 'text-slate-500'}`}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md ${filter === 'ALL' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-500'}`}
             >
               All ({stats.total})
             </button>
             <button
               type="button"
               onClick={() => setFilter('VALID')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md ${filter === 'VALID' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-500'}`}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md ${filter === 'VALID' ? 'bg-emerald-600 text-white shadow-xs font-bold' : 'text-slate-500'}`}
             >
               Valid ({stats.valid})
             </button>
             <button
               type="button"
               onClick={() => setFilter('ERRORS')}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md ${filter === 'ERRORS' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-500'}`}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md ${filter === 'ERRORS' ? 'bg-rose-600 text-white shadow-xs font-bold' : 'text-slate-500'}`}
             >
               Errors ({stats.errors})
             </button>
@@ -188,7 +211,7 @@ export function MarksPreviewGrid({
           <button
             type="button"
             onClick={onClear}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-300 hover:bg-slate-100 transition-colors"
           >
             Clear Parsed Data
           </button>
@@ -220,10 +243,10 @@ export function MarksPreviewGrid({
       </div>
 
       {/* Parsed Data Preview Table */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
         <div className="max-h-96 overflow-y-auto overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+            <thead className="sticky top-0 bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
               <tr>
                 <th className="py-2.5 px-3">#</th>
                 <th className="py-2.5 px-3">Status</th>
@@ -267,7 +290,7 @@ export function MarksPreviewGrid({
                 <th className="py-2.5 px-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+            <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="py-8 text-center text-slate-500">
@@ -282,16 +305,16 @@ export function MarksPreviewGrid({
                   return (
                     <tr
                       key={origIdx}
-                      className={item.isValid ? 'hover:bg-slate-50 dark:hover:bg-slate-800/50' : 'bg-rose-50/40 dark:bg-rose-950/20 hover:bg-rose-50 dark:hover:bg-rose-950/40'}
+                      className={item.isValid ? 'hover:bg-slate-50/70' : 'bg-rose-50/40 hover:bg-rose-50/70'}
                     >
                       <td className="py-2 px-3 text-slate-400 font-mono">{displayIdx + 1}</td>
                       <td className="py-2 px-3">
                         {item.isValid ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-100 text-emerald-700">
                             Valid
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-rose-100 text-rose-700">
                             Error
                           </span>
                         )}
@@ -301,7 +324,7 @@ export function MarksPreviewGrid({
                           type="text"
                           value={r.rollNumber || r.roll || ''}
                           onChange={(e) => onUpdateRow(origIdx, { ...r, rollNumber: e.target.value })}
-                          className="w-28 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent font-mono font-medium text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800"
+                          className="w-28 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white font-mono font-medium text-slate-900 focus:ring-1 focus:ring-sky-500"
                         />
                       </td>
                       <td className="py-2 px-3">
@@ -310,7 +333,7 @@ export function MarksPreviewGrid({
                           placeholder="Student Name"
                           value={r.studentName || studentMap.get(String(r.rollNumber || r.roll || '').trim().toLowerCase()) || ''}
                           onChange={(e) => onUpdateRow(origIdx, { ...r, studentName: e.target.value })}
-                          className="w-32 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800"
+                          className="w-32 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-sky-500"
                         />
                       </td>
                       <td className="py-2 px-3">
@@ -318,7 +341,7 @@ export function MarksPreviewGrid({
                           type="text"
                           value={r.subjectCode || ''}
                           onChange={(e) => onUpdateRow(origIdx, { ...r, subjectCode: e.target.value })}
-                          className="w-24 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800"
+                          className="w-24 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white font-mono text-slate-900 focus:ring-1 focus:ring-sky-500"
                         />
                       </td>
 
@@ -330,7 +353,7 @@ export function MarksPreviewGrid({
                               placeholder="Marks or AB"
                               value={r.internalMarks ?? r.marks ?? ''}
                               onChange={(e) => onUpdateRow(origIdx, { ...r, internalMarks: e.target.value, marks: e.target.value })}
-                              className="w-20 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent font-semibold text-slate-900 dark:text-slate-100"
+                              className="w-20 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white font-semibold text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3 text-slate-500">{r.maxInternalMarks || 30}</td>
@@ -345,7 +368,7 @@ export function MarksPreviewGrid({
                               placeholder="Marks or AB"
                               value={r.externalMarks ?? r.marks ?? ''}
                               onChange={(e) => onUpdateRow(origIdx, { ...r, externalMarks: e.target.value, marks: e.target.value })}
-                              className="w-20 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent font-semibold text-slate-900 dark:text-slate-100"
+                              className="w-20 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white font-semibold text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3 text-slate-500">{r.maxExternalMarks || 70}</td>
@@ -367,7 +390,7 @@ export function MarksPreviewGrid({
                               type="text"
                               value={r.grade || ''}
                               onChange={(e) => onUpdateRow(origIdx, { ...r, grade: e.target.value })}
-                              className="w-12 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent font-bold uppercase"
+                              className="w-12 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white font-bold uppercase text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -376,7 +399,7 @@ export function MarksPreviewGrid({
                               step="0.1"
                               value={r.gradePoints ?? ''}
                               onChange={(e) => onUpdateRow(origIdx, { ...r, gradePoints: e.target.value })}
-                              className="w-14 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent"
+                              className="w-14 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -385,7 +408,7 @@ export function MarksPreviewGrid({
                               step="0.5"
                               value={r.credits ?? ''}
                               onChange={(e) => onUpdateRow(origIdx, { ...r, credits: e.target.value })}
-                              className="w-14 px-1.5 py-0.5 text-xs rounded border border-slate-300 dark:border-slate-700 bg-transparent"
+                              className="w-14 px-1.5 py-0.5 text-xs rounded border border-slate-300 bg-white text-slate-900"
                             />
                           </td>
                           <td className="py-2 px-3">
