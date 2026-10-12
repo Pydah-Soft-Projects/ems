@@ -21,7 +21,14 @@ function createMarksRoutes(services) {
   /** Get available exam and revaluation notifications for marks uploading */
   router.get(
     '/notifications',
-    requirePrivilege('exams:read', 'exams:results', 'revaluations:read'),
+    requirePrivilege(
+      'exams:read',
+      'exams:results',
+      'revaluations:read',
+      'marks:read',
+      'marks:upload',
+      'results:read',
+    ),
     asyncHandler(async (req, res) => {
       res.json(await services.marks.getNotifications());
     }),
@@ -30,7 +37,7 @@ function createMarksRoutes(services) {
   /** Get enrolled students and paper subjects for a selected notification */
   router.get(
     '/notification-details/:type/:id',
-    requirePrivilege('exams:read', 'exams:results'),
+    requirePrivilege('exams:read', 'exams:results', 'marks:read', 'marks:upload'),
     asyncHandler(async (req, res) => {
       const type = req.params.type;
       const id = parseId(req.params.id);
@@ -41,7 +48,7 @@ function createMarksRoutes(services) {
   /** Get consolidated student-wise results report */
   router.get(
     '/consolidated-results',
-    requirePrivilege('exams:read', 'exams:results'),
+    requirePrivilege('exams:results', 'results:read'),
     asyncHandler(async (req, res) => {
       const { examId, revaluationId, rollNumber, search } = req.query;
       res.json(
@@ -58,7 +65,7 @@ function createMarksRoutes(services) {
   /** Parse uploaded Excel or PDF file into structured JSON rows */
   router.post(
     '/parse',
-    requirePrivilege('exams:results', 'exams:write'),
+    requirePrivilege('exams:results', 'exams:write', 'marks:upload'),
     upload.single('file'),
     asyncHandler(async (req, res) => {
       let buffer = req.file?.buffer;
@@ -97,7 +104,7 @@ function createMarksRoutes(services) {
   /** Upload marks for a specific category and notification */
   router.post(
     '/upload/:category/:notificationId',
-    requirePrivilege('exams:results', 'exams:write'),
+    requirePrivilege('exams:results', 'exams:write', 'marks:upload'),
     asyncHandler(async (req, res) => {
       const category = req.params.category;
       const notificationId = parseId(req.params.notificationId);
@@ -118,7 +125,7 @@ function createMarksRoutes(services) {
   /** Get previously uploaded marks history */
   router.get(
     '/history/:category/:notificationId',
-    requirePrivilege('exams:read', 'exams:results'),
+    requirePrivilege('exams:read', 'exams:results', 'marks:read', 'marks:upload'),
     asyncHandler(async (req, res) => {
       const category = req.params.category;
       const notificationId = parseId(req.params.notificationId);

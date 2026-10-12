@@ -58,6 +58,21 @@ const PRIVILEGE_GROUPS = [
     ],
   },
   {
+    id: 'marks_upload',
+    label: 'Marks uploading',
+    privileges: [
+      { key: 'marks:read', label: 'View marks uploading & history' },
+      { key: 'marks:upload', label: 'Upload / import marks (Excel, PDF & manual entry)' },
+    ],
+  },
+  {
+    id: 'student_results',
+    label: 'Student results',
+    privileges: [
+      { key: 'results:read', label: 'View student results & statements' },
+    ],
+  },
+  {
     id: 'revaluations',
     label: 'Revaluations',
     privileges: [

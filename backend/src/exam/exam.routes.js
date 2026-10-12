@@ -149,7 +149,7 @@ function createExamRoutes(services) {
   );
   router.post(
     '/:id/results',
-    requirePrivilege('exams:results'),
+    requirePrivilege('exams:results', 'marks:upload'),
     asyncHandler(async (req, res) => {
       const uploadedBy =
         req.user?.fullName?.trim() || req.user?.username?.trim() || null;
@@ -163,7 +163,7 @@ function createExamRoutes(services) {
   );
   router.get(
     '/:id/results',
-    requirePrivilege('exams:results'),
+    requirePrivilege('exams:results', 'results:read'),
     asyncHandler(async (req, res) => {
       res.json(await services.results.getExamResults(parseId(req.params.id)));
     }),
@@ -176,7 +176,7 @@ function createResultsRoutes(services) {
   router.use(requireStaff);
   router.get(
     '/roll/:rollNumber',
-    requirePrivilege('exams:results'),
+    requirePrivilege('exams:results', 'results:read'),
     asyncHandler(async (req, res) => {
       res.json(
         await services.results.getStudentResultsByRoll(

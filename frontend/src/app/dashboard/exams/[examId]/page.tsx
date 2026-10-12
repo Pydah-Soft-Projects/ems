@@ -246,7 +246,7 @@ export default function ExamDetailPage() {
           },
         ]
       : []),
-    ...(can(staff, 'exams:results')
+    ...(can(staff, ['exams:results', 'results:read'])
       ? [
           {
             id: 'results' as const,
@@ -358,7 +358,7 @@ export default function ExamDetailPage() {
           {tabParam === 'hall-tickets' && can(staff, 'exams:hall_tickets') ? (
             <ExamHallTicketsTab exam={exam} />
           ) : null}
-          {tabParam === 'results' && can(staff, 'exams:results') ? (
+          {tabParam === 'results' && can(staff, ['exams:results', 'results:read']) ? (
             <ExamResultsPanel exam={exam} />
           ) : null}
       </div>

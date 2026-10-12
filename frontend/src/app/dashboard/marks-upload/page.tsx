@@ -22,9 +22,13 @@ import { MarksPreviewGrid } from '@/components/marks-upload/MarksPreviewGrid';
 import { StudentIndividualEntryGrid } from '@/components/marks-upload/StudentIndividualEntryGrid';
 import { UploadedHistoryTable } from '@/components/marks-upload/UploadedHistoryTable';
 import { useToast } from '@/components/ui/Toast';
+import { getStoredUser } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 
 export default function MarksUploadPage() {
   const toast = useToast();
+  const user = getStoredUser();
+  const canUpload = can(user, ['marks:upload', 'exams:results', 'exams:write']);
 
   const [courseCategory, setCourseCategory] = useState<CourseCategoryType>('THEORY');
   const [activeTab, setActiveTab] = useState<MarksTabType>('INTERNAL');
@@ -166,6 +170,10 @@ export default function MarksUploadPage() {
 
   // Parse uploaded file (Mode 1)
   const handleFileSelect = async (file: File) => {
+    if (!canUpload) {
+      toast.push('You do not have permission to upload marks files.', 'danger');
+      return;
+    }
     setSelectedFile(file);
     setIsParsing(true);
     setErrorMsg('');
@@ -216,6 +224,10 @@ export default function MarksUploadPage() {
 
   // Submit and upload to database (for both Mode 1 & Mode 2)
   const handleImportToDatabase = async (rowsToSave?: ParsedMarkRow[]) => {
+    if (!canUpload) {
+      toast.push('You do not have permission to import or save marks.', 'danger');
+      return;
+    }
     if (!selectedNotification) {
       toast.push('Please select an examination notification first.', 'danger');
       return;
@@ -427,34 +439,51 @@ export default function MarksUploadPage() {
           title={getHeaderTitle()}
           description="Select examination notification and choose upload or manual student entry mode."
           action={
-            <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-100">
-              <button
-                type="button"
-                onClick={() => setEntryMode('EXCEL')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  entryMode === 'EXCEL'
-                    ? 'bg-white text-[var(--primary)] shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-              Excel / PDF Import
-              </button>
-              <button
-                type="button"
-                onClick={() => setEntryMode('INDIVIDUAL')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                  entryMode === 'INDIVIDUAL'
-                    ? 'bg-white text-[var(--primary)] shadow-xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-               Individual Student Inputs
-              </button>
-            </div>
+            canUpload ? (
+              <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('EXCEL')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                    entryMode === 'EXCEL'
+                      ? 'bg-white text-[var(--primary)] shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                Excel / PDF Import
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('INDIVIDUAL')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                    entryMode === 'INDIVIDUAL'
+                      ? 'bg-white text-[var(--primary)] shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                 Individual Student Inputs
+                </button>
+              </div>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                View Only
+              </span>
+            )
           }
         />
 
         <CardBody className="space-y-6">
+          {!canUpload && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 flex items-center gap-2.5">
+              <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <span className="font-semibold">View-Only Mode:</span> You have permission to view examination notifications and uploaded marks history. The <strong>&quot;Upload / import marks&quot;</strong> privilege is required to upload files or submit marks.
+              </div>
+            </div>
+          )}
+
           {/* Single Row Filters Bar: Examination Notification + Target Branch + Subject Paper */}
           {loadingNotifications ? (
             <div className="py-6 text-center text-xs text-slate-500">
@@ -481,7 +510,7 @@ export default function MarksUploadPage() {
           )}
 
           {/* Mode 1: Excel / PDF Upload */}
-          {selectedNotification && entryMode === 'EXCEL' && (
+          {canUpload && selectedNotification && entryMode === 'EXCEL' && (
             <div className="space-y-6 border-t border-slate-200 pt-6">
               <FileUploadZone
                 activeTab={activeTab}
@@ -513,7 +542,7 @@ export default function MarksUploadPage() {
           )}
 
           {/* Mode 2: Individual Student-Wise Marks Manual Entry */}
-          {selectedNotification && entryMode === 'INDIVIDUAL' && (
+          {canUpload && selectedNotification && entryMode === 'INDIVIDUAL' && (
             <div className="space-y-6 border-t border-slate-200 pt-6">
               {loadingDetails ? (
                 <div className="py-8 text-center text-xs text-slate-500">
