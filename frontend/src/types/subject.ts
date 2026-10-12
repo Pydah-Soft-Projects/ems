@@ -158,7 +158,7 @@ export type UpdateSubjectMappingInput = Partial<SubjectMappingAssignment>;
 
 export interface SubjectMappingFilters {
   regulationId?: number;
-  course?: string;
+  course?: string | string[];
   branch?: string;
   batch?: string;
   yearOfStudy?: number;

@@ -133,7 +133,7 @@ class ExamService {
      * - entries without a branch are common papers and must be mapped for
      *   every branch in the exam scope.
      */
-    async validateExamSubjectsPerBranch(regulationId, course, branches, batch, yearOfStudy, semester, subjectFees) {
+    async validateExamSubjectsPerBranch(regulationId, course, branches, batch, yearOfStudy, semester, subjectFees, batches, yearOfStudies, semesters, courses) {
         const branchSet = new Set(branches.map((b) => b.trim().toLowerCase()));
         const common = [];
         const byBranch = new Map();
@@ -150,6 +150,19 @@ class ExamService {
             list.push(sf);
             byBranch.set(branch, list);
         }
+        const finalCourses = (Array.isArray(courses) && courses.length > 0)
+            ? courses
+            : (course ? String(course).split(',').map((c) => c.trim()).filter(Boolean) : []);
+        const finalBatches = (Array.isArray(batches) && batches.length > 0)
+            ? batches
+            : (batch ? String(batch).split(',').map((b) => b.trim()).filter(Boolean) : []);
+        const finalYears = (Array.isArray(yearOfStudies) && yearOfStudies.length > 0)
+            ? yearOfStudies.map(Number)
+            : (yearOfStudy != null ? [Number(yearOfStudy)] : []);
+        const finalSemesters = (Array.isArray(semesters) && semesters.length > 0)
+            ? semesters.map(Number)
+            : (semester != null ? [Number(semester)] : []);
+
         for (const branch of branches) {
             const own = byBranch.get(branch) ?? [];
             const toCheck = [...own, ...common];
@@ -158,11 +171,11 @@ class ExamService {
             }
             const entries = await this.subjectsService.getMappedSubjectEntriesForExam({
                 regulationId,
-                course,
+                course: finalCourses.length > 0 ? finalCourses : course,
                 branch,
-                batch,
-                yearOfStudy,
-                semester,
+                batch: finalBatches.length > 0 ? finalBatches : batch,
+                yearOfStudy: finalYears.length > 0 ? finalYears : yearOfStudy,
+                semester: finalSemesters.length > 0 ? finalSemesters : semester,
             });
             const allMappedIds = new Set(entries.map((e) => e.subjectId));
             const idsForSection = (section) => {
@@ -511,35 +524,61 @@ class ExamService {
     }
     expandScopeRows(dto, scopeInputs) {
         const rows = [];
+        const batches = Array.isArray(dto.batches) && dto.batches.length > 0
+            ? dto.batches
+            : (dto.batch ? String(dto.batch).split(',').map((b) => b.trim()).filter(Boolean) : []);
+        const yearOfStudies = Array.isArray(dto.yearOfStudies) && dto.yearOfStudies.length > 0
+            ? dto.yearOfStudies.map(Number)
+            : (dto.yearOfStudy != null ? [Number(dto.yearOfStudy)] : []);
+        const semesters = Array.isArray(dto.semesters) && dto.semesters.length > 0
+            ? dto.semesters.map(Number)
+            : (dto.semester != null ? [Number(dto.semester)] : []);
+
+        const finalBatches = batches.length > 0 ? batches : [dto.batch];
+        const finalYears = yearOfStudies.length > 0 ? yearOfStudies : [Number(dto.yearOfStudy)];
+        const finalSemesters = semesters.length > 0 ? semesters : [Number(dto.semester)];
+
         for (const s of scopeInputs) {
             const branch = s.branch.trim();
             const sections = (s.sections ?? [])
                 .map((x) => x.trim())
                 .filter(Boolean);
-            if (sections.length === 0) {
-                rows.push({
-                    college: dto.college,
-                    course: dto.course,
-                    branch,
-                    branchId: s.branchId ?? null,
-                    batch: dto.batch,
-                    yearOfStudy: dto.yearOfStudy,
-                    semester: dto.semester,
-                    section: null,
-                });
-            }
-            else {
-                for (const section of sections) {
-                    rows.push({
-                        college: dto.college,
-                        course: dto.course,
-                        branch,
-                        branchId: s.branchId ?? null,
-                        batch: dto.batch,
-                        yearOfStudy: dto.yearOfStudy,
-                        semester: dto.semester,
-                        section,
-                    });
+
+            const branchBatches = s.batch ? [s.batch] : (s.batches?.length ? s.batches : finalBatches);
+            const branchYears = s.yearOfStudy ? [Number(s.yearOfStudy)] : (s.yearOfStudies?.length ? s.yearOfStudies.map(Number) : finalYears);
+            const branchSemesters = s.semester ? [Number(s.semester)] : (s.semesters?.length ? s.semesters.map(Number) : finalSemesters);
+
+            const courseVal = (s.course ?? (Array.isArray(dto.courses) && dto.courses.length > 0 ? dto.courses.join(', ') : dto.course) ?? '').trim();
+
+            for (const b of branchBatches) {
+                for (const y of branchYears) {
+                    for (const sem of branchSemesters) {
+                        if (sections.length === 0) {
+                            rows.push({
+                                college: dto.college,
+                                course: courseVal,
+                                branch,
+                                branchId: s.branchId ?? null,
+                                batch: b,
+                                yearOfStudy: y,
+                                semester: sem,
+                                section: null,
+                            });
+                        } else {
+                            for (const section of sections) {
+                                rows.push({
+                                    college: dto.college,
+                                    course: courseVal,
+                                    branch,
+                                    branchId: s.branchId ?? null,
+                                    batch: b,
+                                    yearOfStudy: y,
+                                    semester: sem,
+                                    section,
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -563,7 +602,35 @@ class ExamService {
         const scopeInputs = this.resolveCreateScopes(dto);
         const scopeRows = this.expandScopeRows(dto, scopeInputs);
         const uniqueBranches = [...new Set(scopeRows.map((r) => r.branch))];
-        await this.validateExamSubjectsPerBranch(dto.regulationId, dto.course, uniqueBranches, dto.batch, dto.yearOfStudy, dto.semester, dto.subjects);
+        const uniqueCourses = Array.isArray(dto.courses) && dto.courses.length > 0
+            ? dto.courses
+            : (dto.course ? String(dto.course).split(',').map((c) => c.trim()).filter(Boolean) : []);
+        const courseSummary = uniqueCourses.length > 0
+            ? uniqueCourses.join(', ')
+            : (dto.course || '');
+        const uniqueBatches = Array.isArray(dto.batches) && dto.batches.length > 0
+            ? dto.batches
+            : (dto.batch ? String(dto.batch).split(',').map((b) => b.trim()).filter(Boolean) : []);
+        const uniqueYears = Array.isArray(dto.yearOfStudies) && dto.yearOfStudies.length > 0
+            ? dto.yearOfStudies.map(Number)
+            : (dto.yearOfStudy != null ? [Number(dto.yearOfStudy)] : []);
+        const uniqueSemesters = Array.isArray(dto.semesters) && dto.semesters.length > 0
+            ? dto.semesters.map(Number)
+            : (dto.semester != null ? [Number(dto.semester)] : []);
+
+        await this.validateExamSubjectsPerBranch(
+            dto.regulationId,
+            courseSummary || dto.course,
+            uniqueBranches,
+            dto.batch,
+            dto.yearOfStudy,
+            dto.semester,
+            dto.subjects,
+            uniqueBatches,
+            uniqueYears,
+            uniqueSemesters,
+            uniqueCourses,
+        );
         this.validateDates(dto);
         const subjectFees = this.normalizeSubjectFees(dto.subjects);
         this.assertSubjectDatesInWindow(subjectFees, dto.examinationStartDate, dto.examinationEndDate);
@@ -603,17 +670,20 @@ class ExamService {
         const branchSummary = uniqueBranches.length === 1
             ? uniqueBranches[0]
             : uniqueBranches.join(', ');
+        const batchSummary = uniqueBatches.length > 0
+            ? uniqueBatches.join(', ')
+            : dto.batch;
         const exam = this.examRepo.create({
             name: dto.name.trim(),
             type: allowedTypes[0],
             allowedTypes,
             regulationId: dto.regulationId,
             college: dto.college,
-            course: dto.course,
+            course: (courseSummary || dto.course || '').slice(0, 100),
             branch: branchSummary.slice(0, 100) || primaryBranch,
-            batch: dto.batch,
-            yearOfStudy: dto.yearOfStudy,
-            semester: dto.semester,
+            batch: (batchSummary || '').slice(0, 50),
+            yearOfStudy: uniqueYears[0] ?? dto.yearOfStudy ?? 1,
+            semester: uniqueSemesters[0] ?? dto.semester ?? 1,
             packageFee,
             duplicateHallTicketFee: duplicateHallTicketFeeRaw,
             packageFees,
@@ -668,7 +738,22 @@ class ExamService {
                 (exam.scopes?.length
                     ? [...new Set(exam.scopes.map((s) => s.branch))]
                     : [branch]);
-            await this.validateExamSubjectsPerBranch(dto.regulationId ?? exam.regulationId, dto.course ?? exam.course, branches, dto.batch ?? exam.batch, dto.yearOfStudy ?? exam.yearOfStudy, dto.semester ?? exam.semester, dto.subjects);
+            const uniqueCourses = Array.isArray(dto.courses) && dto.courses.length > 0
+                ? dto.courses
+                : (dto.course ? String(dto.course).split(',').map((c) => c.trim()).filter(Boolean) : (exam.course ? [exam.course] : []));
+            await this.validateExamSubjectsPerBranch(
+                dto.regulationId ?? exam.regulationId,
+                dto.course ?? exam.course,
+                branches,
+                dto.batch ?? exam.batch,
+                dto.yearOfStudy ?? exam.yearOfStudy,
+                dto.semester ?? exam.semester,
+                dto.subjects,
+                dto.batches,
+                dto.yearOfStudies,
+                dto.semesters,
+                uniqueCourses,
+            );
             await this.examSubjectRepo.delete({ examId: id });
             const subjectFees = this.normalizeSubjectFees(dto.subjects);
             this.assertSubjectDatesInWindow(subjectFees, dto.examinationStartDate ?? exam.examinationStartDate, dto.examinationEndDate ?? exam.examinationEndDate);
@@ -787,7 +872,7 @@ class ExamService {
             type: exam.type,
             regulationId: dto.regulationId ?? exam.regulationId,
             college: dto.college ?? exam.college,
-            course: dto.course ?? exam.course,
+            course: (Array.isArray(dto.courses) && dto.courses.length > 0 ? dto.courses.join(', ') : (dto.course ?? exam.course)).slice(0, 100),
             branch: dto.branch ?? exam.branch,
             batch: dto.batch ?? exam.batch,
             yearOfStudy: dto.yearOfStudy ?? exam.yearOfStudy,

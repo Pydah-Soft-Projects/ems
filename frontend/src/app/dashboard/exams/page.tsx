@@ -62,7 +62,7 @@ export default function ExamsPage() {
       );
       setExams(data);
     } catch {
-      setActionError('Failed to load examinations.');
+      setActionError('Failed to load external examinations.');
     } finally {
       setLoading(false);
     }
@@ -439,8 +439,8 @@ export default function ExamsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Examinations"
-        description="Create examinations from mapped subjects, submit for approval, and publish for student enrollment."
+        title="External Examinations"
+        description="Create external examinations from mapped subjects, submit for approval, and publish for student enrollment."
         action={
           <div className="flex flex-wrap items-center gap-2.5">
             {statusFilter === 'published' && canWrite ? (
@@ -480,7 +480,7 @@ export default function ExamsPage() {
                     d="M12 4.5v15m7.5-7.5h-15"
                   />
                 </svg>
-                New examination
+                New external examination
               </Button>
             ) : undefined}
           </div>

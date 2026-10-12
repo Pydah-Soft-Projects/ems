@@ -194,8 +194,7 @@ export function ExamForm({
   const [regulationId, setRegulationId] = useState('');
   const [collegeId, setCollegeId] = useState('');
   const [collegeName, setCollegeName] = useState('');
-  const [courseId, setCourseId] = useState('');
-  const [courseName, setCourseName] = useState('');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<number[]>([]);
   const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
   /** Selected section names per branch; empty array = all sections */
   const [branchSections, setBranchSections] = useState<Record<number, string[]>>(
@@ -204,9 +203,13 @@ export function ExamForm({
   const [sectionsByBranch, setSectionsByBranch] = useState<
     Record<number, SdmsSection[]>
   >({});
-  const [batch, setBatch] = useState('');
-  const [yearOfStudy, setYearOfStudy] = useState('');
-  const [semester, setSemester] = useState('');
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
+  const [selectedYears, setSelectedYears] = useState<number[]>([]);
+  const [selectedSemesters, setSelectedSemesters] = useState<number[]>([]);
+
+  const batch = selectedBatches.join(', ');
+  const yearOfStudy = selectedYears.length > 0 ? String(selectedYears[0]) : '';
+  const semester = selectedSemesters.length > 0 ? String(selectedSemesters[0]) : '';
 
   const [branches, setBranches] = useState<SdmsBranch[]>([]);
   const [yearSem, setYearSem] = useState<SdmsBranchYearSemesters | null>(null);
@@ -257,17 +260,23 @@ export function ExamForm({
       collegeId ? getScopedCourses(scopes, parseInt(collegeId, 10)) : [],
     [scopes, collegeId],
   );
-  const batches = useMemo(
-    () =>
-      collegeId && courseId
-        ? getScopedBatches(
-            scopes,
-            parseInt(collegeId, 10),
-            parseInt(courseId, 10),
-          )
-        : [],
-    [scopes, collegeId, courseId],
+  const selectedCourses = useMemo(
+    () => courses.filter((c) => selectedCourseIds.includes(c.id)),
+    [courses, selectedCourseIds],
   );
+  const courseId = selectedCourseIds.length > 0 ? String(selectedCourseIds[0]) : '';
+  const courseName = selectedCourses.map((c) => c.name).join(', ');
+
+  const batches = useMemo(() => {
+    if (!collegeId || selectedCourseIds.length === 0) return [];
+    const set = new Set<string>();
+    const cid = parseInt(collegeId, 10);
+    for (const cId of selectedCourseIds) {
+      const bList = getScopedBatches(scopes, cid, cId);
+      for (const b of bList) set.add(b);
+    }
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [scopes, collegeId, selectedCourseIds]);
 
   const selectedBranches = useMemo(
     () => branches.filter((b) => selectedBranchIds.includes(b.id)),
@@ -380,10 +389,18 @@ export function ExamForm({
       setTypes(nextTypes.length > 0 ? nextTypes : DEFAULT_CREATE_TYPES);
       setRegulationId(String(initial.regulationId));
       setCollegeName(initial.college ?? '');
-      setCourseName(initial.course);
-      setBatch(initial.batch);
-      setYearOfStudy(String(initial.yearOfStudy ?? ''));
-      setSemester(String(initial.semester));
+      const initialBatches = initial.scopes?.length
+        ? [...new Set(initial.scopes.map((s) => s.batch).filter(Boolean))]
+        : (initial.batch ? initial.batch.split(',').map((b) => b.trim()).filter(Boolean) : []);
+      setSelectedBatches(initialBatches.length > 0 ? initialBatches : (initial.batch ? [initial.batch] : []));
+      const initialYears = initial.scopes?.length
+        ? [...new Set(initial.scopes.map((s) => Number(s.yearOfStudy)).filter(Boolean))]
+        : (initial.yearOfStudy ? [Number(initial.yearOfStudy)] : []);
+      setSelectedYears(initialYears.length > 0 ? initialYears : (initial.yearOfStudy ? [Number(initial.yearOfStudy)] : []));
+      const initialSemesters = initial.scopes?.length
+        ? [...new Set(initial.scopes.map((s) => Number(s.semester)).filter(Boolean))]
+        : (initial.semester ? [Number(initial.semester)] : []);
+      setSelectedSemesters(initialSemesters.length > 0 ? initialSemesters : (initial.semester ? [Number(initial.semester)] : []));
       setPackageFee(
         initial.packageFee != null ? String(initial.packageFee) : '',
       );
@@ -457,15 +474,36 @@ export function ExamForm({
       setBranchSections({});
 
       const regulation = regulations.find((r) => r.id === initial.regulationId);
-      const scope = regulation?.scopes?.find(
+      const initialCourseNames = new Set<string>();
+      if (initial.scopes?.length) {
+        for (const s of initial.scopes) {
+          if (s.course) {
+            s.course.split(',').forEach((c) => initialCourseNames.add(c.trim()));
+          }
+        }
+      }
+      if (initial.course) {
+        initial.course.split(',').forEach((c) => initialCourseNames.add(c.trim()));
+      }
+
+      const matchingScopes = regulation?.scopes?.filter(
         (s) =>
-          s.courseName === initial.course &&
+          initialCourseNames.has(s.courseName) &&
           (!initial.college || s.collegeName === initial.college),
-      );
-      if (scope) {
-        setCollegeId(String(scope.collegeId));
-        setCollegeName(scope.collegeName);
-        setCourseId(String(scope.courseId));
+      ) ?? [];
+
+      if (matchingScopes.length > 0) {
+        setCollegeId(String(matchingScopes[0].collegeId));
+        setCollegeName(matchingScopes[0].collegeName);
+        setSelectedCourseIds([...new Set(matchingScopes.map((s) => s.courseId))]);
+      } else {
+        const fallbackScope = regulation?.scopes?.find(
+          (s) => (!initial.college || s.collegeName === initial.college),
+        );
+        if (fallbackScope) {
+          setCollegeId(String(fallbackScope.collegeId));
+          setCollegeName(fallbackScope.collegeName);
+        }
       }
     } else {
       setName('');
@@ -473,14 +511,13 @@ export function ExamForm({
       setRegulationId(defaultRegulationId ? String(defaultRegulationId) : '');
       setCollegeId('');
       setCollegeName('');
-      setCourseId('');
-      setCourseName('');
+      setSelectedCourseIds([]);
       setSelectedBranchIds([]);
       setBranchSections({});
       setSectionsByBranch({});
-      setBatch('');
-      setYearOfStudy('');
-      setSemester('');
+      setSelectedBatches([]);
+      setSelectedYears([]);
+      setSelectedSemesters([]);
       setYearSem(null);
       setSelectedFees({});
       setPackageFee('');
@@ -503,14 +540,29 @@ export function ExamForm({
   }, [initial, defaultRegulationId, regulations]);
 
   useEffect(() => {
-    if (!courseId) {
+    if (selectedCourseIds.length === 0) {
       setBranches([]);
       return;
     }
-    api
-      .getSdmsBranches(parseInt(courseId, 10))
-      .then((data) => {
+    let cancelled = false;
+    Promise.all(
+      selectedCourseIds.map((cId) =>
+        api.getSdmsBranches(cId).catch(() => [] as SdmsBranch[]),
+      ),
+    )
+      .then((lists) => {
+        if (cancelled) return;
+        const map = new Map<number, SdmsBranch>();
+        for (const list of lists) {
+          for (const b of list) {
+            if (!map.has(b.id)) map.set(b.id, b);
+          }
+        }
+        const data = Array.from(map.values()).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
         setBranches(data);
+
         if (!initial) return;
 
         if (initial.scopes?.length) {
@@ -538,8 +590,13 @@ export function ExamForm({
           if (match) setSelectedBranchIds([match.id]);
         }
       })
-      .catch(() => setBranches([]));
-  }, [courseId, initial]);
+      .catch(() => {
+        if (!cancelled) setBranches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCourseIds, initial]);
 
   useEffect(() => {
     if (!firstBranchId) {
@@ -555,7 +612,7 @@ export function ExamForm({
   }, [firstBranchId]);
 
   useEffect(() => {
-    if (!batch || selectedBranchIds.length === 0) {
+    if (selectedBatches.length === 0 || selectedBranchIds.length === 0) {
       setSectionsByBranch({});
       return;
     }
@@ -563,8 +620,18 @@ export function ExamForm({
     Promise.all(
       selectedBranchIds.map(async (id) => {
         try {
-          const sections = await api.getSdmsBranchSections(id, batch);
-          return [id, sections] as const;
+          const sectionLists = await Promise.all(
+            selectedBatches.map((b) =>
+              api.getSdmsBranchSections(id, b).catch(() => [] as SdmsSection[]),
+            ),
+          );
+          const map = new Map<string, SdmsSection>();
+          for (const list of sectionLists) {
+            for (const sec of list) {
+              if (!map.has(sec.name)) map.set(sec.name, sec);
+            }
+          }
+          return [id, Array.from(map.values())] as const;
         } catch {
           return [id, [] as SdmsSection[]] as const;
         }
@@ -580,16 +647,16 @@ export function ExamForm({
     return () => {
       cancelled = true;
     };
-  }, [selectedBranchIds, batch]);
+  }, [selectedBranchIds, selectedBatches]);
 
   useEffect(() => {
     if (
       !regulationId ||
       !courseName ||
       selectedBranches.length === 0 ||
-      !batch ||
-      !yearOfStudy ||
-      !semester
+      selectedBatches.length === 0 ||
+      selectedYears.length === 0 ||
+      selectedSemesters.length === 0
     ) {
       setMappedByBranch({});
       return;
@@ -599,14 +666,29 @@ export function ExamForm({
     Promise.all(
       selectedBranches.map(async (b) => {
         try {
-          const entries = await api.getSubjectMappings({
-            regulationId: parseInt(regulationId, 10),
-            course: courseName,
-            branch: b.name,
-            batch,
-            yearOfStudy: parseInt(yearOfStudy, 10),
-            semester: parseInt(semester, 10),
-          });
+          const branchCourse =
+            courses.find((c) => c.id === b.courseId)?.name || courseName;
+          const requests: Promise<any[]>[] = [];
+          for (const bch of selectedBatches) {
+            for (const yr of selectedYears) {
+              for (const sm of selectedSemesters) {
+                requests.push(
+                  api
+                    .getSubjectMappings({
+                      regulationId: parseInt(regulationId, 10),
+                      course: branchCourse,
+                      branch: b.name,
+                      batch: bch,
+                      yearOfStudy: yr,
+                      semester: sm,
+                    })
+                    .catch(() => []),
+                );
+              }
+            }
+          }
+          const results = await Promise.all(requests);
+          const entries = results.flat();
           // Sections chosen for this branch in step 1; empty = all sections.
           const scopeSections = branchSections[b.id] ?? [];
           const groups: Record<string, Map<number, Subject>> = {};
@@ -683,9 +765,9 @@ export function ExamForm({
     courseName,
     selectedBranches,
     branchSections,
-    batch,
-    yearOfStudy,
-    semester,
+    selectedBatches,
+    selectedYears,
+    selectedSemesters,
   ]);
 
   function toggleType(t: ExamType) {
@@ -704,8 +786,8 @@ export function ExamForm({
         });
         const next = prev.filter((id) => id !== branch.id);
         if (prev[0] === branch.id) {
-          setYearOfStudy('');
-          setSemester('');
+          setSelectedYears([]);
+          setSelectedSemesters([]);
         }
         return next;
       }
@@ -723,16 +805,61 @@ export function ExamForm({
     });
   }
 
+  function toggleCourse(course: { id: number; name: string }) {
+    setSelectedCourseIds((prev) => {
+      const isChecked = prev.includes(course.id);
+      const next = isChecked
+        ? prev.filter((id) => id !== course.id)
+        : [...prev, course.id];
+      if (isChecked) {
+        // Prune branches belonging to this unselected course
+        setSelectedBranchIds((prevBranches) => {
+          const removedBranchIds = new Set(
+            branches
+              .filter((b) => b.courseId === course.id)
+              .map((b) => b.id),
+          );
+          return prevBranches.filter((bId) => !removedBranchIds.has(bId));
+        });
+        setBranchSections((prevSecs) => {
+          const removedBranchIds = new Set(
+            branches
+              .filter((b) => b.courseId === course.id)
+              .map((b) => b.id),
+          );
+          const nextSecs = { ...prevSecs };
+          for (const id of removedBranchIds) {
+            delete nextSecs[id];
+          }
+          return nextSecs;
+        });
+      }
+      return next;
+    });
+  }
+
+  function toggleAllCourses() {
+    if (selectedCourseIds.length === courses.length) {
+      setSelectedCourseIds([]);
+      setSelectedBranchIds([]);
+      setBranchSections({});
+      setSelectedBatches([]);
+      setSelectedYears([]);
+      setSelectedSemesters([]);
+    } else {
+      setSelectedCourseIds(courses.map((c) => c.id));
+    }
+  }
+
   function resetDownstreamFromRegulation() {
     setCollegeId('');
     setCollegeName('');
-    setCourseId('');
-    setCourseName('');
+    setSelectedCourseIds([]);
     setSelectedBranchIds([]);
     setBranchSections({});
-    setBatch('');
-    setYearOfStudy('');
-    setSemester('');
+    setSelectedBatches([]);
+    setSelectedYears([]);
+    setSelectedSemesters([]);
   }
 
   function validateStep(current: Step): boolean {
@@ -745,21 +872,21 @@ export function ExamForm({
         !name.trim() ||
         !regulationId ||
         !collegeName ||
-        !courseName ||
+        selectedCourseIds.length === 0 ||
         selectedBranchIds.length === 0 ||
-        !batch
+        selectedBatches.length === 0
       ) {
         setError(
-          'Name, regulation, college, programme, at least one branch, and batch are required.',
+          'Name, regulation, college, at least one programme, at least one branch, and at least one batch are required.',
         );
         return false;
       }
-      const year = parseInt(yearOfStudy, 10);
-      const sem = parseInt(semester, 10);
-      if (isNaN(year) || year < 1 || isNaN(sem) || sem < 1) {
-        setError(
-          'Select program year and semester from the branch configuration.',
-        );
+      if (selectedYears.length === 0) {
+        setError('Select at least one program year.');
+        return false;
+      }
+      if (selectedSemesters.length === 0) {
+        setError('Select at least one semester.');
         return false;
       }
     }
@@ -1025,11 +1152,28 @@ export function ExamForm({
             }))
         : undefined;
 
-    const scopesPayload = selectedBranches.map((b) => ({
-      branch: b.name,
-      branchId: b.id,
-      sections: branchSections[b.id] ?? [],
-    }));
+    const batchSummary = selectedBatches.join(', ');
+    const primaryBatch = selectedBatches[0] ?? '';
+    const primaryYear = selectedYears[0] ?? 1;
+    const primarySemester = selectedSemesters[0] ?? 1;
+
+    const scopesPayload = selectedBranches.map((b) => {
+      const branchCourse = courses.find((c) => c.id === b.courseId);
+      return {
+        course: branchCourse?.name || courseName,
+        courseId: branchCourse?.id || (selectedCourseIds[0] ?? undefined),
+        courses: selectedCourses.map((c) => c.name),
+        branch: b.name,
+        branchId: b.id,
+        sections: branchSections[b.id] ?? [],
+        batches: selectedBatches,
+        batch: primaryBatch,
+        yearOfStudies: selectedYears,
+        yearOfStudy: primaryYear,
+        semesters: selectedSemesters,
+        semester: primarySemester,
+      };
+    });
     const primaryBranch =
       selectedBranches[0]?.name ?? initial?.branch ?? '';
 
@@ -1042,10 +1186,15 @@ export function ExamForm({
           regulationId: parseInt(regulationId, 10),
           college: collegeName,
           course: courseName,
+          courses: selectedCourses.map((c) => c.name),
+          courseIds: selectedCourseIds,
           branch: primaryBranch,
-          batch,
-          yearOfStudy: parseInt(yearOfStudy, 10),
-          semester: parseInt(semester, 10),
+          batch: batchSummary || primaryBatch,
+          batches: selectedBatches,
+          yearOfStudy: primaryYear,
+          yearOfStudies: selectedYears,
+          semester: primarySemester,
+          semesters: selectedSemesters,
           scopes: scopesPayload,
           subjects,
           packageFee: pkg,
@@ -1069,10 +1218,15 @@ export function ExamForm({
           regulationId: parseInt(regulationId, 10),
           college: collegeName,
           course: courseName,
+          courses: selectedCourses.map((c) => c.name),
+          courseIds: selectedCourseIds,
           branch: primaryBranch,
-          batch,
-          yearOfStudy: parseInt(yearOfStudy, 10),
-          semester: parseInt(semester, 10),
+          batch: batchSummary || primaryBatch,
+          batches: selectedBatches,
+          yearOfStudy: primaryYear,
+          yearOfStudies: selectedYears,
+          semester: primarySemester,
+          semesters: selectedSemesters,
           scopes: scopesPayload,
           subjects,
           packageFee: pkg,
@@ -1095,8 +1249,38 @@ export function ExamForm({
     }
   }
 
-  const selectedYear = yearSem?.years.find(
-    (y) => y.yearOfStudy === parseInt(yearOfStudy, 10),
+  const availableYears = useMemo(() => {
+    if (yearSem?.years?.length) {
+      return yearSem.years;
+    }
+    return [
+      { yearOfStudy: 1, label: 'I Year', semesters: [{ semesterNumber: 1, label: 'Semester 1' }, { semesterNumber: 2, label: 'Semester 2' }] },
+      { yearOfStudy: 2, label: 'II Year', semesters: [{ semesterNumber: 1, label: 'Semester 1' }, { semesterNumber: 2, label: 'Semester 2' }] },
+      { yearOfStudy: 3, label: 'III Year', semesters: [{ semesterNumber: 1, label: 'Semester 1' }, { semesterNumber: 2, label: 'Semester 2' }] },
+      { yearOfStudy: 4, label: 'IV Year', semesters: [{ semesterNumber: 1, label: 'Semester 1' }, { semesterNumber: 2, label: 'Semester 2' }] },
+    ];
+  }, [yearSem]);
+
+  const availableSemesters = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const y of availableYears) {
+      if (selectedYears.length === 0 || selectedYears.includes(y.yearOfStudy)) {
+        for (const s of y.semesters) {
+          if (!map.has(s.semesterNumber)) {
+            map.set(s.semesterNumber, s.label || `Semester ${s.semesterNumber}`);
+          }
+        }
+      }
+    }
+    if (map.size === 0) {
+      map.set(1, 'Semester 1');
+      map.set(2, 'Semester 2');
+    }
+    return Array.from(map.entries()).map(([semesterNumber, label]) => ({ semesterNumber, label }));
+  }, [availableYears, selectedYears]);
+
+  const selectedYear = availableYears.find(
+    (y) => selectedYears.includes(y.yearOfStudy),
   );
 
   const selectedCount = Object.entries(selectedFees).filter(
@@ -1272,13 +1456,12 @@ export function ExamForm({
                   setCollegeId(id);
                   const c = colleges.find((x) => x.id === parseInt(id, 10));
                   setCollegeName(c?.name ?? '');
-                  setCourseId('');
-                  setCourseName('');
+                  setSelectedCourseIds([]);
                   setSelectedBranchIds([]);
                   setBranchSections({});
-                  setBatch('');
-                  setYearOfStudy('');
-                  setSemester('');
+                  setSelectedBatches([]);
+                  setSelectedYears([]);
+                  setSelectedSemesters([]);
                 }}
                 className={selectClass}
                 required
@@ -1292,34 +1475,54 @@ export function ExamForm({
                 ))}
               </select>
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Programme
-              </label>
-              <select
-                value={courseId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setCourseId(id);
-                  const c = courses.find((x) => x.id === parseInt(id, 10));
-                  setCourseName(c?.name ?? '');
-                  setSelectedBranchIds([]);
-                  setBranchSections({});
-                  setBatch('');
-                  setYearOfStudy('');
-                  setSemester('');
-                }}
-                className={selectClass}
-                required
-                disabled={!collegeId}
-              >
-                <option value="">Select programme</option>
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+            {/* Programme Multi-Select */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  Programme{selectedCourseIds.length > 0 ? ` (${selectedCourseIds.length} selected)` : ''}
+                </label>
+                {courses.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={toggleAllCourses}
+                    className="text-xs font-medium text-[var(--primary)] hover:underline"
+                  >
+                    {selectedCourseIds.length === courses.length ? 'Deselect all' : 'Select all'}
+                  </button>
+                )}
+              </div>
+              {!collegeId ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  Select a college to load programmes.
+                </div>
+              ) : courses.length === 0 ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  No programmes found for this college.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-white p-2.5 space-y-1">
+                  {courses.map((c) => {
+                    const isChecked = selectedCourseIds.includes(c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs font-medium cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-sky-50 text-sky-900 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleCourse(c)}
+                        />
+                        <span>{c.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1327,13 +1530,13 @@ export function ExamForm({
             <label className="mb-1.5 block text-sm font-medium text-slate-700">
               Branches
             </label>
-            {!courseId ? (
+            {selectedCourseIds.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">
-                Select a programme to load branches.
+                Select at least one programme to load branches.
               </p>
             ) : branches.length === 0 ? (
               <p className="text-sm text-[var(--muted)]">
-                No SDMS branches for this programme.
+                No SDMS branches found for the selected programmes.
               </p>
             ) : (
               <div className="space-y-3 rounded-[var(--radius)] border border-[var(--border)] p-3">
@@ -1341,6 +1544,7 @@ export function ExamForm({
                   const checked = selectedBranchIds.includes(b.id);
                   const available = sectionsByBranch[b.id] ?? [];
                   const selectedSecs = branchSections[b.id] ?? [];
+                  const branchCourse = courses.find((c) => c.id === b.courseId);
                   return (
                     <div key={b.id} className="space-y-1.5">
                       <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
@@ -1348,16 +1552,20 @@ export function ExamForm({
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleBranch(b)}
-                          disabled={!courseId}
                         />
-                        {b.name}
+                        <span>{b.name}</span>
                         {b.code ? (
                           <span className="font-normal text-[var(--muted)]">
                             ({b.code})
                           </span>
                         ) : null}
+                        {selectedCourseIds.length > 1 && branchCourse ? (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-normal text-slate-600">
+                            {branchCourse.name}
+                          </span>
+                        ) : null}
                       </label>
-                      {checked && batch && (
+                      {checked && selectedBatches.length > 0 && (
                         <div className="ml-6 space-y-1">
                           {available.length === 0 ? (
                             <p className="text-xs text-[var(--muted)]">
@@ -1389,9 +1597,9 @@ export function ExamForm({
                           )}
                         </div>
                       )}
-                      {checked && !batch && (
+                      {checked && selectedBatches.length === 0 && (
                         <p className="ml-6 text-xs text-[var(--muted)]">
-                          Select a batch to load sections.
+                          Select at least one batch to load sections.
                         </p>
                       )}
                     </div>
@@ -1401,74 +1609,189 @@ export function ExamForm({
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Batch
-              </label>
-              <select
-                value={batch}
-                onChange={(e) => {
-                  setBatch(e.target.value);
-                  setBranchSections({});
-                }}
-                className={selectClass}
-                required
-                disabled={!courseId}
-              >
-                <option value="">Select batch</option>
-                {batches.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Program year
-              </label>
-              <select
-                value={yearOfStudy}
-                onChange={(e) => {
-                  setYearOfStudy(e.target.value);
-                  setSemester('');
-                }}
-                className={selectClass}
-                required
-                disabled={!firstBranchId}
-              >
-                <option value="">Select year</option>
-                {yearSem?.years.map((y) => (
-                  <option key={y.yearOfStudy} value={y.yearOfStudy}>
-                    {y.label}
-                  </option>
-                ))}
-              </select>
-              {selectedBranchIds.length > 1 && (
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  Year/semester from first selected branch.
-                </p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {/* 1. Batch Multi-Select */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  Batch{selectedBatches.length > 0 ? ` (${selectedBatches.length} selected)` : ''}
+                </label>
+                {batches.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedBatches.length === batches.length) {
+                        setSelectedBatches([]);
+                      } else {
+                        setSelectedBatches([...batches]);
+                      }
+                      setBranchSections({});
+                    }}
+                    className="text-xs font-medium text-[var(--primary)] hover:underline"
+                  >
+                    {selectedBatches.length === batches.length ? 'Deselect all' : 'Select all'}
+                  </button>
+                )}
+              </div>
+              {selectedCourseIds.length === 0 ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  Select at least one programme to load batches.
+                </div>
+              ) : batches.length === 0 ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  No batches configured for the selected programmes.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-white p-2.5 space-y-1">
+                  {batches.map((b) => {
+                    const isChecked = selectedBatches.includes(b);
+                    return (
+                      <label
+                        key={b}
+                        className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs font-medium cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-sky-50 text-sky-900 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedBatches((prev) =>
+                              prev.includes(b)
+                                ? prev.filter((x) => x !== b)
+                                : [...prev, b],
+                            );
+                            setBranchSections({});
+                          }}
+                        />
+                        <span>{b}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               )}
             </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                Semester
-              </label>
-              <select
-                value={semester}
-                onChange={(e) => setSemester(e.target.value)}
-                className={selectClass}
-                required
-                disabled={!yearOfStudy}
-              >
-                <option value="">Select semester</option>
-                {selectedYear?.semesters.map((s) => (
-                  <option key={s.semesterNumber} value={s.semesterNumber}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+
+            {/* 2. Program Year Multi-Select */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  Program year{selectedYears.length > 0 ? ` (${selectedYears.length} selected)` : ''}
+                </label>
+                {availableYears.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedYears.length === availableYears.length) {
+                        setSelectedYears([]);
+                      } else {
+                        setSelectedYears(availableYears.map((y) => y.yearOfStudy));
+                      }
+                    }}
+                    className="text-xs font-medium text-[var(--primary)] hover:underline"
+                  >
+                    {selectedYears.length === availableYears.length ? 'Deselect all' : 'Select all'}
+                  </button>
+                )}
+              </div>
+              {selectedBranchIds.length === 0 ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  Select at least one branch to load years.
+                </div>
+              ) : availableYears.length === 0 ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  No years found for selected branch.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-white p-2.5 space-y-1">
+                  {availableYears.map((y) => {
+                    const isChecked = selectedYears.includes(y.yearOfStudy);
+                    return (
+                      <label
+                        key={y.yearOfStudy}
+                        className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs font-medium cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-sky-50 text-sky-900 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedYears((prev) =>
+                              prev.includes(y.yearOfStudy)
+                                ? prev.filter((x) => x !== y.yearOfStudy)
+                                : [...prev, y.yearOfStudy],
+                            );
+                          }}
+                        />
+                        <span>{y.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Semester Multi-Select */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-slate-700">
+                  Semester{selectedSemesters.length > 0 ? ` (${selectedSemesters.length} selected)` : ''}
+                </label>
+                {availableSemesters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedSemesters.length === availableSemesters.length) {
+                        setSelectedSemesters([]);
+                      } else {
+                        setSelectedSemesters(availableSemesters.map((s) => s.semesterNumber));
+                      }
+                    }}
+                    className="text-xs font-medium text-[var(--primary)] hover:underline"
+                  >
+                    {selectedSemesters.length === availableSemesters.length ? 'Deselect all' : 'Select all'}
+                  </button>
+                )}
+              </div>
+              {selectedYears.length === 0 ? (
+                <div className="rounded-[var(--radius)] border border-dashed border-[var(--border)] p-3 text-xs text-[var(--muted)] bg-slate-50">
+                  Select program year first to choose semesters.
+                </div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-white p-2.5 space-y-1">
+                  {availableSemesters.map((s) => {
+                    const isChecked = selectedSemesters.includes(s.semesterNumber);
+                    return (
+                      <label
+                        key={s.semesterNumber}
+                        className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs font-medium cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-sky-50 text-sky-900 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedSemesters((prev) =>
+                              prev.includes(s.semesterNumber)
+                                ? prev.filter((x) => x !== s.semesterNumber)
+                                : [...prev, s.semesterNumber],
+                            );
+                          }}
+                        />
+                        <span>{s.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2214,8 +2537,10 @@ export function ExamForm({
             <p className="mt-1 text-[var(--muted)]">
               {reg?.code ?? '—'} ·{' '}
               Enrollment types:{' '}
-              {reviewTypes.map(examTypeLabel).join(' + ')} · {collegeName} /{' '}
-              {courseName} / {batch} · Y{yearOfStudy} / S{semester}
+              {reviewTypes.map(examTypeLabel).join(' + ')} · {collegeName} / Programme:{' '}
+              {selectedCourses.map((c) => c.name).join(', ') || courseName || '—'} / Batch: {selectedBatches.join(', ') || '—'} ·{' '}
+              Years: {selectedYears.map((y) => `Y${y}`).join(', ') || '—'} ·{' '}
+              Semesters: {selectedSemesters.map((s) => `S${s}`).join(', ') || '—'}
             </p>
             <div className="mt-2 space-y-1">
               <p className="font-medium text-slate-800">Branches & sections</p>

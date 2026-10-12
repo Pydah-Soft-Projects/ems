@@ -132,7 +132,16 @@ export interface LateFeeSlabInput {
 export interface ExamScopeInput {
   branch: string;
   branchId?: number;
+  course?: string;
+  courseId?: number;
+  courses?: string[];
   sections?: string[];
+  batches?: string[];
+  batch?: string;
+  yearOfStudies?: number[];
+  yearOfStudy?: number;
+  semesters?: number[];
+  semester?: number;
 }
 
 export interface CreateExamInput {
@@ -143,11 +152,16 @@ export interface CreateExamInput {
   regulationId: number;
   college: string;
   course: string;
+  courses?: string[];
+  courseIds?: number[];
   /** Legacy single branch — prefer `scopes` */
   branch?: string;
   batch: string;
+  batches?: string[];
   yearOfStudy: number;
+  yearOfStudies?: number[];
   semester: number;
+  semesters?: number[];
   scopes?: ExamScopeInput[];
   subjects: ExamSubjectFeeInput[];
   packageFee?: number;

@@ -225,7 +225,9 @@ export function ExamOverviewPanel({
                 Programme
               </p>
               <p className="mt-1 text-sm font-medium text-slate-900">
-                {exam.course}
+                {exam.scopes?.length
+                  ? [...new Set(exam.scopes.map((s) => s.course).filter(Boolean))].join(', ') || exam.course
+                  : exam.course}
               </p>
             </div>
             <div>
@@ -233,7 +235,16 @@ export function ExamOverviewPanel({
                 Batch · Year · Sem
               </p>
               <p className="mt-1 text-sm font-medium text-slate-900">
-                {exam.batch} · Y{exam.yearOfStudy} · S{exam.semester}
+                {exam.scopes?.length
+                  ? (() => {
+                      const batches = [...new Set(exam.scopes.map((s) => s.batch).filter(Boolean))].join(', ') || exam.batch;
+                      const years = [...new Set(exam.scopes.map((s) => s.yearOfStudy).filter(Boolean))].sort((a, b) => a - b);
+                      const sems = [...new Set(exam.scopes.map((s) => s.semester).filter(Boolean))].sort((a, b) => a - b);
+                      const yrStr = years.length > 0 ? `Y${years.join(', ')}` : `Y${exam.yearOfStudy}`;
+                      const semStr = sems.length > 0 ? `S${sems.join(', ')}` : `S${exam.semester}`;
+                      return `${batches} · ${yrStr} · ${semStr}`;
+                    })()
+                  : `${exam.batch} · Y${exam.yearOfStudy} · S${exam.semester}`}
               </p>
             </div>
             <div>

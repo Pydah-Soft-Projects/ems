@@ -444,7 +444,10 @@ export const api = {
   getSubjectMappings(filters: SubjectMappingFilters = {}) {
     const params = new URLSearchParams();
     if (filters.regulationId) params.set('regulationId', String(filters.regulationId));
-    if (filters.course) params.set('course', filters.course);
+    if (filters.course) {
+      const c = Array.isArray(filters.course) ? filters.course.join(',') : filters.course;
+      params.set('course', c);
+    }
     if (filters.branch) params.set('branch', filters.branch);
     if (filters.batch) params.set('batch', filters.batch);
     if (filters.yearOfStudy) params.set('yearOfStudy', String(filters.yearOfStudy));

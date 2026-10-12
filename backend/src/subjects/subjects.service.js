@@ -470,21 +470,47 @@ class SubjectsService {
             });
         }
         if (filters?.course) {
-            qb.andWhere('entry.courseName = :course', { course: filters.course });
+            const courses = Array.isArray(filters.course)
+                ? filters.course
+                : String(filters.course).split(',').map((c) => c.trim()).filter(Boolean);
+            if (courses.length > 1) {
+                qb.andWhere('entry.courseName IN (:...courses)', { courses });
+            } else if (courses.length === 1) {
+                qb.andWhere('entry.courseName = :course', { course: courses[0] });
+            }
         }
         if (filters?.branch) {
             qb.andWhere('entry.branchName = :branch', { branch: filters.branch });
         }
         if (filters?.batch) {
-            qb.andWhere('entry.batch = :batch', { batch: filters.batch });
+            const batches = Array.isArray(filters.batch)
+                ? filters.batch
+                : String(filters.batch).split(',').map((b) => b.trim()).filter(Boolean);
+            if (batches.length > 1) {
+                qb.andWhere('entry.batch IN (:...batches)', { batches });
+            } else if (batches.length === 1) {
+                qb.andWhere('entry.batch = :batch', { batch: batches[0] });
+            }
         }
         if (filters?.yearOfStudy) {
-            qb.andWhere('entry.yearOfStudy = :yearOfStudy', {
-                yearOfStudy: filters.yearOfStudy,
-            });
+            const years = Array.isArray(filters.yearOfStudy)
+                ? filters.yearOfStudy.map(Number)
+                : [Number(filters.yearOfStudy)];
+            if (years.length > 1) {
+                qb.andWhere('entry.yearOfStudy IN (:...years)', { years });
+            } else if (years.length === 1) {
+                qb.andWhere('entry.yearOfStudy = :yearOfStudy', { yearOfStudy: years[0] });
+            }
         }
         if (filters?.semester) {
-            qb.andWhere('entry.semester = :semester', { semester: filters.semester });
+            const sems = Array.isArray(filters.semester)
+                ? filters.semester.map(Number)
+                : [Number(filters.semester)];
+            if (sems.length > 1) {
+                qb.andWhere('entry.semester IN (:...sems)', { sems });
+            } else if (sems.length === 1) {
+                qb.andWhere('entry.semester = :semester', { semester: sems[0] });
+            }
         }
         if (filters?.subjectId) {
             qb.andWhere('entry.subjectId = :subjectId', {
@@ -549,15 +575,52 @@ class SubjectsService {
         await this.mappingRepo.remove(mapping);
     }
     async getMappedSubjectEntriesForExam(params) {
+        const courseVals = Array.isArray(params.course)
+            ? params.course
+            : (typeof params.course === 'string'
+                ? params.course.split(',').map((c) => c.trim()).filter(Boolean)
+                : (params.course ? [params.course] : []));
+        const batchVals = Array.isArray(params.batch)
+            ? params.batch
+            : (typeof params.batch === 'string'
+                ? params.batch.split(',').map((b) => b.trim()).filter(Boolean)
+                : (params.batch ? [params.batch] : []));
+        const yearVals = Array.isArray(params.yearOfStudy)
+            ? params.yearOfStudy.map(Number)
+            : (params.yearOfStudy != null ? [Number(params.yearOfStudy)] : []);
+        const semVals = Array.isArray(params.semester)
+            ? params.semester.map(Number)
+            : (params.semester != null ? [Number(params.semester)] : []);
+
+        const where = {
+            regulationId: params.regulationId,
+            branchName: params.branch,
+        };
+        if (courseVals.length > 1) {
+            where.courseName = In(courseVals);
+        } else if (courseVals.length === 1) {
+            where.courseName = courseVals[0];
+        } else if (params.course) {
+            where.courseName = params.course;
+        }
+        if (batchVals.length > 1) {
+            where.batch = In(batchVals);
+        } else if (batchVals.length === 1) {
+            where.batch = batchVals[0];
+        }
+        if (yearVals.length > 1) {
+            where.yearOfStudy = In(yearVals);
+        } else if (yearVals.length === 1) {
+            where.yearOfStudy = yearVals[0];
+        }
+        if (semVals.length > 1) {
+            where.semester = In(semVals);
+        } else if (semVals.length === 1) {
+            where.semester = semVals[0];
+        }
+
         const entries = await this.mappingRepo.find({
-            where: {
-                regulationId: params.regulationId,
-                courseName: params.course,
-                branchName: params.branch,
-                batch: params.batch,
-                yearOfStudy: params.yearOfStudy,
-                semester: params.semester,
-            },
+            where,
             relations: ['subject'],
         });
         if (entries.length === 0) {

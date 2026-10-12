@@ -68,8 +68,8 @@ export const navigation: NavGroup[] = [
     items: [
       {
         href: '/dashboard/exams',
-        label: 'Examinations',
-        description: 'Create and manage exams',
+        label: 'External Examinations',
+        description: 'Create and manage external exams',
         icon: 'exams',
         privilege: 'exams:read',
       },

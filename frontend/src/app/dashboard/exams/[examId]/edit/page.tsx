@@ -50,7 +50,7 @@ export default function EditExamPage() {
           setError(
             err instanceof ApiError
               ? err.message
-              : 'Failed to load examination.',
+              : 'Failed to load external examination.',
           );
         }
       } finally {
@@ -71,11 +71,11 @@ export default function EditExamPage() {
       const update: UpdateExamInput = { ...data };
       delete (update as { submitForApproval?: boolean }).submitForApproval;
       await api.updateExam(exam.id, update);
-      toast.push('Examination updated.', 'success');
+      toast.push('External examination updated.', 'success');
       router.push(`/dashboard/exams/${exam.id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Failed to update examination.',
+        err instanceof ApiError ? err.message : 'Failed to update external examination.',
       );
       throw err;
     } finally {
@@ -88,13 +88,13 @@ export default function EditExamPage() {
       user={user}
       privilege="exams:edit"
       fallback={
-        <AccessDenied description="You need Create / edit examinations privilege to edit examinations." />
+        <AccessDenied description="You need Create / edit examinations privilege to edit external examinations." />
       }
     >
       <div className="space-y-6">
         <PageHeader
-          title={exam ? `Edit ${exam.name}` : 'Edit examination'}
-          description="Update examination details, subjects, fee structures, and timetable."
+          title={exam ? `Edit ${exam.name}` : 'Edit external examination'}
+          description="Update external examination details, subjects, fee structures, and timetable."
           action={
             <Button
               variant="secondary"

@@ -272,8 +272,17 @@ export default function ExamDetailPage() {
               {exam.name}
             </h1>
             <p className="mt-2 text-sm text-slate-200">
-              {exam.college ?? '—'} · {exam.course} · Batch {exam.batch} · Y
-              {exam.yearOfStudy} S{exam.semester}
+              {exam.college ?? '—'} · {exam.course} ·{' '}
+              {exam.scopes?.length
+                ? (() => {
+                    const batches = [...new Set(exam.scopes.map((s) => s.batch).filter(Boolean))].join(', ') || exam.batch;
+                    const years = [...new Set(exam.scopes.map((s) => s.yearOfStudy).filter(Boolean))].sort((a, b) => a - b);
+                    const sems = [...new Set(exam.scopes.map((s) => s.semester).filter(Boolean))].sort((a, b) => a - b);
+                    const yrStr = years.length > 0 ? `Y${years.join(', ')}` : `Y${exam.yearOfStudy}`;
+                    const semStr = sems.length > 0 ? `S${sems.join(', ')}` : `S${exam.semester}`;
+                    return `Batch: ${batches} · ${yrStr} / ${semStr}`;
+                  })()
+                : `Batch ${exam.batch} · Y${exam.yearOfStudy} S${exam.semester}`}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

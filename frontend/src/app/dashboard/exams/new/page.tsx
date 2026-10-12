@@ -38,11 +38,11 @@ export default function NewExamPage() {
     setError('');
     try {
       const created = await api.createExam(data);
-      toast.push('Examination created.', 'success');
+      toast.push('External examination created.', 'success');
       router.push(`/dashboard/exams/${created.id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Failed to create examination.',
+        err instanceof ApiError ? err.message : 'Failed to create external examination.',
       );
       throw err;
     } finally {
@@ -55,12 +55,12 @@ export default function NewExamPage() {
       user={user}
       privilege="exams:write"
       fallback={
-        <AccessDenied description="You need Create / edit examinations privilege to create examinations." />
+        <AccessDenied description="You need Create / edit examinations privilege to create external examinations." />
       }
     >
       <div className="space-y-6">
         <PageHeader
-          title="Create examination"
+          title="Create external examination"
           description="Scope → mapped subjects & fees → dates → review."
           action={
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
