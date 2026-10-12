@@ -73,6 +73,7 @@ export interface ExamScope {
 export interface Exam {
   id: number;
   name: string;
+  examCategory?: 'EXTERNAL' | 'INTERNAL';
   type: ExamType;
   /** Types students may choose when enrolling (Regular and/or Supply). */
   allowedTypes?: ExamType[] | null;
@@ -130,6 +131,7 @@ export interface LateFeeSlabInput {
 }
 
 export interface ExamScopeInput {
+  college?: string;
   branch: string;
   branchId?: number;
   course?: string;
@@ -146,6 +148,7 @@ export interface ExamScopeInput {
 
 export interface CreateExamInput {
   name: string;
+  examCategory?: 'EXTERNAL' | 'INTERNAL';
   type?: ExamType;
   /** Allowed enrollment types on this single exam (e.g. regular + supply) */
   types?: ExamType[];

@@ -11,7 +11,7 @@ function createUsersRoutes(services) {
 
   router.get(
     '/privileges',
-    requirePrivilege('roles:read', 'roles:write', 'users:write'),
+    requirePrivilege('users:read', 'roles:read', 'roles:write', 'users:write'),
     asyncHandler(async (_req, res) => {
       res.json({
         groups: PRIVILEGE_GROUPS,

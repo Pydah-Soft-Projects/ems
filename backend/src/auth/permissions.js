@@ -58,6 +58,14 @@ const PRIVILEGE_GROUPS = [
     ],
   },
   {
+    id: 'internal_exams',
+    label: 'Internal examinations',
+    privileges: [
+      { key: 'internal_exams:read', label: 'View internal examination notifications' },
+      { key: 'internal_exams:write', label: 'Create internal examination notifications' },
+    ],
+  },
+  {
     id: 'marks_upload',
     label: 'Marks uploading',
     privileges: [

@@ -31,11 +31,60 @@ function createExamRoutes(services) {
     }),
   );
 
+  router.get(
+    '/internal/options/regulations',
+    requirePrivilege('internal_exams:read', 'internal_exams:write'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.regulations.findAll());
+    }),
+  );
+  router.get(
+    '/internal/options/:regulationId',
+    requirePrivilege('internal_exams:read', 'internal_exams:write'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.exam.getInternalNotificationOptions(
+          parseId(req.params.regulationId),
+        ),
+      );
+    }),
+  );
+  router.patch(
+    '/internal/:id',
+    requirePrivilege('internal_exams:write'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.exam.updateInternal(
+          parseId(req.params.id),
+          req.body,
+        ),
+      );
+    }),
+  );
+  router.get(
+    '/internal',
+    requirePrivilege('internal_exams:read', 'internal_exams:write'),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.exam.findAll(undefined, 'INTERNAL'));
+    }),
+  );
+  router.post(
+    '/internal',
+    requirePrivilege('internal_exams:write'),
+    asyncHandler(async (req, res) => {
+      res.status(201).json(
+        await services.exam.create({ ...req.body, examCategory: 'INTERNAL' }),
+      );
+    }),
+  );
+
   router.post(
     '/',
     requirePrivilege('exams:write'),
     asyncHandler(async (req, res) => {
-      res.status(201).json(await services.exam.create(req.body));
+      res.status(201).json(
+        await services.exam.create({ ...req.body, examCategory: 'EXTERNAL' }),
+      );
     }),
   );
   router.get(
@@ -43,7 +92,7 @@ function createExamRoutes(services) {
     requirePrivilege('exams:read', 'fees:read', 'fees:collect'),
     asyncHandler(async (req, res) => {
       const status = req.query.status;
-      res.json(await services.exam.findAll(status));
+      res.json(await services.exam.findAll(status, 'EXTERNAL'));
     }),
   );
   router.get(

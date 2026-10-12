@@ -4,6 +4,7 @@ export type MarksTabType = 'INTERNAL' | 'EXTERNAL' | 'RESULT' | 'REVALUATION';
 export interface MarksNotificationItem {
   id: number;
   notificationType: 'EXAM' | 'REVALUATION';
+  examCategory?: 'EXTERNAL' | 'INTERNAL';
   title: string;
   type: string;
   course?: string;

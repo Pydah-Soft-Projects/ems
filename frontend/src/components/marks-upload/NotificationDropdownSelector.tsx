@@ -123,6 +123,7 @@ export function NotificationDropdownSelector({
               key={`${item.notificationType}-${item.id}`}
               value={`${item.notificationType}-${item.id}`}
             >
+              {item.examCategory === 'INTERNAL' ? '[INTERNAL] ' : ''}
               {item.title} | {item.course || item.regulationCode} {item.branch ? `(${item.branch})` : ''} - Sem {item.semester || item.yearOfStudy || 'All'} ({item.status.toUpperCase()})
             </option>
           ))}

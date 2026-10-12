@@ -22,6 +22,7 @@
     "migrate:add-self-online": "node scripts/migrate-add-self-online-columns.js",
     "migrate:add-canara": "node scripts/migrate-add-canara-columns.js",
     "migrate:add-revaluation-notifications": "node scripts/migrate-add-revaluation-notifications.js",
+    "migrate:add-internal-exam-category": "node scripts/migrate-add-internal-exam-category.js",
     "remove:test-revaluation": "node scripts/remove-test-revaluation.js",
     "migrate:late-fee-slab-dates": "node scripts/migrate-late-fee-slab-dates.js"
   },

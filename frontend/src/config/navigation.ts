@@ -67,6 +67,13 @@ export const navigation: NavGroup[] = [
     title: 'Examination',
     items: [
       {
+        href: '/dashboard/internal-exams',
+        label: 'Internal Examinations',
+        description: 'Create internal examination notifications',
+        icon: 'exams',
+        privilege: ['internal_exams:read', 'internal_exams:write'],
+      },
+      {
         href: '/dashboard/exams',
         label: 'External Examinations',
         description: 'Create and manage external exams',
@@ -85,14 +92,14 @@ export const navigation: NavGroup[] = [
         label: 'Marks Uploading',
         description: 'Import Internal, External, Main Exam & Revaluation marks via Excel & PDF',
         icon: 'reports',
-        privilege: ['marks:read', 'marks:upload', 'exams:results'],
+        privilege: ['marks:read', 'marks:upload'],
       },
       {
         href: '/dashboard/results',
         label: 'Student Results',
         description: 'Comprehensive student-wise result statement with internals, externals, semester & revaluations',
         icon: 'reports',
-        privilege: ['results:read', 'exams:results'],
+        privilege: 'results:read',
       },
       {
         href: '/dashboard/duplicate-hall-tickets',

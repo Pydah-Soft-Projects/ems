@@ -41,6 +41,7 @@ Keys live in `backend/src/auth/permissions.js`, grouped as:
 - Subjects & mappings
 - Organization / students (SDMS)
 - Examinations (read/write/submit/approve/publish/hall tickets/results/analytics)
+- Internal examinations (`internal_exams:read` / `internal_exams:write`)
 - Fees & payments
 - Remuneration / professionals
 - Settings (payment gateway)
@@ -62,7 +63,11 @@ Staff login (`POST /api/auth/login`) returns `role`, `emsRoleName`, `privileges`
 ## Frontend
 
 - `/dashboard/user-management` — roles, HRMS user picker, Super Admin assignment
-- Sidebar / page guards filter by privileges
+- `/dashboard/internal-exams` — create draft internal exam notifications using
+  mapped regulation subjects and the existing exam/scope/subject records
+- Existing operation privilege selections also control which pages appear in
+  the sidebar and which pages the user can open. No separate page-access
+  privileges are required.
 - Exam action buttons (edit/submit/approve/publish/release) gated by privilege
 
 ## Status

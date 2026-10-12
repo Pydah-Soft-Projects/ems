@@ -555,7 +555,7 @@ class ExamService {
                     for (const sem of branchSemesters) {
                         if (sections.length === 0) {
                             rows.push({
-                                college: dto.college,
+                                college: s.college ?? dto.college,
                                 course: courseVal,
                                 branch,
                                 branchId: s.branchId ?? null,
@@ -567,7 +567,7 @@ class ExamService {
                         } else {
                             for (const section of sections) {
                                 rows.push({
-                                    college: dto.college,
+                                    college: s.college ?? dto.college,
                                     course: courseVal,
                                     branch,
                                     branchId: s.branchId ?? null,
@@ -591,11 +591,17 @@ class ExamService {
         return String(type).replace(/_/g, ' ');
     }
     async create(dto) {
+        const examCategory = String(dto.examCategory ?? 'EXTERNAL').toUpperCase();
+        if (!['EXTERNAL', 'INTERNAL'].includes(examCategory)) {
+            throw AppError.badRequest('Invalid examination category');
+        }
         if (!dto.college?.trim()) {
             throw AppError.badRequest('College is required');
         }
         await this.regulationsService.findOne(dto.regulationId);
-        const allowedTypes = this.resolveCreateTypes(dto);
+        const allowedTypes = examCategory === 'INTERNAL'
+            ? [ExamType.REGULAR]
+            : this.resolveCreateTypes(dto);
         if (allowedTypes.length === 0) {
             throw AppError.badRequest('Select at least one exam type');
         }
@@ -646,7 +652,7 @@ class ExamService {
         if (duplicateHallTicketFeeRaw != null && (!Number.isFinite(duplicateHallTicketFeeRaw) || duplicateHallTicketFeeRaw < 0)) {
             throw AppError.badRequest('Duplicate hall ticket fee must be a non-negative number');
         }
-        if (allowsRegular) {
+        if (examCategory !== 'INTERNAL' && allowsRegular) {
             const hasDefault = packageFee != null && !Number.isNaN(packageFee) && packageFee >= 0;
             const hasScoped = Array.isArray(packageFees) && packageFees.length > 0;
             if (!hasDefault && !hasScoped) {
@@ -675,6 +681,7 @@ class ExamService {
             : dto.batch;
         const exam = this.examRepo.create({
             name: dto.name.trim(),
+            examCategory,
             type: allowedTypes[0],
             allowedTypes,
             regulationId: dto.regulationId,
@@ -715,9 +722,14 @@ class ExamService {
         });
         return this.examRepo.save(exam);
     }
-    findAll(status) {
-        const where = status ? { status } : {};
+    findAll(status, examCategory = 'EXTERNAL') {
+        const where = { examCategory };
+        if (status) where.status = status;
         return this.examRepo.find({ where, order: { createdAt: 'DESC' } });
+    }
+    async getInternalNotificationOptions(regulationId) {
+        await this.regulationsService.findOne(Number(regulationId));
+        return this.subjectsService.findAllMappings({ regulationId: Number(regulationId) });
     }
     async findOne(id) {
         const exam = await this.examRepo.findOne({ where: { id } });
@@ -725,8 +737,17 @@ class ExamService {
             throw AppError.notFound('Examination not found');
         return exam;
     }
+    assertExternalExam(exam) {
+        if (exam.examCategory === 'INTERNAL') {
+            throw AppError.badRequest('Internal examination notifications do not use the external examination workflow');
+        }
+    }
     async update(id, dto, actor = {}) {
         const exam = await this.findOne(id);
+        if (exam.examCategory === 'INTERNAL') {
+            return this.updateInternal(id, dto);
+        }
+        this.assertExternalExam(exam);
         if (exam.status === ExamStatus.ARCHIVED) {
             throw AppError.badRequest('Archived examinations cannot be updated');
         }
@@ -906,13 +927,94 @@ class ExamService {
         }
         return savedExam;
     }
+    async updateInternal(id, dto) {
+        const exam = await this.findOne(id);
+        if (exam.examCategory !== 'INTERNAL') {
+            throw AppError.badRequest('Only internal examinations can use this update operation');
+        }
+        if (exam.status !== ExamStatus.DRAFT && exam.status !== ExamStatus.REJECTED) {
+            throw AppError.badRequest('Only draft or rejected internal examinations can be edited');
+        }
+        const name = String(dto.name ?? '').trim();
+        if (!name) {
+            throw AppError.badRequest('Examination name is required');
+        }
+        const regulationId = Number(dto.regulationId);
+        await this.regulationsService.findOne(regulationId);
+        const scopeInputs = this.resolveCreateScopes(dto);
+        const scopeRows = this.expandScopeRows(dto, scopeInputs);
+        const scopeBranches = [...new Set(scopeRows.map((row) => row.branch))];
+        const courses = Array.isArray(dto.courses) && dto.courses.length > 0
+            ? dto.courses
+            : (dto.course ? String(dto.course).split(',').map((value) => value.trim()).filter(Boolean) : []);
+        const batches = Array.isArray(dto.batches) && dto.batches.length > 0
+            ? dto.batches
+            : (dto.batch ? String(dto.batch).split(',').map((value) => value.trim()).filter(Boolean) : []);
+        const years = Array.isArray(dto.yearOfStudies) && dto.yearOfStudies.length > 0
+            ? dto.yearOfStudies.map(Number)
+            : [Number(dto.yearOfStudy)];
+        const semesters = Array.isArray(dto.semesters) && dto.semesters.length > 0
+            ? dto.semesters.map(Number)
+            : [Number(dto.semester)];
+        await this.validateExamSubjectsPerBranch(
+            regulationId,
+            courses.join(', '),
+            scopeBranches,
+            batches[0],
+            years[0],
+            semesters[0],
+            dto.subjects,
+            batches,
+            years,
+            semesters,
+            courses,
+        );
+        this.validateDates(dto);
+        const subjectRows = this.normalizeSubjectFees(dto.subjects);
+        this.assertSubjectDatesInWindow(
+            subjectRows,
+            dto.examinationStartDate,
+            dto.examinationEndDate,
+        );
+
+        await this.examSubjectRepo.delete({ examId: id });
+        await this.examScopeRepo.delete({ examId: id });
+        exam.name = name;
+        exam.regulationId = regulationId;
+        exam.college = String(dto.college ?? '').trim().slice(0, 150);
+        exam.course = courses.join(', ').slice(0, 100);
+        exam.branch = scopeBranches.join(', ').slice(0, 100);
+        exam.batch = batches.join(', ').slice(0, 50);
+        exam.yearOfStudy = years[0];
+        exam.semester = semesters[0];
+        exam.examinationStartDate = dto.examinationStartDate;
+        exam.examinationEndDate = dto.examinationEndDate;
+        exam.rejectionRemarks = null;
+        exam.examSubjects = subjectRows.map((subject) =>
+            this.examSubjectRepo.create({
+                examId: id,
+                subjectId: subject.subjectId,
+                branch: subject.branch,
+                section: subject.section,
+                fee: 0,
+                examDate: subject.examDate,
+            }),
+        );
+        exam.scopes = scopeRows.map((scope) =>
+            this.examScopeRepo.create({ ...scope, examId: id }),
+        );
+        return this.examRepo.save(exam);
+    }
     async syncEventsForPublishedExams(actor = {}) {
         const publishedExams = await this.examRepo.find({
             where: { status: ExamStatus.PUBLISHED },
             relations: ['scopes', 'examSubjects', 'lateFeeSlabs'],
         });
+        const externalExams = publishedExams.filter(
+            (exam) => exam.examCategory !== 'INTERNAL',
+        );
         let totalCreated = 0;
-        for (const exam of publishedExams) {
+        for (const exam of externalExams) {
             try {
                 const res = await this.sdms.createOrReplaceExamEventsForPublishedExam(exam, actor);
                 totalCreated += res.created ?? 0;
@@ -920,7 +1022,7 @@ class ExamService {
                 log.error({ err, examId: exam.id }, 'Failed to sync exam events');
             }
         }
-        return { syncedExams: publishedExams.length, totalCreated };
+        return { syncedExams: externalExams.length, totalCreated };
     }
     async submitForApproval(id) {
         const exam = await this.findOne(id);
@@ -967,6 +1069,9 @@ class ExamService {
         exam.publishedAt = new Date();
         await this.examRepo.save(exam);
         const publishedExam = await this.findOne(id);
+        if (exam.examCategory === 'INTERNAL') {
+            return publishedExam;
+        }
         // Create SDMS timeline events for scoped students (admin calendar).
         // Don't block publication if SDMS is temporarily unreachable.
         try {
@@ -1492,7 +1597,9 @@ class ExamService {
             where: { status: ExamStatus.PUBLISHED },
             order: { createdAt: 'DESC' },
         });
-        const inScope = exams.filter((e) => this.studentMatchesExam(e, student));
+        const inScope = exams.filter((e) =>
+            e.examCategory !== 'INTERNAL' && this.studentMatchesExam(e, student),
+        );
         const roll = this.resolveRoll(student);
         await this.syncTransactionsWithFeeManagement({ studentRollNumber: roll }).catch(() => undefined);
         const appsByExam = new Map();
@@ -1549,6 +1656,9 @@ class ExamService {
     async getPublishedExamForStudent(examId, studentId) {
         const student = await this.loadStudentForEnrollment(studentId);
         const exam = await this.findOne(examId);
+        if (exam.examCategory === 'INTERNAL') {
+            throw AppError.badRequest('Internal examinations do not accept student applications');
+        }
         if (exam.status !== ExamStatus.PUBLISHED) {
             throw AppError.badRequest('Examination is not published');
         }
@@ -1634,6 +1744,7 @@ class ExamService {
         }
         const student = await this.loadStudentForEnrollment(studentId);
         const exam = await this.findOne(examId);
+        this.assertExternalExam(exam);
         if (exam.status !== ExamStatus.PUBLISHED) {
             throw AppError.badRequest('Examination is not published');
         }

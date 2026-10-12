@@ -10,6 +10,7 @@ const Exam = new EntitySchema({
   columns: {
     id: { type: 'int', primary: true, generated: true },
     name: { type: 'varchar', length: 200 },
+    examCategory: { type: 'varchar', length: 20, default: 'EXTERNAL' },
     type: { type: 'varchar', length: 30, default: ExamType.REGULAR },
     allowedTypes: { type: 'simple-json', nullable: true },
     regulationId: { type: 'int' },

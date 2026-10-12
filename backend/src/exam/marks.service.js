@@ -89,6 +89,7 @@ class MarksService {
     const examNotifications = exams.map((e) => ({
       id: e.id,
       notificationType: 'EXAM',
+      examCategory: e.examCategory ?? 'EXTERNAL',
       title: e.name,
       type: e.type, // REGULAR / SUPPLEMENTARY
       course: e.course,
@@ -179,6 +180,9 @@ class MarksService {
       relations: ['examSubjects', 'examSubjects.subject', 'scopes'],
     });
     if (!exam) throw AppError.notFound('Examination not found');
+    if (exam.examCategory === 'INTERNAL' && (!Array.isArray(exam.scopes) || exam.scopes.length === 0)) {
+      throw AppError.serviceUnavailable('Internal exam scope data is unavailable.');
+    }
 
     const subjectsMap = new Map();
     for (const es of exam.examSubjects || []) {
@@ -399,15 +403,32 @@ class MarksService {
             }
           }
         } else if (typeof this.sdms.listStudents === 'function') {
-          for (const b of targetBranches) {
-            const res = await this.sdms.listStudents({
-              course: exam.course,
-              branch: b,
-              batch: exam.batch,
-              limit: 500,
-            });
-            const items = res?.items || (Array.isArray(res) ? res : []);
-            sdmsStudents.push(...items);
+          if (exam.examCategory === 'INTERNAL') {
+            for (const scope of exam.scopes) {
+              const res = await this.sdms.listStudents({
+                college: scope.college,
+                course: scope.course,
+                branch: scope.branch,
+                batch: scope.batch,
+                currentYear: scope.yearOfStudy,
+                currentSemester: scope.semester,
+                ...(scope.section ? { section: scope.section } : {}),
+                limit: 500,
+              });
+              const items = res?.items || (Array.isArray(res) ? res : []);
+              sdmsStudents.push(...items);
+            }
+          } else {
+            for (const b of targetBranches) {
+              const res = await this.sdms.listStudents({
+                course: exam.course,
+                branch: b,
+                batch: exam.batch,
+                limit: 500,
+              });
+              const items = res?.items || (Array.isArray(res) ? res : []);
+              sdmsStudents.push(...items);
+            }
           }
         }
 
@@ -415,6 +436,26 @@ class MarksService {
           for (const s of sdmsStudents) {
             const roll = (s.pinNo || s.admissionNumber || '').trim();
             if (!roll) continue;
+            if (
+              exam.examCategory === 'INTERNAL' &&
+              !exam.scopes.some((scope) => {
+                const matchesText = (studentValue, scopeValue) =>
+                  !scopeValue ||
+                  String(studentValue || '').trim().toLowerCase() === String(scopeValue).trim().toLowerCase();
+
+                return (
+                  matchesText(s.college, scope.college) &&
+                  matchesText(s.course, scope.course) &&
+                  matchesText(s.branch, scope.branch) &&
+                  matchesText(s.batch, scope.batch) &&
+                  Number(s.currentYear) === Number(scope.yearOfStudy) &&
+                  Number(s.currentSemester) === Number(scope.semester) &&
+                  matchesText(s.section, scope.section)
+                );
+              })
+            ) {
+              continue;
+            }
             const rKey = roll.toLowerCase();
             const existing = studentMapByRoll.get(rKey);
             const b = s.branch || (targetBranches.size === 1 ? Array.from(targetBranches)[0] : exam.branch) || 'GENERAL';
@@ -435,7 +476,9 @@ class MarksService {
           }
         }
       } catch (sdmsErr) {
-        // SDMS query fallback
+        if (exam.examCategory === 'INTERNAL') {
+          throw AppError.serviceUnavailable('The internal exam student roster could not be loaded.');
+        }
       }
     }
 
@@ -452,6 +495,7 @@ class MarksService {
         batch: exam.batch,
         semester: exam.semester,
         yearOfStudy: exam.yearOfStudy,
+        examCategory: exam.examCategory || 'EXTERNAL',
       },
       branches: [...branchesSet].filter(Boolean),
       subjects,
@@ -491,6 +535,9 @@ class MarksService {
       try {
         const details = await this.getNotificationDetails(notificationType || 'EXAM', notificationId);
         const enrolledStudents = details?.students || [];
+        if (details?.notification?.examCategory === 'INTERNAL' && enrolledStudents.length === 0) {
+          throw AppError.badRequest('No students were found in the selected internal exam scope.');
+        }
 
         if (enrolledStudents.length > 0) {
           const enrolledMap = new Map();

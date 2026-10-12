@@ -637,6 +637,34 @@ export const api = {
     return request<Exam[]>(`/exams${query}`);
   },
 
+  getInternalExams() {
+    return request<Exam[]>('/exams/internal');
+  },
+
+  getInternalExamRegulations() {
+    return request<Regulation[]>('/exams/internal/options/regulations');
+  },
+
+  getInternalExamSubjectMappings(regulationId: number) {
+    return request<SubjectMappingEntry[]>(
+      `/exams/internal/options/${regulationId}`,
+    );
+  },
+
+  createInternalExam(data: CreateExamInput) {
+    return request<Exam>('/exams/internal', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateInternalExam(id: number, data: CreateExamInput) {
+    return request<Exam>(`/exams/internal/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   getExamApplicationReport(filters: {
     examId?: number;
     batch?: string;
