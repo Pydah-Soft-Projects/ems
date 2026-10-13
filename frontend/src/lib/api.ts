@@ -245,6 +245,20 @@ export const api = {
     });
   },
 
+  ssoLogin(encryptedToken: string) {
+    return request<LoginResponse>('/auth/sso-login', {
+      method: 'POST',
+      body: JSON.stringify({ encryptedToken }),
+    });
+  },
+
+  ssoSession(data: { userId?: string; role?: string; portalId?: string; ssoToken?: string; encryptedToken?: string }) {
+    return request<LoginResponse>('/auth/sso-session', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   me() {
     return request<AuthUser>('/auth/me');
   },

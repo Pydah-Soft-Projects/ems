@@ -124,6 +124,20 @@ function createApp(services) {
     }),
   );
 
+  api.post(
+    '/auth/sso-login',
+    asyncHandler(async (req, res) => {
+      res.json(await services.auth.loginWithSsoToken(req.body));
+    }),
+  );
+
+  api.post(
+    '/auth/sso-session',
+    asyncHandler(async (req, res) => {
+      res.json(await services.auth.loginWithSsoToken(req.body));
+    }),
+  );
+
   api.get(
     '/fees/verify/:receiptNumber',
     asyncHandler(async (req, res) => {

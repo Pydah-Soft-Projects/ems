@@ -24,14 +24,16 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  if (pathname === '/login' && token) {
+  const hasSsoToken = request.nextUrl.searchParams.has('token');
+
+  if (pathname === '/login' && token && !hasSsoToken) {
     if (role === 'student') {
       return NextResponse.redirect(new URL('/student', request.url));
     }
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  if (pathname === '/student/login' && token) {
+  if (pathname === '/student/login' && token && !hasSsoToken) {
     if (role === 'student') {
       return NextResponse.redirect(new URL('/student', request.url));
     }

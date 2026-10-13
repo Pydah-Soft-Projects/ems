@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { AuthUser, clearAuth } from '@/lib/auth';
+import { AuthUser, handleLogout as authLogout } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { findNavItem, navigation } from '@/config/navigation';
 import { NavIcon } from '@/components/icons/NavIcon';
@@ -35,8 +35,7 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
     .filter((group) => group.items.length > 0);
 
   function logout() {
-    clearAuth();
-    router.replace('/login');
+    authLogout(router, '/login');
   }
 
   return (

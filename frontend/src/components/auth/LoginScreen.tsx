@@ -1,10 +1,10 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
-import { setAuth } from '@/lib/auth';
+import { clearAuth, setAuth } from '@/lib/auth';
 import { Alert } from '@/components/ui/Alert';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 
@@ -15,6 +15,13 @@ type Role = 'student' | 'staff';
 
 export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const ssoToken = searchParams.get('token');
+  const crmFrontendUrl =
+    process.env.NEXT_PUBLIC_CRM_FRONTEND_URL ||
+    process.env.VITE_CRM_FRONTEND_URL ||
+    'https://crm.pydah.edu.in';
+
   const [role, setRole] = useState<Role>(defaultRole);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +30,49 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [isVerifyingSSO, setIsVerifyingSSO] = useState<boolean>(Boolean(ssoToken));
+  const [ssoError, setSsoError] = useState<string>('');
+
+  useEffect(() => {
+    if (!ssoToken) {
+      setIsVerifyingSSO(false);
+      return;
+    }
+
+    let cancelled = false;
+    // Explicitly clear existing storage to prioritize incoming SSO login
+    clearAuth();
+    setIsVerifyingSSO(true);
+    setSsoError('');
+
+    async function handleSSOLogin(token: string) {
+      try {
+        const res = await api.ssoLogin(token);
+        if (cancelled) return;
+        setAuth(res.accessToken, res.user, true);
+        if (res.user.role === 'student') {
+          router.replace('/student');
+        } else {
+          router.replace('/dashboard');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setIsVerifyingSSO(false);
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : 'Single Sign-On authentication failed. Please try again.';
+        setSsoError(message);
+      }
+    }
+
+    void handleSSOLogin(ssoToken);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ssoToken, router]);
 
   function switchRole(next: Role) {
     setRole(next);
@@ -40,11 +90,11 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
     try {
       if (role === 'student') {
         const res = await api.studentLogin(identifier.trim(), password);
-        setAuth(res.accessToken, res.user);
+        setAuth(res.accessToken, res.user, false);
         router.replace('/student');
       } else {
         const res = await api.login(identifier.trim(), password);
-        setAuth(res.accessToken, res.user);
+        setAuth(res.accessToken, res.user, false);
         router.replace('/dashboard');
       }
     } catch (err) {
@@ -126,50 +176,126 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
         </div>
 
         <div className="w-full max-w-[440px] rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgb(13_27_61/0.10)] sm:p-9">
-          <h2 className="text-center text-2xl font-bold" style={{ color: NAVY }}>
-            Welcome Back!
-          </h2>
-          <p className="mt-1.5 text-center text-[13px] text-slate-500">
-            Sign in to continue to your account
-          </p>
+          {isVerifyingSSO ? (
+            <div className="py-8 text-center">
+              <div
+                className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200"
+                style={{ borderTopColor: GREEN }}
+              />
+              <h3 className="mt-5 text-lg font-bold" style={{ color: NAVY }}>
+                Verifying Single Sign-On…
+              </h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Connecting with CRM Authentication Gateway and establishing your session.
+              </p>
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className="h-4 w-4 text-[#2E7D32]"
+                >
+                  <path d="M12 3 5 6v5c0 4.4 3 8.1 7 9 4-.9 7-4.6 7-9V6l-7-3Z" strokeLinejoin="round" />
+                </svg>
+                Securing connection…
+              </div>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-center text-2xl font-bold" style={{ color: NAVY }}>
+                Welcome Back!
+              </h2>
+              <p className="mt-1.5 text-center text-[13px] text-slate-500">
+                Sign in to continue to your account
+              </p>
 
-          {/* Role tabs */}
-          <div className="mt-6 flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-            <button
-              type="button"
-              onClick={() => switchRole('student')}
-              className={`${tabBase} ${
-                role === 'student'
-                  ? 'bg-white shadow-sm ring-1 ring-slate-200'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-              style={role === 'student' ? { color: GREEN } : undefined}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                <path d="m12 4 10 5-10 5L2 9l10-5Z" strokeLinejoin="round" />
-                <path d="M6 11.5V16c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5v-4.5M22 9v5" strokeLinecap="round" />
-              </svg>
-              Student
-            </button>
-            <button
-              type="button"
-              onClick={() => switchRole('staff')}
-              className={`${tabBase} ${
-                role === 'staff'
-                  ? 'bg-white shadow-sm ring-1 ring-slate-200'
-                  : 'text-slate-400 hover:text-slate-600'
-              }`}
-              style={role === 'staff' ? { color: GREEN } : undefined}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                <rect x="3" y="7" width="18" height="13" rx="2" />
-                <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12h18" strokeLinecap="round" />
-              </svg>
-              Staff
-            </button>
-          </div>
+              {ssoError ? (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-left">
+                  <div className="flex items-start gap-3">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <div className="flex-1 text-xs">
+                      <p className="font-semibold text-red-800">Single Sign-On Failed</p>
+                      <p className="mt-1 leading-relaxed text-red-700">{ssoError}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={crmFrontendUrl}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className="h-3.5 w-3.5"
+                          >
+                            <path d="m15 18-6-6 6-6" />
+                          </svg>
+                          Return to CRM Portal
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSsoError('');
+                            router.replace('/login');
+                          }}
+                          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          Sign In with Password
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
-          <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-4">
+              {/* Role tabs */}
+              <div className="mt-6 flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => switchRole('student')}
+                  className={`${tabBase} ${
+                    role === 'student'
+                      ? 'bg-white shadow-sm ring-1 ring-slate-200'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                  style={role === 'student' ? { color: GREEN } : undefined}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                    <path d="m12 4 10 5-10 5L2 9l10-5Z" strokeLinejoin="round" />
+                    <path d="M6 11.5V16c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5v-4.5M22 9v5" strokeLinecap="round" />
+                  </svg>
+                  Student
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchRole('staff')}
+                  className={`${tabBase} ${
+                    role === 'staff'
+                      ? 'bg-white shadow-sm ring-1 ring-slate-200'
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                  style={role === 'staff' ? { color: GREEN } : undefined}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                    <rect x="3" y="7" width="18" height="13" rx="2" />
+                    <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12h18" strokeLinecap="round" />
+                  </svg>
+                  Staff
+                </button>
+              </div>
+
+              <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-4">
             <div>
               <label
                 htmlFor="login-identifier"
@@ -290,7 +416,9 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
               administrator
             </span>
           </p>
-        </div>
+        </>
+      )}
+    </div>
 
         <p className="mt-6 flex items-center gap-2 text-xs text-slate-400">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">

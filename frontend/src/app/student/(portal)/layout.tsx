@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearAuth, getStoredUser } from '@/lib/auth';
+import { AuthUser, clearAuth, getStoredUser, handleLogout as authLogout } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { StudentShell } from '@/components/student/StudentShell';
 import { LoadingBlock } from '@/components/ui/Spinner';
@@ -37,8 +37,7 @@ export default function StudentPortalLayout({
   }, [router]);
 
   function logout() {
-    clearAuth();
-    router.replace('/student/login');
+    authLogout(router, '/student/login');
   }
 
   if (loading) {

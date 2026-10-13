@@ -86,4 +86,17 @@ module.exports = () => ({
     process.env.PUBLIC_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     `http://localhost:${parseInt(process.env.PORT || '4000', 10)}`,
+  crm: {
+    backendUrl:
+      process.env.CRM_BACKEND_URL ||
+      process.env.VITE_CRM_BACKEND_URL ||
+      process.env.NEXT_PUBLIC_CRM_BACKEND_URL ||
+      'https://pydah-crm-backend.pydah.edu.in',
+    frontendUrl:
+      process.env.CRM_FRONTEND_URL ||
+      process.env.VITE_CRM_FRONTEND_URL ||
+      process.env.NEXT_PUBLIC_CRM_FRONTEND_URL ||
+      'https://crm.pydah.edu.in',
+    portalId: process.env.EMS_SSO_PORTAL_ID || 'examination-portal',
+  },
 });

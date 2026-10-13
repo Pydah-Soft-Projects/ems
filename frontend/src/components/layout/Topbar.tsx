@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { findNavItem } from '@/config/navigation';
 import { Button } from '@/components/ui/Button';
 import { SoftSearchField } from '@/components/ui/SoftSearch';
-import { AuthUser, clearAuth } from '@/lib/auth';
+import { AuthUser, handleLogout as authLogout } from '@/lib/auth';
 
 interface TopbarProps {
   user: AuthUser;
@@ -33,8 +33,7 @@ export function Topbar({
   const current = findNavItem(pathname);
 
   function handleLogout() {
-    clearAuth();
-    router.replace('/login');
+    authLogout(router, '/login');
   }
 
   return (
