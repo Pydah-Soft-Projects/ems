@@ -2,10 +2,11 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, clearAuth, getStoredUser, handleLogout as authLogout } from '@/lib/auth';
+import { AuthUser, clearAuth, getStoredUser } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { StudentShell } from '@/components/student/StudentShell';
 import { LoadingBlock } from '@/components/ui/Spinner';
+import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
 
 export default function StudentPortalLayout({
   children,
@@ -15,6 +16,7 @@ export default function StudentPortalLayout({
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
     async function boot() {
@@ -36,10 +38,6 @@ export default function StudentPortalLayout({
     void boot();
   }, [router]);
 
-  function logout() {
-    authLogout(router, '/student/login');
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -51,8 +49,15 @@ export default function StudentPortalLayout({
   if (!user) return null;
 
   return (
-    <StudentShell user={user} onLogout={logout}>
-      {children}
-    </StudentShell>
+    <>
+      <StudentShell user={user} onLogout={() => setIsLogoutModalOpen(true)}>
+        {children}
+      </StudentShell>
+      <LogoutConfirmModal
+        open={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        fallbackUrl="/student/login"
+      />
+    </>
   );
 }

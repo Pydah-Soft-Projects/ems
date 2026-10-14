@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { AuthUser, handleLogout as authLogout } from '@/lib/auth';
+import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { AuthUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 import { findNavItem, navigation } from '@/config/navigation';
 import { NavIcon } from '@/components/icons/NavIcon';
 import { BrandLockup } from '@/components/brand/BrandLogo';
+import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
 
 function getInitials(name: string) {
   return name
@@ -21,11 +23,12 @@ interface SidebarProps {
   user: AuthUser;
   collapsed?: boolean;
   onNavigate?: () => void;
+  onLogout?: () => void;
 }
 
-export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
+export function Sidebar({ user, collapsed = false, onNavigate, onLogout }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const activeItem = findNavItem(pathname);
   const visibleGroups = navigation
     .map((group) => ({
@@ -34,8 +37,12 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
     }))
     .filter((group) => group.items.length > 0);
 
-  function logout() {
-    authLogout(router, '/login');
+  function handleSignOutClick() {
+    if (onLogout) {
+      onLogout();
+    } else {
+      setIsModalOpen(true);
+    }
   }
 
   return (
@@ -115,16 +122,44 @@ export function Sidebar({ user, collapsed = false, onNavigate }: SidebarProps) {
             </div>
           ) : null}
         </div>
-        {!collapsed ? (
+        {collapsed ? (
           <button
             type="button"
-            onClick={logout}
+            onClick={handleSignOutClick}
+            title="Sign out"
+            aria-label="Sign out"
+            className="mt-2 flex w-full justify-center rounded-[var(--radius)] p-2 text-[var(--muted)] transition hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+              />
+            </svg>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSignOutClick}
             className="mt-2 w-full rounded-[var(--radius)] px-3 py-2 text-left text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
           >
             Sign out
           </button>
-        ) : null}
+        )}
       </div>
+
+      <LogoutConfirmModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        fallbackUrl="/login"
+      />
     </aside>
   );
 }

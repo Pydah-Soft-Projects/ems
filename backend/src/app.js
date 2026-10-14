@@ -138,6 +138,13 @@ function createApp(services) {
     }),
   );
 
+  api.post(
+    '/auth/logout',
+    asyncHandler(async (_req, res) => {
+      res.json({ success: true, message: 'Logged out successfully' });
+    }),
+  );
+
   api.get(
     '/fees/verify/:receiptNumber',
     asyncHandler(async (req, res) => {

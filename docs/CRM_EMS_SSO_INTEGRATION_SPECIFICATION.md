@@ -171,8 +171,9 @@ When the EMS backend receives valid payload data from the CRM backend, it resolv
    - Provides a direct link **"Return to CRM Portal"** pointing to `https://crm.pydah.edu.in`.
    - Provides an option **"Sign In with Password"** to switch back to normal login.
 4. **Logout Behavior**:
-   - **For SSO Users**: When an SSO-authenticated user logs out, EMS displays an alert popup (*"Logged out successfully. Returning to CRM Portal…"*) and navigates the browser directly back to the CRM portal (`https://crm.pydah.edu.in`).
-   - **For Standard Users**: When a standard user logs out, they are redirected to the local EMS login page (`/login` or `/student/login`).
+   - **Confirmation Modal**: Clicking logout or sign out prompts the user with an interactive confirmation modal (*"Are you sure you want to log out?"*).
+   - **For SSO Users**: When confirmed, EMS clears session storage and cookies, displays redirect feedback, and navigates the browser directly back to the CRM portal (`https://crm.pydah.edu.in`).
+   - **For Standard Users**: When confirmed, EMS clears session storage and cookies and redirects to the local EMS login page (`/login` or `/student/login`).
 
 ---
 

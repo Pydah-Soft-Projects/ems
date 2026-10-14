@@ -41,7 +41,19 @@ export interface LoginResponse {
 
 export function isSSOLogin(): boolean {
   if (typeof window === 'undefined') return false;
-  return localStorage.getItem(LOGIN_METHOD_KEY) === 'sso';
+  const fromStorage = localStorage.getItem(LOGIN_METHOD_KEY) === 'sso';
+  if (fromStorage) return true;
+  if (typeof document !== 'undefined') {
+    return document.cookie.split('; ').some((c) => c.trim().startsWith('ems_is_sso=1'));
+  }
+  return false;
+}
+
+export function getLogoutRedirectUrl(fallbackUrl: string = '/login'): string {
+  if (isSSOLogin()) {
+    return CRM_FRONTEND_URL;
+  }
+  return fallbackUrl;
 }
 
 export function setAuth(token: string, user: AuthUser, isSSO?: boolean) {
@@ -86,7 +98,6 @@ export function handleLogout(
   clearAuth();
 
   if (isSso) {
-    alert('Logged out successfully. Returning to CRM Portal…');
     window.location.href = CRM_FRONTEND_URL;
     return;
   }

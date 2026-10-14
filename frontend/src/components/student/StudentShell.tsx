@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AuthUser } from '@/lib/auth';
@@ -10,6 +11,7 @@ import {
 } from '@/config/studentNavigation';
 import { StudentNavIcon } from './StudentNavIcon';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
 
 function getInitials(name: string) {
   return name
@@ -26,10 +28,19 @@ export function StudentShell({
   children,
 }: {
   user: AuthUser;
-  onLogout: () => void;
+  onLogout?: () => void;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [isLocalModalOpen, setIsLocalModalOpen] = useState(false);
+
+  function handleSignOutClick() {
+    if (onLogout) {
+      onLogout();
+    } else {
+      setIsLocalModalOpen(true);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[var(--background)] pb-24 lg:pb-0">
@@ -77,7 +88,7 @@ export function StudentShell({
                 PIN {user.pinNo || user.username}
               </span>
             </div>
-            <Button type="button" variant="ghost" size="sm" onClick={onLogout}>
+            <Button type="button" variant="ghost" size="sm" onClick={handleSignOutClick}>
               Sign out
             </Button>
           </div>
@@ -111,6 +122,12 @@ export function StudentShell({
           })}
         </ul>
       </nav>
+
+      <LogoutConfirmModal
+        open={isLocalModalOpen}
+        onClose={() => setIsLocalModalOpen(false)}
+        fallbackUrl="/student/login"
+      />
     </div>
   );
 }

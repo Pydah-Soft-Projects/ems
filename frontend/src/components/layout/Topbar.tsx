@@ -1,16 +1,19 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { findNavItem } from '@/config/navigation';
 import { Button } from '@/components/ui/Button';
 import { SoftSearchField } from '@/components/ui/SoftSearch';
-import { AuthUser, handleLogout as authLogout } from '@/lib/auth';
+import { AuthUser } from '@/lib/auth';
+import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
 
 interface TopbarProps {
   user: AuthUser;
   onMenuClick: () => void;
   onCollapseClick: () => void;
   collapsed: boolean;
+  onLogout?: () => void;
 }
 
 function getInitials(name: string) {
@@ -27,13 +30,18 @@ export function Topbar({
   onMenuClick,
   onCollapseClick,
   collapsed,
+  onLogout,
 }: TopbarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const current = findNavItem(pathname);
 
-  function handleLogout() {
-    authLogout(router, '/login');
+  function handleLogoutClick() {
+    if (onLogout) {
+      onLogout();
+    } else {
+      setIsModalOpen(true);
+    }
   }
 
   return (
@@ -89,10 +97,16 @@ export function Topbar({
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleLogout}>
+        <Button variant="ghost" size="sm" onClick={handleLogoutClick}>
           Logout
         </Button>
       </div>
+
+      <LogoutConfirmModal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        fallbackUrl="/login"
+      />
     </header>
   );
 }

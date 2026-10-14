@@ -8,6 +8,7 @@ import { findNavItem } from '@/config/navigation';
 import { api } from '@/lib/api';
 import { Sidebar } from './Sidebar';
 import { AccessDenied } from '@/components/auth/AccessDenied';
+import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -15,6 +16,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
     async function loadUser() {
@@ -65,7 +67,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-[260px]">
-        <Sidebar user={user} />
+        <Sidebar user={user} onLogout={() => setIsLogoutModalOpen(true)} />
       </div>
 
       {mobileOpen ? (
@@ -77,7 +79,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             aria-label="Close menu"
           />
           <div className="absolute inset-y-0 left-0 w-[260px] shadow-[var(--shadow-lg)]">
-            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
+            <Sidebar
+              user={user}
+              onNavigate={() => setMobileOpen(false)}
+              onLogout={() => {
+                setMobileOpen(false);
+                setIsLogoutModalOpen(true);
+              }}
+            />
           </div>
         </div>
       ) : null}
@@ -110,6 +119,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+
+      <LogoutConfirmModal
+        open={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        fallbackUrl="/login"
+      />
     </div>
   );
 }
