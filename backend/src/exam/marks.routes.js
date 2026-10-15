@@ -135,6 +135,61 @@ function createMarksRoutes(services) {
     }),
   );
 
+  /** Internal Marks Management Overview: Details table, Submission summary & Lock status */
+  router.get(
+    '/internal-management/:notificationId',
+    requirePrivilege('exams:read', 'exams:results', 'marks:read', 'marks:upload'),
+    asyncHandler(async (req, res) => {
+      const notificationId = parseId(req.params.notificationId);
+      const data = await services.marks.getInternalMarksOverview(notificationId, req.query);
+      res.json(data);
+    }),
+  );
+
+  /** Unlock marks entry for an exam subject beyond the 4-day deadline */
+  router.post(
+    '/internal-management/:notificationId/unlock',
+    requirePrivilege('marks:unlock', 'marks:upload', 'exams:write', 'exams:approve', 'users:super_admin'),
+    asyncHandler(async (req, res) => {
+      const notificationId = parseId(req.params.notificationId);
+      const { subjectCode, reason, facultyName, facultyEmail } = req.body;
+      const result = await services.marks.unlockInternalMarks(
+        notificationId,
+        { subjectCode, reason, facultyName, facultyEmail },
+        req.user,
+      );
+      res.json(result);
+    }),
+  );
+
+  /** Relock marks entry for an exam subject */
+  router.post(
+    '/internal-management/:notificationId/relock',
+    requirePrivilege('marks:unlock', 'marks:upload', 'exams:write', 'exams:approve', 'users:super_admin'),
+    asyncHandler(async (req, res) => {
+      const notificationId = parseId(req.params.notificationId);
+      const { subjectCode } = req.body;
+      const result = await services.marks.relockInternalMarks(
+        notificationId,
+        { subjectCode },
+        req.user,
+      );
+      res.json(result);
+    }),
+  );
+
+  /** Save or update internal marks directly */
+  router.post(
+    '/internal-management/:notificationId/save',
+    requirePrivilege('exams:results', 'exams:write', 'marks:upload'),
+    asyncHandler(async (req, res) => {
+      const notificationId = parseId(req.params.notificationId);
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : (Array.isArray(req.body) ? req.body : []);
+      const result = await services.marks.saveInternalMarks(notificationId, rows, req.user);
+      res.json(result);
+    }),
+  );
+
   return router;
 }
 

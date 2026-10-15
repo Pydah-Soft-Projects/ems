@@ -110,6 +110,12 @@ import type {
   MarksHistoryResponse,
   ConsolidatedResultsResponse,
 } from '@/types/marks-upload';
+import type {
+  InternalMarksOverviewResponse,
+  UnlockMarksInput,
+  RelockMarksInput,
+  LockActionResponse,
+} from '@/types/internal-marks';
 
 type RevaluationNotificationInput = {
   regulationId: number;
@@ -1685,6 +1691,42 @@ export const api = {
     const qs = q.toString();
     return request<ConsolidatedResultsResponse>(
       `/marks/consolidated-results${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  getInternalMarksOverview(notificationId: number) {
+    return request<InternalMarksOverviewResponse>(
+      `/marks/internal-management/${notificationId}`
+    );
+  },
+
+  unlockInternalMarks(notificationId: number, input: UnlockMarksInput) {
+    return request<LockActionResponse>(
+      `/marks/internal-management/${notificationId}/unlock`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }
+    );
+  },
+
+  relockInternalMarks(notificationId: number, input: RelockMarksInput) {
+    return request<LockActionResponse>(
+      `/marks/internal-management/${notificationId}/relock`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }
+    );
+  },
+
+  saveInternalMarks(notificationId: number, rows: any[]) {
+    return request<{ success: boolean; message: string }>(
+      `/marks/internal-management/${notificationId}/save`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }
     );
   },
 };

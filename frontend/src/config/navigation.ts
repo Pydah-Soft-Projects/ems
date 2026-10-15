@@ -88,6 +88,13 @@ export const navigation: NavGroup[] = [
         privilege: 'revaluations:read',
       },
       {
+        href: '/dashboard/internal-marks',
+        label: 'Internal Marks Management',
+        description: 'Internal marks monitoring, submission summaries, and lock/unlock workflows',
+        icon: 'reports',
+        privilege: ['marks:read', 'marks:upload', 'exams:read', 'exams:results'],
+      },
+      {
         href: '/dashboard/marks-upload',
         label: 'Marks Uploading',
         description: 'Import Internal, External, Main Exam & Revaluation marks via Excel & PDF',

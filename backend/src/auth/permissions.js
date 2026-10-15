@@ -71,6 +71,7 @@ const PRIVILEGE_GROUPS = [
     privileges: [
       { key: 'marks:read', label: 'View marks uploading & history' },
       { key: 'marks:upload', label: 'Upload / import marks (Excel, PDF & manual entry)' },
+      { key: 'marks:unlock', label: 'Unlock internal marks entry after deadline' },
     ],
   },
   {
