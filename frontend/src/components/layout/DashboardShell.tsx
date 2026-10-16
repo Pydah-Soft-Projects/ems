@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { Sidebar } from './Sidebar';
 import { AccessDenied } from '@/components/auth/AccessDenied';
 import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
+import { PortalSwitcher } from '@/components/portal-switcher/PortalSwitcher';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -125,6 +126,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         onClose={() => setIsLogoutModalOpen(false)}
         fallbackUrl="/login"
       />
+      <PortalSwitcher user={user} />
     </div>
   );
 }

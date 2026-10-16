@@ -34,6 +34,11 @@ export const CRM_FRONTEND_URL =
   process.env.VITE_CRM_FRONTEND_URL ||
   'https://crm.pydah.edu.in';
 
+export const CRM_BACKEND_URL =
+  process.env.NEXT_PUBLIC_CRM_BACKEND_URL ||
+  process.env.VITE_CRM_BACKEND_URL ||
+  'https://pydah-crm-backend.pydah.edu.in';
+
 export interface LoginResponse {
   accessToken: string;
   user: AuthUser;
@@ -61,6 +66,11 @@ export function setAuth(token: string, user: AuthUser, isSSO?: boolean) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 
+  // Store standard keys for seamless cross-portal compatibility and Portal Switcher auto-detection
+  localStorage.setItem('token', token);
+  localStorage.setItem('accessToken', token);
+  localStorage.setItem('user', JSON.stringify(user));
+
   const shouldBeSso = isSSO !== undefined ? isSSO : isSSOLogin();
   if (shouldBeSso) {
     localStorage.setItem(LOGIN_METHOD_KEY, 'sso');
@@ -84,9 +94,26 @@ export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(LOGIN_METHOD_KEY);
+  localStorage.removeItem('token');
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('user');
+  sessionStorage.clear();
   document.cookie = 'ems_token=; path=/; max-age=0';
   document.cookie = 'ems_role=; path=/; max-age=0';
   document.cookie = 'ems_is_sso=; path=/; max-age=0';
+}
+
+/**
+ * Ensures that if an incoming SSO token is present in the URL query,
+ * any previous session is cleared to prevent session collisions.
+ */
+export function clearIncomingSSOCollision() {
+  if (typeof window === 'undefined') return;
+  const urlParams = new URLSearchParams(window.location.search);
+  const ssoToken = urlParams.get('token');
+  if (ssoToken) {
+    clearAuth();
+  }
 }
 
 export function handleLogout(

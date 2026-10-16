@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { StudentShell } from '@/components/student/StudentShell';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
+import { PortalSwitcher } from '@/components/portal-switcher/PortalSwitcher';
 
 export default function StudentPortalLayout({
   children,
@@ -58,6 +59,7 @@ export default function StudentPortalLayout({
         onClose={() => setIsLogoutModalOpen(false)}
         fallbackUrl="/student/login"
       />
+      <PortalSwitcher user={user} />
     </>
   );
 }

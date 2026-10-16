@@ -26,6 +26,13 @@ export function proxy(request: NextRequest) {
 
   const hasSsoToken = request.nextUrl.searchParams.has('token');
 
+  // If a request arrives with an SSO token on any route other than /login, redirect to /login to verify and authenticate
+  if (hasSsoToken && pathname !== '/login') {
+    const ssoRedirectUrl = new URL('/login', request.url);
+    ssoRedirectUrl.searchParams.set('token', request.nextUrl.searchParams.get('token')!);
+    return NextResponse.redirect(ssoRedirectUrl);
+  }
+
   if (pathname === '/login' && token && !hasSsoToken) {
     if (role === 'student') {
       return NextResponse.redirect(new URL('/student', request.url));
