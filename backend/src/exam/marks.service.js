@@ -2,6 +2,7 @@
 
 const xlsx = require('xlsx');
 const pdfParse = require('pdf-parse');
+const { IsNull } = require('typeorm');
 const { AppError } = require('../common/errors');
 const { ExamStatus } = require('./schemas/exam.enums');
 
@@ -62,6 +63,9 @@ class MarksService {
     resultUploadRepo,
     feeRecordRepo,
     sdms,
+    internalMarksLockRepo = null,
+    examSubjectRepo = null,
+    emsAuditLogRepo = null,
   ) {
     this.markRepo = studentMarkRepo;
     this.examRepo = examRepo;
@@ -71,6 +75,9 @@ class MarksService {
     this.resultUploadRepo = resultUploadRepo;
     this.feeRecordRepo = feeRecordRepo;
     this.sdms = sdms;
+    this.lockRepo = internalMarksLockRepo;
+    this.examSubjectRepo = examSubjectRepo;
+    this.auditRepo = emsAuditLogRepo;
   }
 
   /**
@@ -95,11 +102,15 @@ class MarksService {
       course: e.course,
       branch: e.branch,
       batch: e.batch,
+      academicYear: e.batch,
       yearOfStudy: e.yearOfStudy,
       semester: e.semester,
       regulationId: e.regulationId,
       regulationCode: e.regulation?.code ?? null,
+      regulationName: e.regulation?.name ?? null,
       status: e.status,
+      examinationStartDate: e.examinationStartDate,
+      examinationEndDate: e.examinationEndDate,
       subjectCount: e.examSubjects?.length ?? 0,
       createdAt: e.createdAt,
     }));
@@ -209,6 +220,9 @@ class MarksService {
           internalMarks: Number(es.subject?.internalMarks ?? 30),
           externalMarks: Number(es.subject?.externalMarks ?? 70),
           totalMarks: Number(es.subject?.totalMarks ?? 100),
+          examDate: es.examDate || exam.examinationStartDate || null,
+          branch: es.branch || null,
+          section: es.section || null,
         });
       }
     }
@@ -476,9 +490,7 @@ class MarksService {
           }
         }
       } catch (sdmsErr) {
-        if (exam.examCategory === 'INTERNAL') {
-          throw AppError.serviceUnavailable('The internal exam student roster could not be loaded.');
-        }
+        console.warn('SDMS student roster note:', sdmsErr.message);
       }
     }
 
@@ -1137,6 +1149,19 @@ class MarksService {
       }
     }
 
+    // Load lock overrides for internal marks validation
+    const lockMap = new Map();
+    if (cat === 'INTERNAL' && exam && this.lockRepo) {
+      try {
+        const locks = await this.lockRepo.find({ where: { examId: notificationId } });
+        for (const l of locks) {
+          if (l.subjectCode) lockMap.set(l.subjectCode.toLowerCase(), l);
+        }
+      } catch (err) {
+        console.warn('Could not load marks locks:', err.message);
+      }
+    }
+
     const errors = [];
     const normalized = [];
     const seenKeys = new Set();
@@ -1151,6 +1176,20 @@ class MarksService {
           code = exam.examSubjects[0].subject?.code || 'MAIN';
         } else {
           code = 'MAIN';
+        }
+      }
+
+      if (cat === 'INTERNAL' && exam) {
+        const es = exam.examSubjects?.find((s) => s.subject?.code?.toLowerCase() === code.toLowerCase());
+        const subExamDate = es?.examDate || exam.examinationStartDate || null;
+        const subOverride = lockMap.get(code.toLowerCase()) || lockMap.get('all') || null;
+        const deadlineInfo = this.calculateSubjectDeadline(subExamDate, subOverride);
+        if (deadlineInfo.isLocked) {
+          errors.push({
+            row: lineNum,
+            message: `Internal marks entry for subject "${code}" is locked (${deadlineInfo.lockReason}, deadline: ${deadlineInfo.deadlineFormatted}). An authorized unlock is required.`,
+          });
+          return;
         }
       }
 
@@ -1558,7 +1597,52 @@ class MarksService {
     }
 
     const studentList = [...studentMap.values()].map((s) => {
-      const examGroups = [...s.examGroupsMap.values()].map((g) => {
+      const studentGroups = [...s.examGroupsMap.values()];
+      const identifiedExamGroups = studentGroups.filter(
+        (group) => group.examId != null && group.revaluationId == null,
+      );
+      const unlinkedGroups = studentGroups.filter(
+        (group) => group.examId == null && group.revaluationId == null,
+      );
+
+      if (identifiedExamGroups.length === 1 && unlinkedGroups.length > 0) {
+        const targetGroup = identifiedExamGroups[0];
+        for (const unlinkedGroup of unlinkedGroups) {
+          for (const [subjectKey, sourceSubject] of unlinkedGroup.subjectsMap) {
+            const targetSubject = targetGroup.subjectsMap.get(subjectKey);
+            if (!targetSubject) {
+              targetGroup.subjectsMap.set(subjectKey, sourceSubject);
+              continue;
+            }
+
+            for (const field of [
+              'internalMarks',
+              'maxInternalMarks',
+              'externalMarks',
+              'maxExternalMarks',
+              'totalMarks',
+              'maxTotalMarks',
+              'grade',
+              'gradePoints',
+              'credits',
+              'passed',
+            ]) {
+              if (targetSubject[field] == null && sourceSubject[field] != null) {
+                targetSubject[field] = sourceSubject[field];
+              }
+            }
+            targetSubject.isAbsent ||= sourceSubject.isAbsent;
+            targetSubject.revaluation ||= sourceSubject.revaluation;
+          }
+        }
+      }
+
+      const groupsForStudent =
+        identifiedExamGroups.length === 1 && unlinkedGroups.length > 0
+          ? studentGroups.filter((group) => !unlinkedGroups.includes(group))
+          : studentGroups;
+
+      const examGroups = groupsForStudent.map((g) => {
         const subjects = [...g.subjectsMap.values()];
         let totalCredits = 0;
         let totalGradePointsCredits = 0;
@@ -1654,6 +1738,653 @@ class MarksService {
       backlogCount: finalStudents.filter((s) => s.status === 'BACKLOGS').length,
       students: finalStudents,
     };
+  }
+
+  /**
+   * Calculate marks entry deadline and effective lock status for a subject.
+   * Internal marks entry is permitted for up to 4 calendar days from the examination date.
+   * Expired entries are automatically locked, unless an active manual unlock override exists.
+   */
+  calculateSubjectDeadline(examDateStr, overrideLock = null) {
+    if (!examDateStr) {
+      const isLocked = overrideLock ? !overrideLock.isUnlocked : false;
+      return {
+        examDate: null,
+        deadlineDate: null,
+        deadlineFormatted: 'No Exam Date Configured',
+        isExpired: false,
+        isLocked,
+        isManuallyUnlocked: !!(overrideLock && overrideLock.isUnlocked),
+        lockReason: overrideLock?.isUnlocked
+          ? (overrideLock.unlockReason || 'Manually Unlocked')
+          : (overrideLock ? 'Manually Locked' : 'Open'),
+        override: overrideLock || null,
+      };
+    }
+
+    const match = String(examDateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) {
+      const isLocked = overrideLock ? !overrideLock.isUnlocked : false;
+      return {
+        examDate: examDateStr,
+        deadlineDate: null,
+        deadlineFormatted: 'Invalid Exam Date',
+        isExpired: false,
+        isLocked,
+        isManuallyUnlocked: !!(overrideLock && overrideLock.isUnlocked),
+        lockReason: overrideLock?.isUnlocked ? (overrideLock.unlockReason || 'Manually Unlocked') : 'Open',
+        override: overrideLock || null,
+      };
+    }
+
+    const [, y, m, d] = match;
+    const baseDate = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+    // Add 4 calendar days
+    baseDate.setUTCDate(baseDate.getUTCDate() + 4);
+    const deadlineDate = baseDate.toISOString().slice(0, 10);
+    // End of 4th day in Asia/Kolkata (23:59:59.999 IST = 18:29:59.999 UTC)
+    const deadlineEndMs = new Date(`${deadlineDate}T23:59:59.999+05:30`).getTime();
+    // Start of exam date in Asia/Kolkata (00:00:00.000 IST)
+    const examStartMs = new Date(`${y}-${m}-${d}T00:00:00.000+05:30`).getTime();
+    const nowMs = Date.now();
+    const isUpcoming = nowMs < examStartMs;
+    const isExpired = nowMs > deadlineEndMs;
+
+    let isLocked = isExpired;
+    let isManuallyUnlocked = false;
+    let lockReason = '';
+
+    if (overrideLock) {
+      if (overrideLock.isUnlocked) {
+        isLocked = false;
+        isManuallyUnlocked = true;
+        lockReason = `Manually Unlocked by ${overrideLock.unlockedBy || 'Admin'}${overrideLock.unlockReason ? `: ${overrideLock.unlockReason}` : ''}`;
+      } else {
+        isLocked = isExpired || isUpcoming;
+        lockReason = isUpcoming
+          ? `Opens on ${d}/${m}/${y}`
+          : isExpired
+          ? '4-Day Entry Period Expired (Relocked)'
+          : 'Open (Relocked)';
+      }
+    } else {
+      if (isUpcoming) {
+        isLocked = true;
+        lockReason = `Opens on ${d}/${m}/${y}`;
+      } else if (isExpired) {
+        isLocked = true;
+        lockReason = '4-Day Entry Period Expired';
+      } else {
+        isLocked = false;
+        lockReason = 'Within 4-Day Window';
+      }
+    }
+
+    const [dy, dm, dd] = deadlineDate.split('-');
+    const deadlineFormatted = `${dd}/${dm}/${dy} 23:59 IST`;
+    const examDateFormatted = `${d}/${m}/${y}`;
+
+    return {
+      examDate: `${y}-${m}-${d}`,
+      examDateFormatted,
+      deadlineDate,
+      deadlineFormatted,
+      isUpcoming,
+      isExpired,
+      isLocked,
+      isManuallyUnlocked,
+      lockReason,
+      override: overrideLock || null,
+    };
+  }
+
+  /**
+   * Get comprehensive Internal Marks Management data for an exam notification:
+   * - Notification details and metadata
+   * - Filter lists (branches, sections, subjects, regulations, years, semesters)
+   * - Subject-wise submission summary (eligible, entered, pending, completion %, deadline, lock status)
+   * - Student marks details rows with distinction between entered 0 and missing marks
+   * - Notification-level summary metrics
+   */
+  async getInternalMarksOverview(notificationId) {
+    const exam = await this.examRepo.findOne({
+      where: { id: notificationId },
+      relations: ['regulation', 'examSubjects', 'examSubjects.subject', 'scopes'],
+    });
+    if (!exam) throw AppError.notFound('Examination notification not found');
+
+    const details = await this.getNotificationDetails('EXAM', notificationId);
+    const enrolledStudents = details?.students || [];
+    const notificationSubjects = details?.subjects || [];
+
+    // Load manual lock overrides
+    const lockRecords = this.lockRepo ? await this.lockRepo.find({ where: { examId: notificationId } }) : [];
+    const lockMap = new Map();
+    for (const l of lockRecords) {
+      if (l.subjectCode) lockMap.set(l.subjectCode.toLowerCase(), l);
+    }
+    const allOverride = lockMap.get('all') || null;
+
+    // Internal marks may also be stored on records created by the results workflow.
+    const markRecords = await this.markRepo.find({
+      where: { examId: notificationId },
+      order: { studentRollNumber: 'ASC', subjectCode: 'ASC', updatedAt: 'DESC' },
+    });
+
+    const unlinkedMarkRecords = await this.markRepo.find({
+      where: { examId: IsNull() },
+      order: { studentRollNumber: 'ASC', subjectCode: 'ASC', updatedAt: 'DESC' },
+    });
+    const unlinkedResultsMarksMap = new Map();
+    for (const record of unlinkedMarkRecords) {
+      if (record.internalMarks == null || record.revaluationId != null) continue;
+      const roll = String(record.studentRollNumber || '').trim().toLowerCase();
+      const code = String(record.subjectCode || '').trim().toLowerCase();
+      if (!roll || !code) continue;
+      const key = `${roll}|${code}`;
+      const existing = unlinkedResultsMarksMap.get(key);
+      const isInternal = String(record.category || '').toUpperCase() === 'INTERNAL';
+      const existingIsInternal = String(existing?.category || '').toUpperCase() === 'INTERNAL';
+      if (!existing || (isInternal && !existingIsInternal)) {
+        unlinkedResultsMarksMap.set(key, record);
+      }
+    }
+
+    const marksMap = new Map();
+    for (const m of markRecords) {
+      const isInternalCategory = String(m.category || '').toUpperCase() === 'INTERNAL';
+      if (m.internalMarks == null && !(isInternalCategory && m.isAbsent)) continue;
+
+      const roll = (m.studentRollNumber || '').trim().toLowerCase();
+      const code = (m.subjectCode || '').trim().toLowerCase();
+      if (!roll || !code) continue;
+
+      const key = `${roll}|${code}`;
+      const existing = marksMap.get(key);
+      const existingIsInternal =
+        existing && String(existing.category || '').toUpperCase() === 'INTERNAL';
+      if (!existing || (isInternalCategory && !existingIsInternal)) {
+        marksMap.set(key, m);
+      }
+    }
+
+    // Build subject list from exam subjects
+    const subjectList = [];
+    const subjectCodeMap = new Map();
+
+    for (const es of exam.examSubjects || []) {
+      const code = es.subject?.code?.trim() || `SUB-${es.subjectId}`;
+      const cKey = code.toLowerCase();
+      const bName = es.branch?.trim() || null;
+      const sName = es.section?.trim() || null;
+
+      if (!subjectCodeMap.has(cKey)) {
+        const subExamDate = es.examDate || exam.examinationStartDate || null;
+        const subOverride = lockMap.get(cKey) || allOverride;
+        const deadlineInfo = this.calculateSubjectDeadline(subExamDate, subOverride);
+
+        const subInfo = {
+          id: es.subjectId,
+          code,
+          name: es.subject?.name || '',
+          type: es.subject?.type || 'THEORY',
+          internalMarks: Number(es.subject?.internalMarks ?? 30),
+          externalMarks: Number(es.subject?.externalMarks ?? 70),
+          totalMarks: Number(es.subject?.totalMarks ?? 100),
+          branch: bName,
+          branches: bName ? [bName] : [],
+          section: sName,
+          sections: sName ? [sName] : [],
+          examDate: deadlineInfo.examDate,
+          examDateFormatted: deadlineInfo.examDateFormatted,
+          deadlineDate: deadlineInfo.deadlineDate,
+          deadlineFormatted: deadlineInfo.deadlineFormatted,
+          isUpcoming: deadlineInfo.isUpcoming,
+          isExpired: deadlineInfo.isExpired,
+          isLocked: deadlineInfo.isLocked,
+          isManuallyUnlocked: deadlineInfo.isManuallyUnlocked,
+          lockReason: deadlineInfo.lockReason,
+          override: deadlineInfo.override,
+        };
+        subjectCodeMap.set(cKey, subInfo);
+        subjectList.push(subInfo);
+      } else {
+        const existing = subjectCodeMap.get(cKey);
+        if (bName && !existing.branches.includes(bName)) {
+          existing.branches.push(bName);
+        }
+        if (sName && !existing.sections.includes(sName)) {
+          existing.sections.push(sName);
+        }
+      }
+    }
+
+    // Fallback if exam has no explicit examSubjects loaded
+    if (subjectList.length === 0) {
+      for (const s of notificationSubjects) {
+        const cKey = s.code.toLowerCase();
+        const bName = s.branch?.trim() || null;
+        const sName = s.section?.trim() || null;
+
+        if (!subjectCodeMap.has(cKey)) {
+          const deadlineInfo = this.calculateSubjectDeadline(s.examDate || exam.examinationStartDate || null, lockMap.get(cKey) || allOverride);
+          const subInfo = {
+            id: s.id || 0,
+            code: s.code,
+            name: s.name,
+            type: s.type || 'THEORY',
+            internalMarks: Number(s.internalMarks ?? 30),
+            externalMarks: Number(s.externalMarks ?? 70),
+            totalMarks: Number(s.totalMarks ?? 100),
+            branch: bName,
+            branches: bName ? [bName] : [],
+            section: sName,
+            sections: sName ? [sName] : [],
+            examDate: deadlineInfo.examDate,
+            examDateFormatted: deadlineInfo.examDateFormatted,
+            deadlineDate: deadlineInfo.deadlineDate,
+            deadlineFormatted: deadlineInfo.deadlineFormatted,
+            isUpcoming: deadlineInfo.isUpcoming,
+            isExpired: deadlineInfo.isExpired,
+            isLocked: deadlineInfo.isLocked,
+            isManuallyUnlocked: deadlineInfo.isManuallyUnlocked,
+            lockReason: deadlineInfo.lockReason,
+            override: deadlineInfo.override,
+          };
+          subjectCodeMap.set(cKey, subInfo);
+          subjectList.push(subInfo);
+        } else {
+          const existing = subjectCodeMap.get(cKey);
+          if (bName && !existing.branches.includes(bName)) {
+            existing.branches.push(bName);
+          }
+          if (sName && !existing.sections.includes(sName)) {
+            existing.sections.push(sName);
+          }
+        }
+      }
+    }
+
+    // Per-subject metrics and student-subject detailed entries
+    const studentEntries = [];
+    const subjectSummaries = [];
+
+    let totalExpectedEntries = 0;
+    let totalSubmittedEntries = 0;
+    let totalLockedEntries = 0;
+    let totalUnlockedEntries = 0;
+
+    let completedSubjectsCount = 0;
+    let partiallySubmittedSubjectsCount = 0;
+    let pendingSubjectsCount = 0;
+    let lockedSubjectsCount = 0;
+    let unlockedSubjectsCount = 0;
+
+    let sNo = 1;
+
+    for (const sub of subjectList) {
+      const cKey = sub.code.toLowerCase();
+      const enteredStudents = [];
+      const missingStudents = [];
+
+      // Determine eligible students for this subject
+      const eligibleStudents = enrolledStudents.filter((student) => {
+        if (sub.branches && sub.branches.length > 0) {
+          const isAll = sub.branches.some((b) => b.toUpperCase() === 'ALL');
+          if (!isAll && !sub.branches.some((b) => b.toUpperCase() === (student.branch || '').toUpperCase())) {
+            return false;
+          }
+        } else if (sub.branch && sub.branch.toUpperCase() !== 'ALL') {
+          if (student.branch && student.branch.toUpperCase() !== sub.branch.toUpperCase()) {
+            return false;
+          }
+        }
+        if (sub.sections && sub.sections.length > 0) {
+          const isAllSec = sub.sections.some((s) => s.toUpperCase() === 'ALL');
+          if (!isAllSec && !sub.sections.some((s) => s.toUpperCase() === (student.section || '').toUpperCase())) {
+            return false;
+          }
+        } else if (sub.section && sub.section.toUpperCase() !== 'ALL') {
+          if (student.section && student.section.toUpperCase() !== sub.section.toUpperCase()) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      for (const student of eligibleStudents) {
+        const rKey = (student.rollNumber || '').trim().toLowerCase();
+        const markKey = `${rKey}|${cKey}`;
+        const mark = marksMap.get(markKey);
+        const resultsMark = unlinkedResultsMarksMap.get(markKey);
+        const internalMarks = mark?.internalMarks ?? resultsMark?.internalMarks;
+
+        // Distinctly handle 0 vs null/undefined
+        const hasMarks = Boolean(
+          internalMarks !== null && internalMarks !== undefined ||
+          (mark &&
+            (String(mark.category || '').toUpperCase() === 'INTERNAL' && mark.isAbsent)),
+        );
+        const marksObtained = hasMarks && internalMarks != null ? Number(internalMarks) : null;
+        const isAbsent = hasMarks
+          ? Boolean(mark?.isAbsent || resultsMark?.isAbsent)
+          : false;
+        const isEntered = Boolean(hasMarks);
+
+        if (isEntered) {
+          enteredStudents.push({
+            rollNumber: student.rollNumber,
+            name: student.name || 'N/A',
+            branch: student.branch || 'GENERAL',
+            section: student.section || null,
+            marks: marksObtained,
+            isAbsent,
+            updatedAt: mark?.updatedAt || mark?.createdAt || null,
+          });
+          totalSubmittedEntries++;
+        } else {
+          missingStudents.push({
+            rollNumber: student.rollNumber,
+            name: student.name || 'N/A',
+            branch: student.branch || 'GENERAL',
+            section: student.section || null,
+          });
+        }
+
+        totalExpectedEntries++;
+        if (sub.isLocked) {
+          totalLockedEntries++;
+        } else {
+          totalUnlockedEntries++;
+        }
+
+        studentEntries.push({
+          sNo: sNo++,
+          studentRollNumber: student.rollNumber,
+          studentName: student.name || 'N/A',
+          academicYear: exam.batch || '2024-25',
+          yearOfStudy: exam.yearOfStudy || 1,
+          semester: exam.semester || 1,
+          branch: student.branch || exam.branch || 'GENERAL',
+          section: student.section || '-',
+          examNotificationName: exam.name,
+          examType: exam.type || 'REGULAR',
+          examDate: sub.examDate,
+          subjectCode: sub.code,
+          subjectName: sub.name,
+          maxMarks: resultsMark?.maxInternalMarks ?? sub.internalMarks ?? 30,
+          marksObtained,
+          isAbsent,
+          isEntered,
+          marksEntryStatus: isEntered ? (isAbsent ? 'Absent' : 'Entered') : 'Not Entered',
+          isLocked: sub.isLocked,
+          lockStatus: sub.isLocked ? 'Locked' : 'Unlocked',
+          lockReason: sub.lockReason,
+          deadline: sub.deadlineFormatted,
+          deadlineDate: sub.deadlineDate,
+          isExpired: sub.isExpired,
+          isManuallyUnlocked: sub.isManuallyUnlocked,
+          marksEntryDate: mark?.updatedAt || mark?.createdAt || null,
+          uploadedBy: mark?.uploadedBy || null,
+        });
+      }
+
+      const eligibleCount = eligibleStudents.length;
+      const enteredCount = enteredStudents.length;
+      const notEnteredCount = eligibleCount - enteredCount;
+      const submissionPercentage = eligibleCount > 0 ? Number(((enteredCount / eligibleCount) * 100).toFixed(1)) : 0;
+
+      let completionStatus = 'PENDING';
+      if (eligibleCount === 0) {
+        completionStatus = 'NO_ELIGIBLE_STUDENTS';
+      } else if (enteredCount === eligibleCount) {
+        completionStatus = 'COMPLETED';
+        completedSubjectsCount++;
+      } else if (enteredCount > 0) {
+        completionStatus = 'PARTIALLY_SUBMITTED';
+        partiallySubmittedSubjectsCount++;
+      } else {
+        completionStatus = 'PENDING';
+        pendingSubjectsCount++;
+      }
+
+      if (sub.isLocked) {
+        lockedSubjectsCount++;
+      } else {
+        unlockedSubjectsCount++;
+      }
+
+      subjectSummaries.push({
+        sNo: subjectSummaries.length + 1,
+        subjectId: sub.id,
+        subjectCode: sub.code,
+        subjectName: sub.name,
+        type: sub.type,
+        maxMarks: sub.internalMarks,
+        totalEligibleStudents: eligibleCount,
+        marksEntered: enteredCount,
+        marksNotEntered: notEnteredCount,
+        submissionPercentage,
+        completionStatus,
+        isLocked: sub.isLocked,
+        lockStatus: sub.isLocked ? 'Locked' : 'Unlocked',
+        isManuallyUnlocked: sub.isManuallyUnlocked,
+        lockReason: sub.lockReason,
+        examDate: sub.examDate,
+        examDateFormatted: sub.examDateFormatted,
+        marksEntryDeadline: sub.deadlineFormatted,
+        deadlineDate: sub.deadlineDate,
+        isUpcoming: sub.isUpcoming,
+        isExpired: sub.isExpired,
+        branch: sub.branches && sub.branches.length > 0 ? sub.branches.join(', ') : sub.branch || 'ALL',
+        facultyName: sub.override?.facultyName || null,
+        facultyEmail: sub.override?.facultyEmail || null,
+        unlockedBy: sub.override?.unlockedBy || null,
+        unlockedAt: sub.override?.unlockedAt || null,
+        enteredStudents,
+        missingStudents,
+      });
+    }
+
+    const overallPercentage = totalExpectedEntries > 0
+      ? Number(((totalSubmittedEntries / totalExpectedEntries) * 100).toFixed(1))
+      : 0;
+
+    const summary = {
+      notificationName: exam.name,
+      examinationDate: exam.examinationStartDate
+        ? `${exam.examinationStartDate}${exam.examinationEndDate ? ` to ${exam.examinationEndDate}` : ''}`
+        : 'Not Scheduled',
+      totalStudents: enrolledStudents.length,
+      totalSubjects: subjectList.length,
+      totalExpectedEntries,
+      entriesSubmitted: totalSubmittedEntries,
+      entriesNotEntered: totalExpectedEntries - totalSubmittedEntries,
+      submissionPercentage: overallPercentage,
+      lockedEntries: totalLockedEntries,
+      unlockedEntries: totalUnlockedEntries,
+      completedSubjects: completedSubjectsCount,
+      partiallySubmittedSubjects: partiallySubmittedSubjectsCount,
+      pendingSubjects: pendingSubjectsCount,
+      lockedSubjects: lockedSubjectsCount,
+      unlockedSubjects: unlockedSubjectsCount,
+    };
+
+    return {
+      notification: {
+        id: exam.id,
+        name: exam.name,
+        type: exam.type,
+        course: exam.course,
+        branch: exam.branch,
+        batch: exam.batch,
+        academicYear: exam.batch,
+        yearOfStudy: exam.yearOfStudy,
+        semester: exam.semester,
+        regulationId: exam.regulationId,
+        regulationCode: exam.regulation?.code || null,
+        regulationName: exam.regulation?.name || null,
+        examinationStartDate: exam.examinationStartDate,
+        examinationEndDate: exam.examinationEndDate,
+        status: exam.status,
+      },
+      branches: details?.branches || [],
+      sections: Array.from(new Set(enrolledStudents.map((s) => s.section).filter(Boolean))),
+      subjects: subjectSummaries,
+      studentEntries,
+      summary,
+    };
+  }
+
+  /**
+   * Unlock internal marks entry for an exam subject (or all subjects in exam).
+   * Persists the unlock override and creates an audit log entry.
+   */
+  async unlockInternalMarks(notificationId, { subjectCode, reason, facultyName, facultyEmail }, actor = {}) {
+    const exam = await this.examRepo.findOne({ where: { id: notificationId } });
+    if (!exam) throw AppError.notFound('Examination notification not found');
+
+    const code = String(subjectCode || 'ALL').trim().toUpperCase();
+    const unlockReason = String(reason || 'Authorized administrative unlock').trim();
+    const fName = facultyName ? String(facultyName).trim() : null;
+    const fEmail = facultyEmail ? String(facultyEmail).trim() : null;
+    const actorEmail = actor.email || actor.username || 'admin';
+    const actorName = actor.fullName || actor.username || actor.email || 'Administrator';
+
+    let lock = null;
+    if (this.lockRepo) {
+      lock = await this.lockRepo.findOne({
+        where: { examId: notificationId, subjectCode: code },
+      });
+
+      if (lock) {
+        lock.isUnlocked = true;
+        lock.unlockedBy = actorName;
+        lock.unlockedAt = new Date();
+        lock.unlockReason = unlockReason;
+        lock.facultyName = fName;
+        lock.facultyEmail = fEmail;
+        lock.relockedBy = null;
+        lock.relockedAt = null;
+      } else {
+        lock = this.lockRepo.create({
+          examId: notificationId,
+          subjectCode: code,
+          isUnlocked: true,
+          unlockedBy: actorName,
+          unlockedAt: new Date(),
+          unlockReason,
+          facultyName: fName,
+          facultyEmail: fEmail,
+        });
+      }
+      await this.lockRepo.save(lock);
+    }
+
+    // Log to EMS Audit Logs
+    if (this.auditRepo) {
+      try {
+        const auditEntry = this.auditRepo.create({
+          actorEmail,
+          actorHrmsUserId: actor.hrmsUserId || null,
+          action: 'INTERNAL_MARKS_UNLOCK',
+          targetType: 'EXAM_SUBJECT',
+          targetId: `${notificationId}:${code}`,
+          detail: {
+            notificationId,
+            examName: exam.name,
+            subjectCode: code,
+            reason: unlockReason,
+            unlockedBy: actorName,
+            unlockedAt: new Date().toISOString(),
+          },
+        });
+        await this.auditRepo.save(auditEntry);
+      } catch (auditErr) {
+        console.warn('Could not save unlock audit log:', auditErr.message);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Internal marks entry for ${code === 'ALL' ? 'all subjects' : `subject ${code}`} has been unlocked successfully.`,
+      lock,
+    };
+  }
+
+  /**
+   * Relock internal marks entry for an exam subject.
+   * Cancels manual unlock override so standard 4-day deadline rules re-apply.
+   */
+  async relockInternalMarks(notificationId, { subjectCode }, actor = {}) {
+    const exam = await this.examRepo.findOne({ where: { id: notificationId } });
+    if (!exam) throw AppError.notFound('Examination notification not found');
+
+    const code = String(subjectCode || 'ALL').trim().toUpperCase();
+    const actorEmail = actor.email || actor.username || 'admin';
+    const actorName = actor.fullName || actor.username || actor.email || 'Administrator';
+
+    let lock = null;
+    if (this.lockRepo) {
+      lock = await this.lockRepo.findOne({
+        where: { examId: notificationId, subjectCode: code },
+      });
+
+      if (lock) {
+        lock.isUnlocked = false;
+        lock.relockedBy = actorName;
+        lock.relockedAt = new Date();
+        await this.lockRepo.save(lock);
+      }
+    }
+
+    // Log to EMS Audit Logs
+    if (this.auditRepo) {
+      try {
+        const auditEntry = this.auditRepo.create({
+          actorEmail,
+          actorHrmsUserId: actor.hrmsUserId || null,
+          action: 'INTERNAL_MARKS_RELOCK',
+          targetType: 'EXAM_SUBJECT',
+          targetId: `${notificationId}:${code}`,
+          detail: {
+            notificationId,
+            examName: exam.name,
+            subjectCode: code,
+            relockedBy: actorName,
+            relockedAt: new Date().toISOString(),
+          },
+        });
+        await this.auditRepo.save(auditEntry);
+      } catch (auditErr) {
+        console.warn('Could not save relock audit log:', auditErr.message);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Internal marks entry for ${code === 'ALL' ? 'all subjects' : `subject ${code}`} has been relocked. Standard deadline rules apply.`,
+      lock,
+    };
+  }
+
+  /**
+   * Save individual or batch internal marks entries.
+   * Validates deadlines/lock status before committing changes.
+   */
+  async saveInternalMarks(notificationId, rows, actor = {}) {
+    const exam = await this.examRepo.findOne({
+      where: { id: notificationId },
+      relations: ['examSubjects', 'examSubjects.subject'],
+    });
+    if (!exam) throw AppError.notFound('Examination notification not found');
+
+    const actorName = actor.fullName || actor.username || actor.email || 'Staff Desk';
+    const uploadDto = {
+      courseCategory: 'THEORY',
+      rows: Array.isArray(rows) ? rows : [],
+    };
+    return this.uploadMarks('INTERNAL', notificationId, uploadDto, actorName);
   }
 }
 

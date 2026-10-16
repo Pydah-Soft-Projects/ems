@@ -13,7 +13,21 @@ export type NavItem = {
     | 'reports'
     | 'remuneration'
     | 'settings'
-    | 'users';
+    | 'users'
+    | 'internal-exams'
+    | 'revaluations'
+    | 'internal-marks'
+    | 'marks-upload'
+    | 'student-results'
+    | 'duplicate-hall-tickets'
+    | 'exam-calendar'
+    | 'subject-reports'
+    | 'application-reports'
+    | 'fee-heads'
+    | 'reconcile'
+    | 'professionals'
+    | 'due-management'
+    | 'payment-reports';
   /** Any of these privileges unlocks the nav item. */
   privilege?: string | string[];
 };
@@ -70,7 +84,7 @@ export const navigation: NavGroup[] = [
         href: '/dashboard/internal-exams',
         label: 'Internal Examinations',
         description: 'Create internal examination notifications',
-        icon: 'exams',
+        icon: 'internal-exams',
         privilege: ['internal_exams:read', 'internal_exams:write'],
       },
       {
@@ -84,28 +98,35 @@ export const navigation: NavGroup[] = [
         href: '/dashboard/revaluations',
         label: 'Revaluations',
         description: 'Publish revaluation access by regulation and batch',
-        icon: 'exams',
+        icon: 'revaluations',
         privilege: 'revaluations:read',
+      },
+      {
+        href: '/dashboard/internal-marks',
+        label: 'Internal Marks Management',
+        description: 'Internal marks monitoring, submission summaries, and lock/unlock workflows',
+        icon: 'internal-marks',
+        privilege: ['marks:read', 'marks:upload', 'exams:read', 'exams:results'],
       },
       {
         href: '/dashboard/marks-upload',
         label: 'Marks Uploading',
         description: 'Import Internal, External, Main Exam & Revaluation marks via Excel & PDF',
-        icon: 'reports',
+        icon: 'marks-upload',
         privilege: ['marks:read', 'marks:upload'],
       },
       {
         href: '/dashboard/results',
         label: 'Student Results',
         description: 'Comprehensive student-wise result statement with internals, externals, semester & revaluations',
-        icon: 'reports',
+        icon: 'student-results',
         privilege: 'results:read',
       },
       {
         href: '/dashboard/duplicate-hall-tickets',
         label: 'Duplicate hall tickets',
         description: 'Raise request, collect fee, and print duplicate hall tickets',
-        icon: 'exams',
+        icon: 'duplicate-hall-tickets',
         privilege: [
           'exams:duplicate_hall_tickets:raise',
           'exams:duplicate_hall_tickets:print',
@@ -117,21 +138,21 @@ export const navigation: NavGroup[] = [
         href: '/dashboard/exam-calendar',
         label: 'Exam Calendar',
         description: 'Admin view of exam + late-fee timeline',
-        icon: 'exams',
+        icon: 'exam-calendar',
         privilege: 'exams:read',
       },
       {
         href: '/dashboard/reports/subject-wise',
         label: 'Subject-wise Reports',
         description: 'Paid PIN numbers by timetable subject and exam date',
-        icon: 'reports',
+        icon: 'subject-reports',
         privilege: 'exams:read',
       },
       {
         href: '/dashboard/exam-reports',
         label: 'Exam Application Reports',
         description: 'Batch and branch wise application summary & paid counts',
-        icon: 'reports',
+        icon: 'application-reports',
         privilege: 'exams:read',
       },
       {
@@ -157,21 +178,21 @@ export const navigation: NavGroup[] = [
         href: '/dashboard/fees/fee-heads',
         label: 'Fee Heads Creation',
         description: 'Global & regulation-specific fee head master',
-        icon: 'fees',
+        icon: 'fee-heads',
         privilege: ['fees:read', 'fees:write', 'fees:collect'],
       },
       {
         href: '/dashboard/fees/self-online',
         label: 'Self Online reconcile',
         description: 'College UPI statements & verification',
-        icon: 'fees',
+        icon: 'reconcile',
         privilege: ['fees:reconcile', 'fees:read'],
       },
       {
         href: '/dashboard/professionals',
         label: 'Professionals',
         description: 'External paper setters & examiners directory',
-        icon: 'organization',
+        icon: 'professionals',
         privilege: 'professionals:read',
       },
       {
@@ -185,14 +206,14 @@ export const navigation: NavGroup[] = [
         href: '/dashboard/due-management',
         label: 'Due Management',
         description: 'Manage examination due status per student',
-        icon: 'fees',
+        icon: 'due-management',
         privilege: ['fees:read'],
       },
       {
         href: '/dashboard/reports',
         label: 'Payment Reports',
         description: 'Day / month wise paid students report',
-        icon: 'fees',
+        icon: 'payment-reports',
         privilege: ['fees:read'],
       },
     ],

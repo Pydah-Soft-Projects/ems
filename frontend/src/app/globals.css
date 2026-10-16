@@ -116,6 +116,11 @@ body {
   }
 }
 
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 .sidebar-scroll::-webkit-scrollbar {
   width: 4px;
 }

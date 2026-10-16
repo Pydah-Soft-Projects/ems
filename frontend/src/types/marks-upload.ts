@@ -12,7 +12,9 @@ export interface MarksNotificationItem {
   batch?: string;
   yearOfStudy?: number;
   semester?: number;
+  regulationId?: number;
   regulationCode?: string;
+  regulationName?: string;
   academicYear?: string;
   status: string;
   subjectCount: number;

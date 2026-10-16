@@ -59,6 +59,7 @@ const {
   RevaluationApplication,
 } = require('../revaluation/schemas/revaluation-notification.schema');
 const { StudentMark } = require('../exam/schemas/student-mark.schema');
+const { InternalMarksLock } = require('../exam/schemas/internal-marks-lock.schema');
 
 const entities = [
   Regulation,
@@ -78,6 +79,7 @@ const entities = [
   ResultUpload,
   SubjectResult,
   StudentMark,
+  InternalMarksLock,
   PaymentGatewaySettings,
   CanaraPaymentSettings,
   CanaraVPA,

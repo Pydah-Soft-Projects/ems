@@ -29,6 +29,7 @@ const {
 } = require('../exam/schemas/merchant-statement.schema');
 const { ResultUpload, SubjectResult } = require('../exam/schemas/result.schema');
 const { StudentMark } = require('../exam/schemas/student-mark.schema');
+const { InternalMarksLock } = require('../exam/schemas/internal-marks-lock.schema');
 const { ResultsService } = require('../exam/results.service');
 const { MarksService } = require('../exam/marks.service');
 const { SelfOnlineService } = require('../exam/self-online.service');
@@ -198,6 +199,9 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(ResultUpload),
     dataSource.getRepository(ExamFeeRecord),
     sdms,
+    dataSource.getRepository(InternalMarksLock),
+    dataSource.getRepository(ExamSubject),
+    dataSource.getRepository(EmsAuditLog),
   );
 
   const auth = new AuthService(sdms, users);

@@ -17,6 +17,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   useEffect(() => {
@@ -67,8 +68,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-[var(--background)]">
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-[260px]">
-        <Sidebar user={user} onLogout={() => setIsLogoutModalOpen(true)} />
+      <div
+        className={`hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex transition-[width] duration-200 ${
+          collapsed ? 'lg:w-[84px]' : 'lg:w-[260px]'
+        }`}
+      >
+        <Sidebar
+          user={user}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((prev) => !prev)}
+          onLogout={() => setIsLogoutModalOpen(true)}
+        />
       </div>
 
       {mobileOpen ? (
@@ -92,7 +102,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
 
-      <div className="flex min-h-screen flex-1 flex-col lg:pl-[260px]">
+      <div
+        className={`flex min-h-screen flex-1 flex-col transition-[padding] duration-200 ${
+          collapsed ? 'lg:pl-[84px]' : 'lg:pl-[260px]'
+        }`}
+      >
         <main className="flex-1 px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
           <button
             type="button"
