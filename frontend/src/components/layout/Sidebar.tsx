@@ -22,11 +22,18 @@ function getInitials(name: string) {
 interface SidebarProps {
   user: AuthUser;
   collapsed?: boolean;
+  onToggleCollapse?: () => void;
   onNavigate?: () => void;
   onLogout?: () => void;
 }
 
-export function Sidebar({ user, collapsed = false, onNavigate, onLogout }: SidebarProps) {
+export function Sidebar({
+  user,
+  collapsed = false,
+  onToggleCollapse,
+  onNavigate,
+  onLogout,
+}: SidebarProps) {
   const pathname = usePathname();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const activeItem = findNavItem(pathname);
@@ -52,13 +59,43 @@ export function Sidebar({ user, collapsed = false, onNavigate, onLogout }: Sideb
       }`}
     >
       <div
-        className={`border-b border-[var(--sidebar-border)] ${collapsed ? 'px-3 py-4' : 'px-4 py-4'}`}
+        className={`flex items-center border-b border-[var(--sidebar-border)] ${
+          collapsed
+            ? 'flex-col gap-2 px-2 py-3.5 justify-center'
+            : 'justify-between px-3.5 py-3.5'
+        }`}
       >
         <BrandLockup
           title="Examination Portal"
           subtitle="Management System"
           collapsed={collapsed}
+          size="sm"
         />
+        {onToggleCollapse ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title={collapsed ? 'Open sidebar' : 'Close sidebar'}
+            aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
+            className="cursor-pointer inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-2xs transition hover:bg-slate-50 hover:text-slate-800 active:scale-95"
+          >
+            <svg
+              className={`h-4 w-4 transition-transform duration-200 ${
+                collapsed ? 'rotate-180' : ''
+              }`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+              />
+            </svg>
+          </button>
+        ) : null}
       </div>
 
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 py-3">
@@ -104,22 +141,45 @@ export function Sidebar({ user, collapsed = false, onNavigate, onLogout }: Sideb
       <div className={`border-t border-[var(--sidebar-border)] ${collapsed ? 'p-3' : 'p-4'}`}>
         <div
           className={`flex items-center rounded-[var(--radius)] bg-[var(--surface-subtle)] ${
-            collapsed ? 'justify-center p-2' : 'gap-3 p-3'
+            collapsed ? 'justify-center p-2' : 'gap-2.5 p-2.5'
           }`}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-sm font-bold text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-sm font-bold text-white shadow-xs">
             {getInitials(user.fullName)}
           </div>
           {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-900">
-                {user.fullName}
-              </p>
-              <p className="truncate text-xs text-[var(--muted)]">
-                {user.emsRoleName || (user.isSuperAdmin ? 'Super Admin' : user.role)}
-              </p>
-              <p className="truncate text-[10px] text-[var(--muted)]">{user.username}</p>
-            </div>
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-900 leading-tight">
+                  {user.fullName}
+                </p>
+                <p className="truncate text-xs text-[var(--muted)] mt-0.5">
+                  {user.emsRoleName || (user.isSuperAdmin ? 'Super Admin' : user.role)}
+                </p>
+                <p className="truncate text-[10px] text-[var(--muted)]">{user.username}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOutClick}
+                title="Logout"
+                aria-label="Logout"
+                className="cursor-pointer inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-2xs transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700 active:scale-95"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+                  />
+                </svg>
+              </button>
+            </>
           ) : null}
         </div>
         {collapsed ? (
@@ -128,7 +188,7 @@ export function Sidebar({ user, collapsed = false, onNavigate, onLogout }: Sideb
             onClick={handleSignOutClick}
             title="Sign out"
             aria-label="Sign out"
-            className="mt-2 flex w-full justify-center rounded-[var(--radius)] p-2 text-[var(--muted)] transition hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
+            className="cursor-pointer mt-2 flex w-full justify-center rounded-[var(--radius)] border border-rose-200 bg-rose-50 p-2 text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
           >
             <svg
               className="h-5 w-5"
@@ -144,15 +204,7 @@ export function Sidebar({ user, collapsed = false, onNavigate, onLogout }: Sideb
               />
             </svg>
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSignOutClick}
-            className="mt-2 w-full rounded-[var(--radius)] px-3 py-2 text-left text-xs font-semibold text-[var(--muted)] transition hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]"
-          >
-            Sign out
-          </button>
-        )}
+        ) : null}
       </div>
 
       <LogoutConfirmModal
