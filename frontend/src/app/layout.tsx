@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Poppins, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
@@ -65,6 +66,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <ToastProvider>{children}</ToastProvider>
+        <Script
+          id="pydah-portal-switcher-cdn"
+          src="https://crm.pydah.edu.in/portal-switcher.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

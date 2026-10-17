@@ -46,6 +46,19 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
     setIsVerifyingSSO(true);
     setSsoError('');
 
+    // Ensure portal-switcher.js CDN is loaded to register <pydah-sso-loader />
+    const scriptId = 'pydah-portal-switcher-cdn-script';
+    if (typeof document !== 'undefined' && !document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = `${crmFrontendUrl}/portal-switcher.js`;
+      script.async = true;
+      script.setAttribute('data-current-portal', 'examination-portal');
+      script.setAttribute('data-api-base-url', process.env.NEXT_PUBLIC_CRM_BACKEND_URL || 'https://pydah-crm-backend.pydah.edu.in');
+      script.setAttribute('data-landing-url', crmFrontendUrl);
+      document.body.appendChild(script);
+    }
+
     async function handleSSOLogin(token: string) {
       try {
         const res = await api.ssoLogin(token);
@@ -72,7 +85,7 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
     return () => {
       cancelled = true;
     };
-  }, [ssoToken, router]);
+  }, [ssoToken, router, crmFrontendUrl]);
 
   function switchRole(next: Role) {
     setRole(next);
@@ -107,6 +120,11 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
 
   const tabBase =
     'flex h-10 flex-1 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors';
+
+  // Show universal workspace transition loader while verifying SSO token
+  if (isVerifyingSSO) {
+    return <pydah-sso-loader portal="examination-portal" />;
+  }
 
   return (
     <div
@@ -176,39 +194,12 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
         </div>
 
         <div className="w-full max-w-[440px] rounded-2xl bg-white p-7 shadow-[0_20px_60px_rgb(13_27_61/0.10)] sm:p-9">
-          {isVerifyingSSO ? (
-            <div className="py-8 text-center">
-              <div
-                className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200"
-                style={{ borderTopColor: GREEN }}
-              />
-              <h3 className="mt-5 text-lg font-bold" style={{ color: NAVY }}>
-                Verifying Single Sign-On…
-              </h3>
-              <p className="mt-2 text-sm text-slate-500">
-                Connecting with CRM Authentication Gateway and establishing your session.
-              </p>
-              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  className="h-4 w-4 text-[#2E7D32]"
-                >
-                  <path d="M12 3 5 6v5c0 4.4 3 8.1 7 9 4-.9 7-4.6 7-9V6l-7-3Z" strokeLinejoin="round" />
-                </svg>
-                Securing connection…
-              </div>
-            </div>
-          ) : (
-            <>
-              <h2 className="text-center text-2xl font-bold" style={{ color: NAVY }}>
-                Welcome Back!
-              </h2>
-              <p className="mt-1.5 text-center text-[13px] text-slate-500">
-                Sign in to continue to your account
-              </p>
+          <h2 className="text-center text-2xl font-bold" style={{ color: NAVY }}>
+            Welcome Back!
+          </h2>
+          <p className="mt-1.5 text-center text-[13px] text-slate-500">
+            Sign in to continue to your account
+          </p>
 
               {ssoError ? (
                 <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-left">
@@ -416,9 +407,7 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
               administrator
             </span>
           </p>
-        </>
-      )}
-    </div>
+        </div>
 
         <p className="mt-6 flex items-center gap-2 text-xs text-slate-400">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
