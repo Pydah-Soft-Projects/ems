@@ -99,6 +99,7 @@ class MarksService {
       examCategory: e.examCategory ?? 'EXTERNAL',
       title: e.name,
       type: e.type, // REGULAR / SUPPLEMENTARY
+      college: e.college || null,
       course: e.course,
       branch: e.branch,
       batch: e.batch,
@@ -191,8 +192,23 @@ class MarksService {
       relations: ['examSubjects', 'examSubjects.subject', 'scopes'],
     });
     if (!exam) throw AppError.notFound('Examination not found');
-    if (exam.examCategory === 'INTERNAL' && (!Array.isArray(exam.scopes) || exam.scopes.length === 0)) {
-      throw AppError.serviceUnavailable('Internal exam scope data is unavailable.');
+    if (!Array.isArray(exam.scopes) || exam.scopes.length === 0) {
+      if (exam.branch || exam.course) {
+        exam.scopes = [
+          {
+            examId: exam.id,
+            college: exam.college || null,
+            course: exam.course || 'B.Tech',
+            branch: exam.branch || 'ALL',
+            batch: exam.batch || null,
+            yearOfStudy: exam.yearOfStudy || 1,
+            semester: exam.semester || 1,
+            section: null,
+          },
+        ];
+      } else {
+        exam.scopes = [];
+      }
     }
 
     const subjectsMap = new Map();
@@ -484,8 +500,16 @@ class MarksService {
                 section: s.section || null,
                 feeStatus: 'unpaid',
               });
-            } else if (!existing.name && s.studentName) {
-              existing.name = s.studentName;
+            } else {
+              if (!existing.name && s.studentName) {
+                existing.name = s.studentName;
+              }
+              if ((!existing.branch || existing.branch === 'GENERAL') && s.branch) {
+                existing.branch = s.branch;
+              }
+              if (!existing.section && s.section) {
+                existing.section = s.section;
+              }
             }
           }
         }
@@ -2029,13 +2053,25 @@ class MarksService {
 
       // Determine eligible students for this subject
       const eligibleStudents = enrolledStudents.filter((student) => {
+        const rKey = (student.rollNumber || '').trim().toLowerCase();
+        // If student already has a mark entry for this subject in this exam, they are unequivocally eligible!
+        if (marksMap.has(`${rKey}|${cKey}`) || unlinkedResultsMarksMap.has(`${rKey}|${cKey}`)) {
+          return true;
+        }
+
+        const studentBranch = (student.branch || '').trim();
+        // If student branch is general, empty, or ALL, allow them across the exam subjects
+        if (!studentBranch || studentBranch.toUpperCase() === 'GENERAL' || studentBranch.toUpperCase() === 'ALL') {
+          return true;
+        }
+
         if (sub.branches && sub.branches.length > 0) {
           const isAll = sub.branches.some((b) => b.toUpperCase() === 'ALL');
-          if (!isAll && !sub.branches.some((b) => b.toUpperCase() === (student.branch || '').toUpperCase())) {
+          if (!isAll && !sub.branches.some((b) => b.toUpperCase() === studentBranch.toUpperCase())) {
             return false;
           }
         } else if (sub.branch && sub.branch.toUpperCase() !== 'ALL') {
-          if (student.branch && student.branch.toUpperCase() !== sub.branch.toUpperCase()) {
+          if (studentBranch.toUpperCase() !== sub.branch.toUpperCase()) {
             return false;
           }
         }
@@ -2103,6 +2139,8 @@ class MarksService {
           studentRollNumber: student.rollNumber,
           studentName: student.name || 'N/A',
           academicYear: exam.batch || '2024-25',
+          college: exam.college || student.college || null,
+          course: exam.course || student.course || null,
           yearOfStudy: exam.yearOfStudy || 1,
           semester: exam.semester || 1,
           branch: student.branch || exam.branch || 'GENERAL',
@@ -2385,6 +2423,72 @@ class MarksService {
       rows: Array.isArray(rows) ? rows : [],
     };
     return this.uploadMarks('INTERNAL', notificationId, uploadDto, actorName);
+  }
+
+  /**
+   * Calculate final internal marks from two or more mid-term exams.
+   * Rule:
+   *  - 80% marks from the best mid
+   *  - 20% marks from the other (second-best) mid
+   *  - Minimum marks to pass: 16 out of 30
+   *
+   * Example:
+   *  Mid 1 = 25, Mid 2 = 10 -> (25 * 0.8) + (10 * 0.2) = 20 + 2 = 22 (Pass >= 16)
+   *  Mid 1 = 10, Mid 2 = 25 -> (25 * 0.8) + (10 * 0.2) = 20 + 2 = 22 (Pass >= 16)
+   *
+   * @param {Array<number|{ marks: number, maxMarks?: number, isAbsent?: boolean }>} midEntries
+   * @param {number} [targetMax=30]
+   * @param {number} [minPass=16]
+   */
+  calculateWeightedInternalMarks(midEntries, targetMax = 30, minPass = 16) {
+    if (!Array.isArray(midEntries)) {
+      return { marks: null, status: 'PENDING', isPass: null, minPass };
+    }
+
+    const validScores = [];
+    for (const item of midEntries) {
+      if (item === null || item === undefined) continue;
+      if (typeof item === 'number') {
+        if (!isNaN(item) && item >= 0) validScores.push(item);
+      } else if (typeof item === 'object') {
+        if (item.isAbsent) {
+          validScores.push(0);
+        } else if (item.marks !== null && item.marks !== undefined && !isNaN(Number(item.marks))) {
+          const m = Number(item.marks);
+          const max = Number(item.maxMarks) || targetMax;
+          const normalized = max > 0 ? (m / max) * targetMax : m;
+          validScores.push(normalized);
+        }
+      }
+    }
+
+    if (validScores.length < 2) {
+      return {
+        marks: null,
+        status: 'PENDING',
+        isPass: null,
+        minPass,
+        bestMid: validScores[0] ? Number(validScores[0].toFixed(2)) : null,
+        secondMid: null,
+      };
+    }
+
+    // Sort descending: best first, second-best second
+    validScores.sort((a, b) => b - a);
+    const best = validScores[0];
+    const second = validScores[1];
+
+    const finalMarks = Number((best * 0.8 + second * 0.2).toFixed(2));
+    const isPass = finalMarks >= minPass;
+
+    return {
+      marks: finalMarks,
+      status: isPass ? 'PASS' : 'FAIL',
+      isPass,
+      minPass,
+      bestMid: Number(best.toFixed(2)),
+      secondMid: Number(second.toFixed(2)),
+    };
   }
 }
 

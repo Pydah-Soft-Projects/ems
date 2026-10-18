@@ -7,6 +7,7 @@ export interface MarksNotificationItem {
   examCategory?: 'EXTERNAL' | 'INTERNAL';
   title: string;
   type: string;
+  college?: string;
   course?: string;
   branch?: string;
   batch?: string;

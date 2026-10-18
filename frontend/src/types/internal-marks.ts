@@ -66,6 +66,8 @@ export interface InternalStudentMarkRow {
   studentRollNumber: string;
   studentName: string;
   academicYear: string;
+  college?: string | null;
+  course?: string | null;
   yearOfStudy: number;
   semester: number;
   branch: string;
