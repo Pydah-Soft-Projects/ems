@@ -38,6 +38,7 @@ const typeTabs: { id: TypeTab; label: string }[] = [
   { id: 'evaluation', label: 'Evaluation' },
   { id: 'observer', label: 'Observer' },
   { id: 'examiner', label: 'Examiner' },
+  { id: 'others', label: 'Others' },
 ];
 
 export default function RemunerationPage() {

@@ -6,6 +6,7 @@ const BillType = Object.freeze({
   EVALUATION: 'evaluation',
   OBSERVER: 'observer',
   EXAMINER: 'examiner',
+  OTHERS: 'others',
 });
 
 const BillStatus = Object.freeze({
@@ -21,6 +22,7 @@ const BILL_TYPE_LABELS = Object.freeze({
   [BillType.EVALUATION]: 'Evaluation',
   [BillType.OBSERVER]: 'Observer',
   [BillType.EXAMINER]: 'Examiner',
+  [BillType.OTHERS]: 'Others',
 });
 
 /** Suggested “Remuneration for” rows per bill type (editable in the form). */
@@ -46,6 +48,11 @@ const DEFAULT_LINE_SUGGESTIONS = Object.freeze({
   ],
   [BillType.EXAMINER]: [
     'External Examiner',
+    'TA',
+    'DA',
+  ],
+  [BillType.OTHERS]: [
+    'Remuneration',
     'TA',
     'DA',
   ],

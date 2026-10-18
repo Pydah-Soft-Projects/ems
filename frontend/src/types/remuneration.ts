@@ -3,7 +3,8 @@ export type RemunerationBillType =
   | 'lab_project'
   | 'evaluation'
   | 'observer'
-  | 'examiner';
+  | 'examiner'
+  | 'others';
 
 export type RemunerationBillStatus =
   | 'draft'
@@ -196,6 +197,7 @@ export const BILL_TYPE_LABELS: Record<RemunerationBillType, string> = {
   evaluation: 'Evaluation',
   observer: 'Observer',
   examiner: 'Examiner',
+  others: 'Others',
 };
 
 export const BILL_STATUS_LABELS: Record<RemunerationBillStatus, string> = {

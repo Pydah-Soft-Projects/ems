@@ -40,6 +40,7 @@ const FORM_TITLES: Record<RemunerationBillType, string> = {
   evaluation: 'Remuneration Bill for Examination Work (Evaluation)',
   observer: 'Remuneration Bill for Examination Work (Observer)',
   examiner: 'Remuneration Bill for Examination Work (Examiner)',
+  others: 'Remuneration Bill for Examination Work (Others)',
 };
 
 const NAME_LABELS: Record<RemunerationBillType, string> = {
@@ -48,6 +49,7 @@ const NAME_LABELS: Record<RemunerationBillType, string> = {
   evaluation: 'Name of the Evaluator / Examiner',
   observer: 'Name of the Observer',
   examiner: 'Name of the Examiner',
+  others: 'Name of the Recipient / Examiner',
 };
 
 const QTY_HEADERS: Record<RemunerationBillType, string> = {
@@ -56,6 +58,7 @@ const QTY_HEADERS: Record<RemunerationBillType, string> = {
   evaluation: 'No. of Scripts Valued',
   observer: 'No. of Sessions / Days',
   examiner: 'No. of Scripts / Sessions',
+  others: 'Quantity / No. of Sessions / Days',
 };
 
 export type PrintRemunerationOptions = {
@@ -122,7 +125,8 @@ function buildDocument(
   const isLab =
     bill.billType === 'lab_project' ||
     bill.billType === 'observer' ||
-    bill.billType === 'examiner';
+    bill.billType === 'examiner' ||
+    bill.billType === 'others';
 
   const durationBlock =
     isLab && (bill.durationFrom || bill.durationTo || bill.numberOfDays != null)
@@ -148,11 +152,13 @@ function buildDocument(
 <meta charset="utf-8" />
 <title>${esc(bill.billNumber)} — Remuneration Bill</title>
 <style>
-  @page { size: A4 portrait; margin: 0; }
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    width: 210mm;
-    min-height: 297mm;
+    width: 100%;
     background: #fff;
     color: #111827;
     font-family: 'Times New Roman', Georgia, serif;
@@ -160,9 +166,10 @@ function buildDocument(
     print-color-adjust: exact !important;
   }
   .sheet {
-    width: 210mm;
-    min-height: 297mm;
-    padding: 12mm 14mm 10mm;
+    width: 100%;
+    max-width: 186mm;
+    min-height: 275mm;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
   }
@@ -171,22 +178,23 @@ function buildDocument(
     grid-template-columns: 20mm 1fr 20mm;
     align-items: center;
     gap: 3mm;
-    border-bottom: 2px solid #111827;
-    padding-bottom: 2.5mm;
+    border-bottom: 1.5px solid #111827;
+    padding-bottom: 2mm;
   }
   .head .logo { width: 18mm; height: 18mm; object-fit: contain; }
   .head .mid { text-align: center; }
   .head h1 {
-    font-size: 15pt;
+    font-size: 14pt;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+    line-height: 1.2;
   }
-  .head .sub { font-size: 8pt; margin-top: 0.6mm; }
-  .head .addr { font-size: 8pt; margin-top: 0.6mm; }
+  .head .sub { font-size: 8pt; margin-top: 0.5mm; line-height: 1.25; }
+  .head .addr { font-size: 8pt; margin-top: 0.5mm; line-height: 1.25; }
   .head .links {
     display: flex; justify-content: space-between;
-    font-size: 8pt; margin-top: 1mm; padding: 0 2mm;
+    font-size: 8pt; margin-top: 0.8mm; padding: 0 1mm;
   }
   .bill-meta {
     display: flex; justify-content: space-between;
@@ -194,19 +202,19 @@ function buildDocument(
   }
   .title {
     text-align: center;
-    font-size: 11.5pt;
+    font-size: 11pt;
     font-weight: 700;
     text-decoration: underline;
-    margin: 4mm 0 5mm;
+    margin: 3mm 0 3.5mm;
   }
   .field {
     display: flex;
     align-items: baseline;
-    font-size: 10pt;
-    margin-bottom: 2.8mm;
+    font-size: 9.5pt;
+    margin-bottom: 2.2mm;
     line-height: 1.35;
   }
-  .f-label { min-width: 62mm; flex-shrink: 0; }
+  .f-label { min-width: 65mm; flex-shrink: 0; }
   .f-sep { padding: 0 2mm 0 1mm; }
   .f-value {
     flex: 1;
@@ -216,51 +224,72 @@ function buildDocument(
     word-break: break-word;
   }
   .section-h {
-    font-size: 10pt; font-weight: 700; margin: 2mm 0 2.5mm;
+    font-size: 9.5pt; font-weight: 700; margin: 3mm 0 2mm;
     text-decoration: underline;
   }
   table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 3mm;
-    font-size: 10pt;
+    margin-top: 3.5mm;
+    font-size: 9.5pt;
+    page-break-inside: auto;
+    break-inside: auto;
   }
   th, td { border: 1.2px solid #111827; padding: 2mm 2.5mm; }
   th { font-weight: 700; text-align: center; background: #fff; }
   td.c { text-align: center; }
   td.r { text-align: right; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; page-break-inside: avoid; break-inside: avoid; }
   tfoot td { font-weight: 700; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
   .certify {
-    font-size: 10pt;
-    margin-top: 5mm;
+    font-size: 8.5pt;
+    margin-top: 3.5mm;
+    line-height: 1.35;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .sign-row {
     display: flex; justify-content: space-between; align-items: flex-end;
-    margin-top: 10mm; font-size: 10pt;
+    margin-top: 7mm; font-size: 9.5pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .sign-block { text-align: center; }
-  .sign-block .line { border-top: 1px solid #111827; min-width: 42mm; padding-top: 1mm; }
+  .sign-block .line { border-top: 1px solid #111827; min-width: 48mm; padding-top: 1.5mm; }
   .office {
-    margin-top: 6mm;
+    margin-top: auto;
     border-top: 1.2px dashed #6b7280;
-    padding-top: 3mm;
-    font-size: 10pt;
+    padding-top: 2.5mm;
+    font-size: 9pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
-  .office .fu { text-align: center; font-size: 8.5pt; margin-bottom: 2mm; }
+  .office .fu { text-align: center; font-size: 8pt; margin-bottom: 1.8mm; }
   .office .passed {
-    display: flex; align-items: baseline; gap: 2mm; margin-bottom: 2mm;
+    display: flex; align-items: baseline; gap: 2mm; margin-bottom: 1.8mm;
   }
   .office .passed .v {
     flex: 1; font-weight: 700; border-bottom: 1px dotted #6b7280; min-height: 4.5mm;
   }
   .office-signs {
-    display: flex; justify-content: space-between; align-items: flex-end;
-    margin-top: 14mm; font-size: 8.5pt; text-align: center; gap: 4mm;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-top: 14mm; font-size: 8.5pt; text-align: center; gap: 6mm;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
-  .office-signs > div { flex: 1; }
-  .office-signs .line { border-top: 1px solid #111827; padding-top: 1mm; }
+  .office-signs > div { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .office-signs .line { border-top: 1px solid #111827; padding-top: 1.5mm; width: 90%; font-weight: 600; line-height: 1.25; }
   @media print {
-    html, body, .sheet { width: 210mm !important; }
+    @page { size: A4 portrait; margin: 10mm 12mm 10mm 12mm; }
+    html, body { width: 100% !important; min-height: 100% !important; }
+    .sheet {
+      width: 100% !important;
+      min-height: 275mm !important;
+      padding: 0 !important;
+      margin: 0 auto !important;
+    }
   }
 </style>
 </head>
@@ -358,9 +387,8 @@ function buildDocument(
       </div>
       <div class="office-signs">
         <div><div class="line">Office Asst.</div></div>
-        <div><div class="line">Addl. Controller of Examinations (UG)</div></div>
-        <div><div class="line">Controller of Examinations</div></div>
-        <div><div class="line">Chief Superintendent / Principal</div></div>
+        <div><div class="line">Addl. Controller of Examinations<br />(UG)</div></div>
+        <div><div class="line">Chief Superintendent / COE</div></div>
       </div>
     </div>
   </div>

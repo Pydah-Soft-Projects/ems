@@ -144,7 +144,8 @@ export function RemunerationBillForm({
   const needsDuration =
     billType === 'lab_project' ||
     billType === 'observer' ||
-    billType === 'examiner';
+    billType === 'examiner' ||
+    billType === 'others';
 
   const totals = useMemo(() => {
     const grandTotalQuantity = lines.reduce(
