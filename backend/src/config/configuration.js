@@ -91,7 +91,7 @@ module.exports = () => ({
       process.env.CRM_BACKEND_URL ||
       process.env.VITE_CRM_BACKEND_URL ||
       process.env.NEXT_PUBLIC_CRM_BACKEND_URL ||
-      'https://pydah-crm-backend.pydah.edu.in',
+      'https://crm.pydah.edu.in',
     frontendUrl:
       process.env.CRM_FRONTEND_URL ||
       process.env.VITE_CRM_FRONTEND_URL ||

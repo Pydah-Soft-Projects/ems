@@ -10,7 +10,7 @@ This specification documents the end-to-end integration between the **CRM Authen
 ┌────────────────────────────────────────────────────────┐
 │                   CRM Authentication Gateway            │
 │  Frontend: https://crm.pydah.edu.in                     │
-│  Backend:  https://pydah-crm-backend.pydah.edu.in       │
+│  Backend:  https://crm.pydah.edu.in                     │
 └───────────────────────────┬────────────────────────────┘
                             │
               1. User clicks EMS Portal
@@ -39,7 +39,7 @@ This specification documents the end-to-end integration between the **CRM Authen
 | Component | Local Development | Production |
 |---|---|---|
 | **CRM Frontend** | `http://localhost:5173` | `https://crm.pydah.edu.in` |
-| **CRM Backend API** | `http://localhost:3000` | `https://pydah-crm-backend.pydah.edu.in` |
+| **CRM Backend API** | `http://localhost:3000` | `https://crm.pydah.edu.in` |
 | **EMS Frontend** | `http://localhost:3000` (or `3001`) | `https://ems.pydah.edu.in` |
 | **EMS Backend API** | `http://localhost:4000` | `https://ems-api.pydah.edu.in` |
 
@@ -69,7 +69,7 @@ The EMS Backend will make a server-to-server HTTP request to the CRM Backend to 
 
 - **Method**: `POST`
 - **Path**: `/auth/verify-token`
-- **Full URL (Production)**: `https://pydah-crm-backend.pydah.edu.in/auth/verify-token`
+- **Full URL (Production)**: `https://crm.pydah.edu.in/auth/verify-token`
 - **Full URL (Dev)**: `http://localhost:3000/auth/verify-token`
 - **Headers**:
   ```http

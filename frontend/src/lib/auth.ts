@@ -37,7 +37,7 @@ export const CRM_FRONTEND_URL =
 export const CRM_BACKEND_URL =
   process.env.NEXT_PUBLIC_CRM_BACKEND_URL ||
   process.env.VITE_CRM_BACKEND_URL ||
-  'https://pydah-crm-backend.pydah.edu.in';
+  'https://crm.pydah.edu.in';
 
 export interface LoginResponse {
   accessToken: string;

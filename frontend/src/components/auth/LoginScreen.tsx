@@ -54,7 +54,7 @@ export function LoginScreen({ defaultRole = 'student' }: { defaultRole?: Role })
       script.src = `${crmFrontendUrl}/portal-switcher.js`;
       script.async = true;
       script.setAttribute('data-current-portal', 'examination-portal');
-      script.setAttribute('data-api-base-url', process.env.NEXT_PUBLIC_CRM_BACKEND_URL || 'https://pydah-crm-backend.pydah.edu.in');
+      script.setAttribute('data-api-base-url', process.env.NEXT_PUBLIC_CRM_BACKEND_URL || 'https://crm.pydah.edu.in');
       script.setAttribute('data-landing-url', crmFrontendUrl);
       document.body.appendChild(script);
     }

@@ -395,7 +395,7 @@ class AuthService {
     }
 
     const base = (
-      config.crm?.backendUrl || 'https://pydah-crm-backend.pydah.edu.in'
+      config.crm?.backendUrl || 'https://crm.pydah.edu.in'
     ).replace(/\/$/, '');
     let crmVerifyUrl = base.endsWith('/auth/verify-token')
       ? base
