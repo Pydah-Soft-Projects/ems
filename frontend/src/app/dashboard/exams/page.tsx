@@ -83,6 +83,12 @@ export default function ExamsPage() {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
 
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.collegeNames && user.collegeNames.length === 1) {
+      setSelectedCollege(user.collegeNames[0]);
+    }
+  }, [user]);
+
   // Available options derived from exams and regulations
   const availableColleges = useMemo(() => {
     const set = new Set<string>();
@@ -97,8 +103,13 @@ export default function ExamsPage() {
         if (s.collegeName?.trim()) set.add(s.collegeName.trim());
       });
     });
-    return Array.from(set).sort();
-  }, [exams, regulations]);
+    let list = Array.from(set).sort();
+    if (!user?.isSuperAdmin && Array.isArray(user?.collegeNames) && user.collegeNames.length > 0) {
+      const allowed = new Set(user.collegeNames);
+      list = list.filter((c) => allowed.has(c));
+    }
+    return list;
+  }, [exams, regulations, user]);
 
   const availableCourses = useMemo(() => {
     const set = new Set<string>();
@@ -126,8 +137,13 @@ export default function ExamsPage() {
       });
     });
 
-    return Array.from(set).sort();
-  }, [exams, regulations, selectedCollege]);
+    let list = Array.from(set).sort();
+    if (!user?.isSuperAdmin && Array.isArray(user?.courseNames) && user.courseNames.length > 0) {
+      const allowed = new Set(user.courseNames);
+      list = list.filter((c) => allowed.has(c));
+    }
+    return list;
+  }, [exams, regulations, selectedCollege, user]);
 
   const availableBranches = useMemo(() => {
     const set = new Set<string>();
@@ -164,8 +180,13 @@ export default function ExamsPage() {
       });
     });
 
-    return Array.from(set).sort();
-  }, [exams, selectedCollege, selectedCourse]);
+    let list = Array.from(set).sort();
+    if (!user?.isSuperAdmin && Array.isArray(user?.branchNames) && user.branchNames.length > 0) {
+      const allowed = new Set(user.branchNames);
+      list = list.filter((b) => allowed.has(b));
+    }
+    return list;
+  }, [exams, selectedCollege, selectedCourse, user]);
 
   // Keep branch and course in sync if available options change
   useEffect(() => {

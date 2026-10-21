@@ -34,8 +34,8 @@ function createExamRoutes(services) {
   router.get(
     '/internal/options/regulations',
     requirePrivilege('internal_exams:read', 'internal_exams:write'),
-    asyncHandler(async (_req, res) => {
-      res.json(await services.regulations.findAll());
+    asyncHandler(async (req, res) => {
+      res.json(await services.regulations.findAll(req.user));
     }),
   );
   router.get(
@@ -45,6 +45,7 @@ function createExamRoutes(services) {
       res.json(
         await services.exam.getInternalNotificationOptions(
           parseId(req.params.regulationId),
+          req.user,
         ),
       );
     }),
@@ -64,8 +65,8 @@ function createExamRoutes(services) {
   router.get(
     '/internal',
     requirePrivilege('internal_exams:read', 'internal_exams:write'),
-    asyncHandler(async (_req, res) => {
-      res.json(await services.exam.findAll(undefined, 'INTERNAL'));
+    asyncHandler(async (req, res) => {
+      res.json(await services.exam.findAll(undefined, 'INTERNAL', req.user));
     }),
   );
   router.post(
@@ -92,14 +93,14 @@ function createExamRoutes(services) {
     requirePrivilege('exams:read', 'fees:read', 'fees:collect'),
     asyncHandler(async (req, res) => {
       const status = req.query.status;
-      res.json(await services.exam.findAll(status, 'EXTERNAL'));
+      res.json(await services.exam.findAll(status, 'EXTERNAL', req.user));
     }),
   );
   router.get(
     '/:id',
     requirePrivilege('exams:read'),
     asyncHandler(async (req, res) => {
-      res.json(await services.exam.findOne(parseId(req.params.id)));
+      res.json(await services.exam.findOne(parseId(req.params.id), req.user));
     }),
   );
   router.patch(
@@ -416,6 +417,7 @@ function createFeesRoutes(services) {
           limit,
           req.query.feeType ? String(req.query.feeType) : undefined,
           req.query.revaluationNotificationId ? parseInt(String(req.query.revaluationNotificationId), 10) : undefined,
+          req.user,
         ),
       );
     }),

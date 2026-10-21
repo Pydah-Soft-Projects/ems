@@ -146,6 +146,13 @@ export function RegulationScopeMapper({
   }, []);
 
   useEffect(() => {
+    if (colleges.length === 1 && selectedCollegeIds.length === 0) {
+      onSelectedCollegeIdsChange([colleges[0].id]);
+      void loadCourses(colleges[0].id);
+    }
+  }, [colleges, selectedCollegeIds, onSelectedCollegeIdsChange, loadCourses]);
+
+  useEffect(() => {
     selectedCollegeIds.forEach((id) => {
       void loadCourses(id);
     });

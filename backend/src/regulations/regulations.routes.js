@@ -19,15 +19,15 @@ function createRegulationsRoutes(services) {
     '/',
     requirePrivilege('regulations:write'),
     asyncHandler(async (req, res) => {
-      res.status(201).json(await services.regulations.create(req.body));
+      res.status(201).json(await services.regulations.create(req.body, req.user));
     }),
   );
 
   router.get(
     '/',
     requirePrivilege('regulations:read'),
-    asyncHandler(async (_req, res) => {
-      res.json(await services.regulations.findAll());
+    asyncHandler(async (req, res) => {
+      res.json(await services.regulations.findAll(req.user));
     }),
   );
 
@@ -50,7 +50,7 @@ function createRegulationsRoutes(services) {
     '/:id/detail',
     requirePrivilege('regulations:read'),
     asyncHandler(async (req, res) => {
-      res.json(await services.regulations.getDetail(parseId(req.params.id)));
+      res.json(await services.regulations.getDetail(parseId(req.params.id), req.user));
     }),
   );
 
@@ -78,7 +78,7 @@ function createRegulationsRoutes(services) {
     '/:id',
     requirePrivilege('regulations:read'),
     asyncHandler(async (req, res) => {
-      res.json(await services.regulations.findOne(parseId(req.params.id)));
+      res.json(await services.regulations.findOne(parseId(req.params.id), req.user));
     }),
   );
 
@@ -86,7 +86,7 @@ function createRegulationsRoutes(services) {
     '/:id',
     requirePrivilege('regulations:write'),
     asyncHandler(async (req, res) => {
-      res.json(await services.regulations.update(parseId(req.params.id), req.body));
+      res.json(await services.regulations.update(parseId(req.params.id), req.body, req.user));
     }),
   );
 

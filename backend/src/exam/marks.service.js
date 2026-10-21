@@ -84,16 +84,39 @@ class MarksService {
    * List all examination notifications (Regular/Supply) and Revaluation notifications
    * to select on the marks upload page.
    */
-  async getNotifications() {
+  async getNotifications(actor) {
     const [exams, revaluations] = await Promise.all([
       this.examRepo.find({
-        relations: ['regulation', 'examSubjects', 'examSubjects.subject'],
+        relations: ['regulation', 'examSubjects', 'examSubjects.subject', 'scopes'],
         order: { createdAt: 'DESC' },
       }),
       this.revalRepo ? this.revalRepo.find({ order: { createdAt: 'DESC' } }) : [],
     ]);
 
-    const examNotifications = exams.map((e) => ({
+    let filteredExams = exams;
+    let filteredRevals = revaluations || [];
+
+    if (actor && !actor.isSuperAdmin) {
+      const collegeNames = Array.isArray(actor.collegeNames) ? actor.collegeNames.filter(Boolean) : [];
+      if (collegeNames.length > 0) {
+        filteredExams = filteredExams.filter((e) => {
+          const colleges = new Set([e.college, ...(e.scopes || []).map((s) => s.college)].filter(Boolean));
+          return colleges.size === 0 || collegeNames.some((c) => colleges.has(c));
+        });
+        filteredRevals = filteredRevals.filter((r) => {
+          return !r.college || collegeNames.includes(r.college);
+        });
+      }
+      const courseNames = Array.isArray(actor.courseNames) ? actor.courseNames.filter(Boolean) : [];
+      if (courseNames.length > 0) {
+        filteredExams = filteredExams.filter((e) => {
+          const courses = new Set([e.course, ...(e.scopes || []).map((s) => s.course)].filter(Boolean));
+          return courses.size === 0 || courseNames.some((c) => courses.has(c));
+        });
+      }
+    }
+
+    const examNotifications = filteredExams.map((e) => ({
       id: e.id,
       notificationType: 'EXAM',
       examCategory: e.examCategory ?? 'EXTERNAL',

@@ -722,19 +722,64 @@ class ExamService {
         });
         return this.examRepo.save(exam);
     }
-    findAll(status, examCategory = 'EXTERNAL') {
-        const where = { examCategory };
-        if (status) where.status = status;
-        return this.examRepo.find({ where, order: { createdAt: 'DESC' } });
+    async findAll(status, examCategory = 'EXTERNAL', actor) {
+        const qb = this.examRepo
+            .createQueryBuilder('exam')
+            .leftJoinAndSelect('exam.scopes', 'scopes')
+            .leftJoinAndSelect('exam.examSubjects', 'examSubjects')
+            .leftJoinAndSelect('examSubjects.subject', 'subject')
+            .where('exam.examCategory = :examCategory', { examCategory })
+            .orderBy('exam.createdAt', 'DESC');
+
+        if (status) {
+            qb.andWhere('exam.status = :status', { status });
+        }
+
+        if (actor && !actor.isSuperAdmin) {
+            const collegeNames = Array.isArray(actor.collegeNames) ? actor.collegeNames.filter(Boolean) : [];
+            if (collegeNames.length > 0) {
+                qb.andWhere('(exam.college IN (:...actorCollegeNames) OR scopes.college IN (:...actorCollegeNames))', {
+                    actorCollegeNames: collegeNames,
+                });
+            }
+            const courseNames = Array.isArray(actor.courseNames) ? actor.courseNames.filter(Boolean) : [];
+            if (courseNames.length > 0) {
+                qb.andWhere('(exam.course IN (:...actorCourseNames) OR scopes.course IN (:...actorCourseNames))', {
+                    actorCourseNames: courseNames,
+                });
+            }
+        }
+
+        return qb.getMany();
     }
-    async getInternalNotificationOptions(regulationId) {
-        await this.regulationsService.findOne(Number(regulationId));
+    async getInternalNotificationOptions(regulationId, actor) {
+        await this.regulationsService.findOne(Number(regulationId), actor);
         return this.subjectsService.findAllMappings({ regulationId: Number(regulationId) });
     }
-    async findOne(id) {
-        const exam = await this.examRepo.findOne({ where: { id } });
+    async findOne(id, actor) {
+        const exam = await this.examRepo.findOne({
+            where: { id },
+            relations: ['regulation', 'examSubjects', 'examSubjects.subject', 'scopes', 'lateFeeSlabs'],
+        });
         if (!exam)
             throw AppError.notFound('Examination not found');
+
+        if (actor && !actor.isSuperAdmin) {
+            const collegeNames = Array.isArray(actor.collegeNames) ? actor.collegeNames.filter(Boolean) : [];
+            if (collegeNames.length > 0) {
+                const examColleges = new Set([
+                    exam.college,
+                    ...(exam.scopes || []).map((s) => s.college),
+                ].filter(Boolean));
+                if (examColleges.size > 0) {
+                    const hasMatch = collegeNames.some((c) => examColleges.has(c));
+                    if (!hasMatch) {
+                        throw AppError.forbidden('You do not have access to this examination');
+                    }
+                }
+            }
+        }
+
         return exam;
     }
     assertExternalExam(exam) {
@@ -2698,7 +2743,7 @@ class ExamService {
         return false;
     }
 
-    async listFeeRecords(examId, rollNumber, status, page, limit, feeType, revaluationNotificationId) {
+    async listFeeRecords(examId, rollNumber, status, page, limit, feeType, revaluationNotificationId, actor) {
         const qb = this.feeRecordRepo
             .createQueryBuilder('fr')
             .leftJoinAndSelect('fr.exam', 'exam')
@@ -2722,6 +2767,12 @@ class ExamService {
         }
         if (feeType) qb.andWhere('fr.feeType = :feeType', { feeType });
         if (revaluationNotificationId) qb.andWhere('fr.revaluationNotificationId = :revaluationNotificationId', { revaluationNotificationId });
+        if (actor && !actor.isSuperAdmin) {
+            const collegeNames = Array.isArray(actor.collegeNames) ? actor.collegeNames.filter(Boolean) : [];
+            if (collegeNames.length > 0) {
+                qb.andWhere('exam.college IN (:...actorFeeCollegeNames)', { actorFeeCollegeNames: collegeNames });
+            }
+        }
         if (limit && limit > 0) {
             const take = Math.min(limit, 1000);
             const skip = Math.max((Math.max(page || 1, 1) - 1) * take, 0);

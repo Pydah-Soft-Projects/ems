@@ -30,7 +30,7 @@ function createMarksRoutes(services) {
       'results:read',
     ),
     asyncHandler(async (req, res) => {
-      res.json(await services.marks.getNotifications());
+      res.json(await services.marks.getNotifications(req.user));
     }),
   );
 

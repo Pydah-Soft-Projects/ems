@@ -25,6 +25,18 @@ export interface AuthUser {
   currentYear?: number;
   currentSemester?: number;
   studentStatus?: string | null;
+  collegeId?: number | null;
+  courseId?: number | null;
+  branchId?: number | null;
+  collegeName?: string | null;
+  courseName?: string | null;
+  branchName?: string | null;
+  collegeIds?: number[];
+  courseIds?: number[];
+  branchIds?: number[];
+  collegeNames?: string[];
+  courseNames?: string[];
+  branchNames?: string[];
 }
 
 export const LOGIN_METHOD_KEY = 'ems_login_method';

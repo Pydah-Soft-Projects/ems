@@ -405,14 +405,32 @@ class SdmsService {
             's.email',
         ])
             .orderBy('s.student_name', 'ASC');
-        if (filters.college) {
-            qb.andWhere('s.college = :college', { college: filters.college });
+        if (Array.isArray(filters.colleges) && filters.colleges.length > 0) {
+            qb.andWhere('s.college IN (:...sdmsColleges)', { sdmsColleges: filters.colleges });
+        } else if (filters.college) {
+            if (Array.isArray(filters.college)) {
+                qb.andWhere('s.college IN (:...sdmsColleges)', { sdmsColleges: filters.college });
+            } else {
+                qb.andWhere('s.college = :college', { college: filters.college });
+            }
         }
-        if (filters.course) {
-            qb.andWhere('s.course = :course', { course: filters.course });
+        if (Array.isArray(filters.courses) && filters.courses.length > 0) {
+            qb.andWhere('s.course IN (:...sdmsCourses)', { sdmsCourses: filters.courses });
+        } else if (filters.course) {
+            if (Array.isArray(filters.course)) {
+                qb.andWhere('s.course IN (:...sdmsCourses)', { sdmsCourses: filters.course });
+            } else {
+                qb.andWhere('s.course = :course', { course: filters.course });
+            }
         }
-        if (filters.branch) {
-            qb.andWhere('s.branch = :branch', { branch: filters.branch });
+        if (Array.isArray(filters.branches) && filters.branches.length > 0) {
+            qb.andWhere('s.branch IN (:...sdmsBranches)', { sdmsBranches: filters.branches });
+        } else if (filters.branch) {
+            if (Array.isArray(filters.branch)) {
+                qb.andWhere('s.branch IN (:...sdmsBranches)', { sdmsBranches: filters.branch });
+            } else {
+                qb.andWhere('s.branch = :branch', { branch: filters.branch });
+            }
         }
         if (filters.batch) {
             qb.andWhere('s.batch = :batch', { batch: filters.batch });

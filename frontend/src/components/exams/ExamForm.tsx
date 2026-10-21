@@ -255,6 +255,14 @@ export function ExamForm({
   );
   const scopes = useMemo(() => reg?.scopes ?? [], [reg]);
   const colleges = useMemo(() => getScopedColleges(scopes), [scopes]);
+
+  useEffect(() => {
+    if (!initial && colleges.length === 1 && !collegeId) {
+      setCollegeId(String(colleges[0].id));
+      setCollegeName(colleges[0].name);
+    }
+  }, [colleges, collegeId, initial]);
+
   const courses = useMemo(
     () =>
       collegeId ? getScopedCourses(scopes, parseInt(collegeId, 10)) : [],

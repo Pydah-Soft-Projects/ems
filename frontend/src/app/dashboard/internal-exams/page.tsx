@@ -340,34 +340,52 @@ export default function InternalExamsPage() {
     [yearOfStudies, yearScoped],
   );
   const collegeOptions = useMemo(
-    () =>
-      [...new Map(
+    () => {
+      let opts = [...new Map(
         scopes.map((scope) => [
           String(scope.collegeId),
           { value: String(scope.collegeId), label: scope.college },
         ]),
-      ).values()],
-    [scopes],
+      ).values()];
+      if (!user?.isSuperAdmin && Array.isArray(user?.collegeIds) && user.collegeIds.length > 0) {
+        const allowed = new Set(user.collegeIds.map(String));
+        opts = opts.filter((o) => allowed.has(o.value));
+      }
+      return opts;
+    },
+    [scopes, user],
   );
   const courseOptions = useMemo(
-    () =>
-      [...new Map(
+    () => {
+      let opts = [...new Map(
         courseScoped.map((scope) => [
           String(scope.courseId),
           { value: String(scope.courseId), label: scope.course },
         ]),
-      ).values()],
-    [courseScoped],
+      ).values()];
+      if (!user?.isSuperAdmin && Array.isArray(user?.courseIds) && user.courseIds.length > 0) {
+        const allowed = new Set(user.courseIds.map(String));
+        opts = opts.filter((o) => allowed.has(o.value));
+      }
+      return opts;
+    },
+    [courseScoped, user],
   );
   const branchOptions = useMemo(
-    () =>
-      [...new Map(
+    () => {
+      let opts = [...new Map(
         branchScoped.map((scope) => [
           String(scope.branchId),
           { value: String(scope.branchId), label: scope.branch },
         ]),
-      ).values()],
-    [branchScoped],
+      ).values()];
+      if (!user?.isSuperAdmin && Array.isArray(user?.branchIds) && user.branchIds.length > 0) {
+        const allowed = new Set(user.branchIds.map(String));
+        opts = opts.filter((o) => allowed.has(o.value));
+      }
+      return opts;
+    },
+    [branchScoped, user],
   );
   const batchOptions = useMemo(
     () =>
@@ -443,24 +461,43 @@ export default function InternalExamsPage() {
       ),
     [exams],
   );
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.collegeNames && user.collegeNames.length === 1) {
+      setListCollege(user.collegeNames[0]);
+    }
+  }, [user]);
+
   const listColleges = useMemo(
-    () =>
-      [...new Set(listScopeRows.map((scope) => scope.college).filter((value): value is string => !!value))]
-        .sort((a, b) => a.localeCompare(b)),
-    [listScopeRows],
+    () => {
+      let list = [...new Set(listScopeRows.map((scope) => scope.college).filter((value): value is string => !!value))]
+        .sort((a, b) => a.localeCompare(b));
+      if (!user?.isSuperAdmin && Array.isArray(user?.collegeNames) && user.collegeNames.length > 0) {
+        const allowed = new Set(user.collegeNames);
+        list = list.filter((c) => allowed.has(c));
+      }
+      return list;
+    },
+    [listScopeRows, user],
   );
   const listCourses = useMemo(
-    () =>
-      [...new Set(
+    () => {
+      let list = [...new Set(
         listScopeRows
           .filter((scope) => listCollege === 'all' || scope.college === listCollege)
           .map((scope) => scope.course),
-      )].sort((a, b) => a.localeCompare(b)),
-    [listCollege, listScopeRows],
+      )].sort((a, b) => a.localeCompare(b));
+      if (!user?.isSuperAdmin && Array.isArray(user?.courseNames) && user.courseNames.length > 0) {
+        const allowed = new Set(user.courseNames);
+        list = list.filter((c) => allowed.has(c));
+      }
+      return list;
+    },
+    [listCollege, listScopeRows, user],
   );
   const listBranches = useMemo(
-    () =>
-      [...new Set(
+    () => {
+      let list = [...new Set(
         listScopeRows
           .filter(
             (scope) =>
@@ -468,8 +505,14 @@ export default function InternalExamsPage() {
               (listCourse === 'all' || scope.course === listCourse),
           )
           .map((scope) => scope.branch),
-      )].sort((a, b) => a.localeCompare(b)),
-    [listCollege, listCourse, listScopeRows],
+      )].sort((a, b) => a.localeCompare(b));
+      if (!user?.isSuperAdmin && Array.isArray(user?.branchNames) && user.branchNames.length > 0) {
+        const allowed = new Set(user.branchNames);
+        list = list.filter((b) => allowed.has(b));
+      }
+      return list;
+    },
+    [listCollege, listCourse, listScopeRows, user],
   );
   const listYears = useMemo(
     () =>

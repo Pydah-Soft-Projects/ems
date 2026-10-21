@@ -120,7 +120,17 @@ class RegulationsService {
             courses: Array.from(college.courses.values()),
         }));
     }
-    async create(dto) {
+    async create(dto, actor) {
+        if (dto.scopes && actor && !actor.isSuperAdmin) {
+            const allowed = new Set((actor.collegeIds || []).map(Number));
+            if (allowed.size > 0) {
+                for (const s of dto.scopes) {
+                    if (!allowed.has(Number(s.collegeId))) {
+                        throw AppError.forbidden(`You do not have permission to map scopes for ${s.collegeName || s.collegeId}`);
+                    }
+                }
+            }
+        }
         const exists = await this.regulationRepo.findOne({
             where: { code: dto.code },
         });
@@ -141,27 +151,77 @@ class RegulationsService {
             skipClaimCheck: true,
             regulationStatus: status,
         });
-        return this.findOne(saved.id);
+        return this.findOne(saved.id, actor);
     }
-    findAll() {
-        return this.regulationRepo.find({
+    async findAll(actor) {
+        const all = await this.regulationRepo.find({
             order: { createdAt: 'DESC' },
             relations: ['scopes'],
         });
+        if (!actor || actor.isSuperAdmin) {
+            return all;
+        }
+        const collegeIds = Array.isArray(actor.collegeIds) ? actor.collegeIds.map(Number).filter(Boolean) : [];
+        if (collegeIds.length === 0) {
+            return all;
+        }
+        const collegeSet = new Set(collegeIds);
+        const courseSet = Array.isArray(actor.courseIds) && actor.courseIds.length > 0
+            ? new Set(actor.courseIds.map(Number).filter(Boolean))
+            : null;
+
+        return all
+            .filter((reg) => {
+                if (!reg.scopes || reg.scopes.length === 0) return true;
+                return reg.scopes.some((s) => {
+                    if (!collegeSet.has(Number(s.collegeId))) return false;
+                    if (courseSet && s.courseId && !courseSet.has(Number(s.courseId))) return false;
+                    return true;
+                });
+            })
+            .map((reg) => {
+                if (reg.scopes && reg.scopes.length > 0) {
+                    const filteredScopes = reg.scopes.filter((s) => {
+                        if (!collegeSet.has(Number(s.collegeId))) return false;
+                        if (courseSet && s.courseId && !courseSet.has(Number(s.courseId))) return false;
+                        return true;
+                    });
+                    return { ...reg, scopes: filteredScopes };
+                }
+                return reg;
+            });
     }
-    async findOne(id) {
+    async findOne(id, actor) {
         const regulation = await this.regulationRepo.findOne({
             where: { id },
             relations: ['scopes'],
         });
         if (!regulation)
             throw AppError.notFound('Regulation not found');
+        if (actor && !actor.isSuperAdmin) {
+            const collegeIds = Array.isArray(actor.collegeIds) ? actor.collegeIds.map(Number).filter(Boolean) : [];
+            if (collegeIds.length > 0 && regulation.scopes && regulation.scopes.length > 0) {
+                const collegeSet = new Set(collegeIds);
+                const hasMatch = regulation.scopes.some((s) => collegeSet.has(Number(s.collegeId)));
+                if (!hasMatch) {
+                    throw AppError.forbidden('You do not have access to this regulation');
+                }
+            }
+        }
         return regulation;
     }
-    async getDetail(id) {
-        const regulation = await this.findOne(id);
-        const grouped = this.groupScopes(regulation.scopes ?? []);
-        const scopeSummaries = await Promise.all((regulation.scopes ?? []).map(async (scope) => {
+    async getDetail(id, actor) {
+        const regulation = await this.findOne(id, actor);
+        let scopes = regulation.scopes ?? [];
+        if (actor && !actor.isSuperAdmin) {
+            const collegeIds = Array.isArray(actor.collegeIds) ? actor.collegeIds.map(Number).filter(Boolean) : [];
+            if (collegeIds.length > 0) {
+                const collegeSet = new Set(collegeIds);
+                scopes = scopes.filter((s) => collegeSet.has(Number(s.collegeId)));
+            }
+        }
+        const grouped = this.groupScopes(scopes);
+        const scopeSummaries = await Promise.all(scopes.map(async (scope) => {
             try {
                 const insight = await this.sdms.getBatchScopeInsight({
                     collegeId: scope.collegeId,
@@ -191,11 +251,12 @@ class RegulationsService {
         const totalStudents = scopeSummaries.reduce((sum, s) => sum + s.studentCount, 0);
         return {
             ...regulation,
+            scopes,
             colleges,
             summary: {
                 collegeCount: colleges.length,
                 courseCount: colleges.reduce((n, c) => n + c.courses.length, 0),
-                batchCount: regulation.scopes?.length ?? 0,
+                batchCount: scopes.length,
                 totalStudents,
             },
         };
@@ -210,8 +271,18 @@ class RegulationsService {
         }
         return this.sdms.getBatchScopeInsight(params);
     }
-    async update(id, dto) {
-        const regulation = await this.findOne(id);
+    async update(id, dto, actor) {
+        const regulation = await this.findOne(id, actor);
+        if (dto.scopes && actor && !actor.isSuperAdmin) {
+            const allowed = new Set((actor.collegeIds || []).map(Number));
+            if (allowed.size > 0) {
+                for (const s of dto.scopes) {
+                    if (!allowed.has(Number(s.collegeId))) {
+                        throw AppError.forbidden(`You do not have permission to map scopes for ${s.collegeName || s.collegeId}`);
+                    }
+                }
+            }
+        }
         if (dto.code && dto.code !== regulation.code) {
             const exists = await this.regulationRepo.findOne({
                 where: { code: dto.code },
@@ -231,7 +302,7 @@ class RegulationsService {
             skipClaimCheck: true,
             regulationStatus: finalStatus,
         });
-        return this.findOne(id);
+        return this.findOne(id, actor);
     }
     async remove(id) {
         const regulation = await this.findOne(id);

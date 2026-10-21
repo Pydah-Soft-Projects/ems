@@ -227,9 +227,22 @@ class SubjectsService {
         });
         return this.subjectRepo.save(subject);
     }
-    findAll(regulationId) {
+    async findAll(regulationId, actor) {
         const where = regulationId ? { regulationId } : {};
-        return this.subjectRepo.find({ where, order: { code: 'ASC' } });
+        let subjects = await this.subjectRepo.find({ where, order: { code: 'ASC' } });
+        if (actor && !actor.isSuperAdmin) {
+            const collegeIds = Array.isArray(actor.collegeIds) ? actor.collegeIds.map(Number).filter(Boolean) : [];
+            if (collegeIds.length > 0) {
+                const collegeSet = new Set(collegeIds);
+                subjects = subjects.filter((s) => !s.collegeId || collegeSet.has(Number(s.collegeId)));
+            }
+            const courseIds = Array.isArray(actor.courseIds) ? actor.courseIds.map(Number).filter(Boolean) : [];
+            if (courseIds.length > 0) {
+                const courseSet = new Set(courseIds);
+                subjects = subjects.filter((s) => !s.courseId || courseSet.has(Number(s.courseId)));
+            }
+        }
+        return subjects;
     }
     async findOne(id) {
         const subject = await this.subjectRepo.findOne({ where: { id } });

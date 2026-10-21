@@ -35,26 +35,65 @@ function createSdmsRoutes(services) {
     '/colleges',
     requirePrivilege('organization:read'),
     asyncHandler(async (req, res) => {
-      res.json(await sdms.listColleges(parseBool(req.query.activeOnly)));
+      let colleges = await sdms.listColleges(parseBool(req.query.activeOnly));
+      if (
+        !req.user?.isSuperAdmin &&
+        Array.isArray(req.user?.collegeIds) &&
+        req.user.collegeIds.length > 0 &&
+        req.query.unscoped !== 'true'
+      ) {
+        const allowed = new Set(req.user.collegeIds.map(Number));
+        colleges = colleges.filter((c) => allowed.has(Number(c.id)));
+      }
+      res.json(colleges);
     }),
   );
   router.get(
     '/colleges/:id',
     requirePrivilege('organization:read'),
     asyncHandler(async (req, res) => {
-      res.json(await sdms.getCollege(parseId(req.params.id)));
+      const collegeId = parseId(req.params.id);
+      if (
+        !req.user?.isSuperAdmin &&
+        Array.isArray(req.user?.collegeIds) &&
+        req.user.collegeIds.length > 0
+      ) {
+        const allowed = new Set(req.user.collegeIds.map(Number));
+        if (!allowed.has(collegeId)) {
+          return res.status(403).json({ message: 'Access denied to this college' });
+        }
+      }
+      res.json(await sdms.getCollege(collegeId));
     }),
   );
   router.get(
     '/colleges/:id/courses',
     requirePrivilege('organization:read'),
     asyncHandler(async (req, res) => {
-      res.json(
-        await sdms.listCourses(
-          parseId(req.params.id),
-          parseBool(req.query.activeOnly),
-        ),
+      const collegeId = parseId(req.params.id);
+      if (
+        !req.user?.isSuperAdmin &&
+        Array.isArray(req.user?.collegeIds) &&
+        req.user.collegeIds.length > 0
+      ) {
+        const allowed = new Set(req.user.collegeIds.map(Number));
+        if (!allowed.has(collegeId)) {
+          return res.json([]);
+        }
+      }
+      let courses = await sdms.listCourses(
+        collegeId,
+        parseBool(req.query.activeOnly),
       );
+      if (
+        !req.user?.isSuperAdmin &&
+        Array.isArray(req.user?.courseIds) &&
+        req.user.courseIds.length > 0
+      ) {
+        const allowedCourses = new Set(req.user.courseIds.map(Number));
+        courses = courses.filter((c) => allowedCourses.has(Number(c.id)));
+      }
+      res.json(courses);
     }),
   );
   router.get(
@@ -68,12 +107,30 @@ function createSdmsRoutes(services) {
     '/courses/:id/branches',
     requirePrivilege('organization:read'),
     asyncHandler(async (req, res) => {
-      res.json(
-        await sdms.listBranches(
-          parseId(req.params.id),
-          parseBool(req.query.activeOnly),
-        ),
+      const courseId = parseId(req.params.id);
+      if (
+        !req.user?.isSuperAdmin &&
+        Array.isArray(req.user?.courseIds) &&
+        req.user.courseIds.length > 0
+      ) {
+        const allowedCourses = new Set(req.user.courseIds.map(Number));
+        if (!allowedCourses.has(courseId)) {
+          return res.json([]);
+        }
+      }
+      let branches = await sdms.listBranches(
+        courseId,
+        parseBool(req.query.activeOnly),
       );
+      if (
+        !req.user?.isSuperAdmin &&
+        Array.isArray(req.user?.branchIds) &&
+        req.user.branchIds.length > 0
+      ) {
+        const allowedBranches = new Set(req.user.branchIds.map(Number));
+        branches = branches.filter((b) => allowedBranches.has(Number(b.id)));
+      }
+      res.json(branches);
     }),
   );
   router.get(
@@ -158,11 +215,52 @@ function createSdmsRoutes(services) {
     '/students',
     requirePrivilege('students:read'),
     asyncHandler(async (req, res) => {
+      const user = req.user;
+      let targetCollege = req.query.college;
+      let targetColleges = undefined;
+      let targetCourse = req.query.course;
+      let targetCourses = undefined;
+      let targetBranch = req.query.branch;
+      let targetBranches = undefined;
+
+      if (!user?.isSuperAdmin) {
+        if (Array.isArray(user?.collegeNames) && user.collegeNames.length > 0) {
+          if (targetCollege) {
+            if (!user.collegeNames.includes(targetCollege)) {
+              return res.json({ items: [], total: 0, page: 1, limit: 50, totalPages: 0 });
+            }
+          } else {
+            targetColleges = user.collegeNames;
+          }
+        }
+        if (Array.isArray(user?.courseNames) && user.courseNames.length > 0) {
+          if (targetCourse) {
+            if (!user.courseNames.includes(targetCourse)) {
+              return res.json({ items: [], total: 0, page: 1, limit: 50, totalPages: 0 });
+            }
+          } else {
+            targetCourses = user.courseNames;
+          }
+        }
+        if (Array.isArray(user?.branchNames) && user.branchNames.length > 0) {
+          if (targetBranch) {
+            if (!user.branchNames.includes(targetBranch)) {
+              return res.json({ items: [], total: 0, page: 1, limit: 50, totalPages: 0 });
+            }
+          } else {
+            targetBranches = user.branchNames;
+          }
+        }
+      }
+
       res.json(
         await sdms.listStudents({
-          college: req.query.college,
-          course: req.query.course,
-          branch: req.query.branch,
+          college: targetCollege,
+          colleges: targetColleges,
+          course: targetCourse,
+          courses: targetCourses,
+          branch: targetBranch,
+          branches: targetBranches,
           batch: req.query.batch,
           currentYear: parseOptionalInt(req.query.currentYear),
           currentSemester: parseOptionalInt(req.query.currentSemester),

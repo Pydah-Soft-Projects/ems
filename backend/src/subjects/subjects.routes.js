@@ -79,7 +79,7 @@ function createSubjectsRoutes(services) {
       const regulationId = req.query.regulationId
         ? parseInt(String(req.query.regulationId), 10)
         : undefined;
-      res.json(await services.subjects.findAll(regulationId));
+      res.json(await services.subjects.findAll(regulationId, req.user));
     }),
   );
   router.get(

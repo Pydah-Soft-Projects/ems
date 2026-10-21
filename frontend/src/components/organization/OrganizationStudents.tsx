@@ -35,6 +35,12 @@ export function OrganizationStudents({ connected }: { connected: boolean }) {
   }, [connected]);
 
   useEffect(() => {
+    if (colleges.length === 1 && !collegeId) {
+      setCollegeId(String(colleges[0].id));
+    }
+  }, [colleges, collegeId]);
+
+  useEffect(() => {
     if (!collegeId) {
       setCourses([]);
       return;
