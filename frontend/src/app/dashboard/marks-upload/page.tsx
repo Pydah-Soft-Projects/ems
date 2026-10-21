@@ -134,6 +134,18 @@ export default function MarksUploadPage() {
     void loadHistory();
   }, [loadNotificationDetails, loadHistory]);
 
+  useEffect(() => {
+    if (notificationBranches.length === 1 && selectedBranch === 'ALL') {
+      setSelectedBranch(notificationBranches[0]);
+    }
+  }, [notificationBranches, selectedBranch]);
+
+  useEffect(() => {
+    if (categorySubjects.length === 1 && selectedSubjectCode === 'ALL') {
+      setSelectedSubjectCode(categorySubjects[0].code);
+    }
+  }, [categorySubjects, selectedSubjectCode]);
+
   // Handle Course Category Switch (Theory vs Labs)
   const handleCourseCategoryChange = (category: CourseCategoryType) => {
     setCourseCategory(category);

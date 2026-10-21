@@ -268,6 +268,13 @@ export function ExamForm({
       collegeId ? getScopedCourses(scopes, parseInt(collegeId, 10)) : [],
     [scopes, collegeId],
   );
+
+  useEffect(() => {
+    if (!initial && courses.length === 1 && selectedCourseIds.length === 0) {
+      setSelectedCourseIds([courses[0].id]);
+    }
+  }, [courses, selectedCourseIds, initial]);
+
   const selectedCourses = useMemo(
     () => courses.filter((c) => selectedCourseIds.includes(c.id)),
     [courses, selectedCourseIds],
@@ -286,10 +293,22 @@ export function ExamForm({
     return Array.from(set).sort((a, b) => b.localeCompare(a));
   }, [scopes, collegeId, selectedCourseIds]);
 
+  useEffect(() => {
+    if (!initial && batches.length === 1 && selectedBatches.length === 0) {
+      setSelectedBatches([batches[0]]);
+    }
+  }, [batches, selectedBatches, initial]);
+
   const selectedBranches = useMemo(
     () => branches.filter((b) => selectedBranchIds.includes(b.id)),
     [branches, selectedBranchIds],
   );
+
+  useEffect(() => {
+    if (!initial && branches.length === 1 && selectedBranchIds.length === 0) {
+      setSelectedBranchIds([branches[0].id]);
+    }
+  }, [branches, selectedBranchIds, initial]);
 
   const firstBranchId = selectedBranchIds[0] ?? null;
 

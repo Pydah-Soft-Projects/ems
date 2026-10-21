@@ -134,6 +134,12 @@ export default function FeesPage() {
   }, []);
 
   useEffect(() => {
+    if (exams.length === 1 && !examId) {
+      setExamId(String(exams[0].id));
+    }
+  }, [exams, examId]);
+
+  useEffect(() => {
     api.getRevaluationNotifications()
       .then((rows) => setRevaluations(rows.filter((row) => row.status === 'published')))
       .catch(() => setRevaluations([]));

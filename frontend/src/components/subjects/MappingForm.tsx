@@ -184,11 +184,31 @@ export function MappingForm({
   );
   const scopes = selectedRegulation?.scopes ?? [];
   const scopedColleges = useMemo(() => getScopedColleges(scopes), [scopes]);
+
+  useEffect(() => {
+    if (scopedColleges.length === 1 && !collegeId) {
+      setCollegeId(String(scopedColleges[0].id));
+    }
+  }, [scopedColleges, collegeId]);
+
+  useEffect(() => {
+    if (scopedColleges.length === 1 && selectedCollegeIds.length === 0) {
+      setSelectedCollegeIds([scopedColleges[0].id]);
+    }
+  }, [scopedColleges, selectedCollegeIds.length]);
+
   const scopedCourses = useMemo(
     () =>
       collegeId ? getScopedCourses(scopes, parseInt(collegeId, 10)) : [],
     [scopes, collegeId],
   );
+
+  useEffect(() => {
+    if (scopedCourses.length === 1 && !courseId) {
+      setCourseId(String(scopedCourses[0].id));
+    }
+  }, [scopedCourses, courseId]);
+
   const scopedBatches = useMemo(
     () =>
       collegeId && courseId
@@ -221,6 +241,12 @@ export function MappingForm({
     }
     return Array.from(map.values());
   }, [scopes, selectedCollegeIds]);
+
+  useEffect(() => {
+    if (multiCourses.length === 1 && selectedCourseKeys.length === 0) {
+      setSelectedCourseKeys([multiCourses[0].key]);
+    }
+  }, [multiCourses, selectedCourseKeys.length]);
 
   const multiBatches = useMemo(() => {
     const options: { key: string; label: string; batch: string }[] = [];

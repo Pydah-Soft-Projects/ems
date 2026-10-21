@@ -387,6 +387,25 @@ export default function InternalExamsPage() {
     },
     [branchScoped, user],
   );
+
+  useEffect(() => {
+    if (creationOpen && collegeOptions.length === 1 && collegeIds.length === 0) {
+      setCollegeIds([collegeOptions[0].value]);
+    }
+  }, [creationOpen, collegeOptions, collegeIds.length]);
+
+  useEffect(() => {
+    if (creationOpen && courseOptions.length === 1 && courseIds.length === 0) {
+      setCourseIds([courseOptions[0].value]);
+    }
+  }, [creationOpen, courseOptions, courseIds.length]);
+
+  useEffect(() => {
+    if (creationOpen && branchOptions.length === 1 && branchIds.length === 0) {
+      setBranchIds([branchOptions[0].value]);
+    }
+  }, [creationOpen, branchOptions, branchIds.length]);
+
   const batchOptions = useMemo(
     () =>
       [...new Set(batchScoped.map((scope) => scope.batch))]
@@ -462,12 +481,6 @@ export default function InternalExamsPage() {
     [exams],
   );
 
-  useEffect(() => {
-    if (!user?.isSuperAdmin && user?.collegeNames && user.collegeNames.length === 1) {
-      setListCollege(user.collegeNames[0]);
-    }
-  }, [user]);
-
   const listColleges = useMemo(
     () => {
       let list = [...new Set(listScopeRows.map((scope) => scope.college).filter((value): value is string => !!value))]
@@ -514,6 +527,30 @@ export default function InternalExamsPage() {
     },
     [listCollege, listCourse, listScopeRows, user],
   );
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.collegeNames && user.collegeNames.length === 1) {
+      setListCollege(user.collegeNames[0]);
+    } else if (listColleges.length === 1 && listCollege === 'all') {
+      setListCollege(listColleges[0]);
+    }
+  }, [user, listColleges, listCollege]);
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.courseNames && user.courseNames.length === 1) {
+      setListCourse(user.courseNames[0]);
+    } else if (listCourses.length === 1 && listCourse === 'all') {
+      setListCourse(listCourses[0]);
+    }
+  }, [user, listCourses, listCourse]);
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.branchNames && user.branchNames.length === 1) {
+      setListBranch(user.branchNames[0]);
+    } else if (listBranches.length === 1 && listBranch === 'all') {
+      setListBranch(listBranches[0]);
+    }
+  }, [user, listBranches, listBranch]);
   const listYears = useMemo(
     () =>
       [...new Set(

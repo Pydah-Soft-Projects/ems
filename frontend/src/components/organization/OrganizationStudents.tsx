@@ -52,6 +52,12 @@ export function OrganizationStudents({ connected }: { connected: boolean }) {
   }, [collegeId]);
 
   useEffect(() => {
+    if (courses.length === 1 && !courseId) {
+      setCourseId(String(courses[0].id));
+    }
+  }, [courses, courseId]);
+
+  useEffect(() => {
     if (!courseId) {
       setBranches([]);
       return;
@@ -61,6 +67,12 @@ export function OrganizationStudents({ connected }: { connected: boolean }) {
       .then(setBranches)
       .catch(() => setBranches([]));
   }, [courseId]);
+
+  useEffect(() => {
+    if (branches.length === 1 && !branchId) {
+      setBranchId(String(branches[0].id));
+    }
+  }, [branches, branchId]);
 
   const loadStudents = useCallback(async () => {
     if (!connected) return;

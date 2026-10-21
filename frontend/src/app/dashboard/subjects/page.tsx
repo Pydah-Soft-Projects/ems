@@ -56,6 +56,12 @@ export default function SubjectsPage() {
   }, [loadRegulations]);
 
   useEffect(() => {
+    if (regulations.length === 1 && !filterRegulationId) {
+      setFilterRegulationId(String(regulations[0].id));
+    }
+  }, [regulations, filterRegulationId]);
+
+  useEffect(() => {
     void loadSubjects();
   }, [loadSubjects]);
 

@@ -83,12 +83,6 @@ export default function ExamsPage() {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
 
-  useEffect(() => {
-    if (!user?.isSuperAdmin && user?.collegeNames && user.collegeNames.length === 1) {
-      setSelectedCollege(user.collegeNames[0]);
-    }
-  }, [user]);
-
   // Available options derived from exams and regulations
   const availableColleges = useMemo(() => {
     const set = new Set<string>();
@@ -187,6 +181,30 @@ export default function ExamsPage() {
     }
     return list;
   }, [exams, selectedCollege, selectedCourse, user]);
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.collegeNames && user.collegeNames.length === 1) {
+      setSelectedCollege(user.collegeNames[0]);
+    } else if (availableColleges.length === 1 && selectedCollege === 'all') {
+      setSelectedCollege(availableColleges[0]);
+    }
+  }, [user, availableColleges, selectedCollege]);
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.courseNames && user.courseNames.length === 1) {
+      setSelectedCourse(user.courseNames[0]);
+    } else if (availableCourses.length === 1 && selectedCourse === 'all') {
+      setSelectedCourse(availableCourses[0]);
+    }
+  }, [user, availableCourses, selectedCourse]);
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && user?.branchNames && user.branchNames.length === 1) {
+      setSelectedBranch(user.branchNames[0]);
+    } else if (availableBranches.length === 1 && selectedBranch === 'all') {
+      setSelectedBranch(availableBranches[0]);
+    }
+  }, [user, availableBranches, selectedBranch]);
 
   // Keep branch and course in sync if available options change
   useEffect(() => {

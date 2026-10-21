@@ -164,6 +164,28 @@ export function RegulationScopeMapper({
     });
   }, [value, loadBatches]);
 
+  useEffect(() => {
+    if (selectedCollegeIds.length === 1 && value.length === 0) {
+      const colId = selectedCollegeIds[0];
+      const courseList = coursesByCollege[colId];
+      if (courseList && courseList.length === 1) {
+        const col = colleges.find((c) => c.id === colId);
+        if (col) {
+          onChange([
+            {
+              collegeId: col.id,
+              collegeName: col.name,
+              courseId: courseList[0].id,
+              courseName: courseList[0].name,
+              batches: [],
+            },
+          ]);
+          void loadBatches(col.id, courseList[0].id);
+        }
+      }
+    }
+  }, [selectedCollegeIds, coursesByCollege, value.length, colleges, onChange, loadBatches]);
+
   function toggleCollege(college: SdmsCollege, checked: boolean) {
     if (checked) {
       const next = selectedCollegeIds.includes(college.id)
