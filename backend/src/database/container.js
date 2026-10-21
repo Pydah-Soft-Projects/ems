@@ -97,6 +97,7 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(EmsRole),
     dataSource.getRepository(EmsUser),
     dataSource.getRepository(EmsAuditLog),
+    sdms,
   );
 
   const feeManagement = new FeeManagementService(sdms);

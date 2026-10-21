@@ -115,6 +115,19 @@ function createUsersRoutes(services) {
     }),
   );
 
+  router.delete(
+    '/users/:id',
+    requirePrivilege('users:write'),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.users.deleteUser(
+          parseInt(String(req.params.id), 10),
+          req.user,
+        ),
+      );
+    }),
+  );
+
   router.get(
     '/hrms-users',
     requirePrivilege('users:write'),

@@ -36,6 +36,18 @@ export interface EmsUser {
   isActive: boolean;
   role: EmsRole | null;
   roleId: number;
+  collegeId?: number | null;
+  courseId?: number | null;
+  branchId?: number | null;
+  collegeName?: string | null;
+  courseName?: string | null;
+  branchName?: string | null;
+  collegeIds?: number[] | null;
+  courseIds?: number[] | null;
+  branchIds?: number[] | null;
+  collegeNames?: string[] | null;
+  courseNames?: string[] | null;
+  branchNames?: string[] | null;
   /** Effective privileges for this user (not inherited from role at runtime). */
   privileges: string[];
   createdAt?: string;
@@ -110,12 +122,36 @@ export interface CreateEmsUserInput {
   hrmsUserId: string;
   hrmsSource?: 'user' | 'employee';
   roleId: number;
+  collegeId?: number | null;
+  courseId?: number | null;
+  branchId?: number | null;
+  collegeName?: string | null;
+  courseName?: string | null;
+  branchName?: string | null;
+  collegeIds?: number[] | null;
+  courseIds?: number[] | null;
+  branchIds?: number[] | null;
+  collegeNames?: string[] | null;
+  courseNames?: string[] | null;
+  branchNames?: string[] | null;
   privileges?: string[];
   isActive?: boolean;
 }
 
 export interface UpdateEmsUserInput {
   roleId?: number;
+  collegeId?: number | null;
+  courseId?: number | null;
+  branchId?: number | null;
+  collegeName?: string | null;
+  courseName?: string | null;
+  branchName?: string | null;
+  collegeIds?: number[] | null;
+  courseIds?: number[] | null;
+  branchIds?: number[] | null;
+  collegeNames?: string[] | null;
+  courseNames?: string[] | null;
+  branchNames?: string[] | null;
   isActive?: boolean;
   fullName?: string;
   privileges?: string[];

@@ -54,6 +54,18 @@ class AuthService {
       role: access.isSuperAdmin ? 'super_admin' : 'staff',
       emsRoleId: access.roleId,
       emsRoleName: access.roleName,
+      collegeId: access.collegeId ?? null,
+      courseId: access.courseId ?? null,
+      branchId: access.branchId ?? null,
+      collegeName: access.collegeName ?? null,
+      courseName: access.courseName ?? null,
+      branchName: access.branchName ?? null,
+      collegeIds: access.collegeIds ?? (access.collegeId != null ? [access.collegeId] : []),
+      courseIds: access.courseIds ?? (access.courseId != null ? [access.courseId] : []),
+      branchIds: access.branchIds ?? (access.branchId != null ? [access.branchId] : []),
+      collegeNames: access.collegeNames ?? (access.collegeName ? [access.collegeName] : []),
+      courseNames: access.courseNames ?? (access.courseName ? [access.courseName] : []),
+      branchNames: access.branchNames ?? (access.branchName ? [access.branchName] : []),
       privileges: access.privileges,
       isSuperAdmin: access.isSuperAdmin,
       hrmsUserId: access.hrmsUserId,
@@ -90,6 +102,18 @@ class AuthService {
         fullName,
         roleId: null,
         roleName: SYSTEM_SUPER_ADMIN_ROLE_NAME,
+        collegeId: null,
+        courseId: null,
+        branchId: null,
+        collegeName: null,
+        courseName: null,
+        branchName: null,
+        collegeIds: [],
+        courseIds: [],
+        branchIds: [],
+        collegeNames: [],
+        courseNames: [],
+        branchNames: [],
         privileges: ['*', ...ALL_PRIVILEGE_KEYS],
         isSuperAdmin: true,
         emsUserId: null,
@@ -127,6 +151,30 @@ class AuthService {
       fullName: emsUser.fullName || fullName,
       roleId: role.id,
       roleName: role.name,
+      collegeId: emsUser.collegeId != null ? Number(emsUser.collegeId) : null,
+      courseId: emsUser.courseId != null ? Number(emsUser.courseId) : null,
+      branchId: emsUser.branchId != null ? Number(emsUser.branchId) : null,
+      collegeName: emsUser.collegeName || null,
+      courseName: emsUser.courseName || null,
+      branchName: emsUser.branchName || null,
+      collegeIds: Array.isArray(emsUser.collegeIds)
+        ? emsUser.collegeIds.map(Number)
+        : (emsUser.collegeId != null ? [Number(emsUser.collegeId)] : []),
+      courseIds: Array.isArray(emsUser.courseIds)
+        ? emsUser.courseIds.map(Number)
+        : (emsUser.courseId != null ? [Number(emsUser.courseId)] : []),
+      branchIds: Array.isArray(emsUser.branchIds)
+        ? emsUser.branchIds.map(Number)
+        : (emsUser.branchId != null ? [Number(emsUser.branchId)] : []),
+      collegeNames: Array.isArray(emsUser.collegeNames)
+        ? emsUser.collegeNames
+        : (emsUser.collegeName ? [emsUser.collegeName] : []),
+      courseNames: Array.isArray(emsUser.courseNames)
+        ? emsUser.courseNames
+        : (emsUser.courseName ? [emsUser.courseName] : []),
+      branchNames: Array.isArray(emsUser.branchNames)
+        ? emsUser.branchNames
+        : (emsUser.branchName ? [emsUser.branchName] : []),
       privileges,
       isSuperAdmin,
       emsUserId: emsUser.id,

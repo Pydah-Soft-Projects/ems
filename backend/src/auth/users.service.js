@@ -21,10 +21,116 @@ const BOOTSTRAP_SUPER_ADMIN_EMAIL = (
 const log = operationLogger('user-management');
 
 class UsersService {
-  constructor(roleRepo, userRepo, auditRepo) {
+  constructor(roleRepo, userRepo, auditRepo, sdms = null) {
     this.roleRepo = roleRepo;
     this.userRepo = userRepo;
     this.auditRepo = auditRepo;
+    this.sdms = sdms;
+  }
+
+  async resolveScope(dto) {
+    let collegeIds = undefined;
+    if (Array.isArray(dto.collegeIds)) {
+      collegeIds = dto.collegeIds.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    } else if (dto.collegeId !== undefined) {
+      collegeIds = dto.collegeId ? [Number(dto.collegeId)] : [];
+    } else if (dto.collegeIds !== undefined) {
+      collegeIds = [];
+    }
+
+    let courseIds = undefined;
+    if (Array.isArray(dto.courseIds)) {
+      courseIds = dto.courseIds.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    } else if (dto.courseId !== undefined) {
+      courseIds = dto.courseId ? [Number(dto.courseId)] : [];
+    } else if (dto.courseIds !== undefined) {
+      courseIds = [];
+    }
+
+    let branchIds = undefined;
+    if (Array.isArray(dto.branchIds)) {
+      branchIds = dto.branchIds.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    } else if (dto.branchId !== undefined) {
+      branchIds = dto.branchId ? [Number(dto.branchId)] : [];
+    } else if (dto.branchIds !== undefined) {
+      branchIds = [];
+    }
+
+    let collegeNames = undefined;
+    if (Array.isArray(dto.collegeNames)) {
+      collegeNames = dto.collegeNames.map(String).map((s) => s.trim()).filter(Boolean);
+    } else if (dto.collegeName !== undefined) {
+      collegeNames = dto.collegeName ? [String(dto.collegeName).trim()] : [];
+    }
+
+    let courseNames = undefined;
+    if (Array.isArray(dto.courseNames)) {
+      courseNames = dto.courseNames.map(String).map((s) => s.trim()).filter(Boolean);
+    } else if (dto.courseName !== undefined) {
+      courseNames = dto.courseName ? [String(dto.courseName).trim()] : [];
+    }
+
+    let branchNames = undefined;
+    if (Array.isArray(dto.branchNames)) {
+      branchNames = dto.branchNames.map(String).map((s) => s.trim()).filter(Boolean);
+    } else if (dto.branchName !== undefined) {
+      branchNames = dto.branchName ? [String(dto.branchName).trim()] : [];
+    }
+
+    if (this.sdms) {
+      if (collegeIds && collegeIds.length > 0 && (!collegeNames || collegeNames.length === 0)) {
+        collegeNames = [];
+        for (const cid of collegeIds) {
+          try {
+            const c = await this.sdms.getCollege(cid);
+            if (c?.name) collegeNames.push(c.name);
+          } catch (_) {}
+        }
+      }
+
+      if (courseIds && courseIds.length > 0 && (!courseNames || courseNames.length === 0)) {
+        courseNames = [];
+        for (const crsId of courseIds) {
+          try {
+            const crs = await this.sdms.getCourse(crsId);
+            if (crs?.name) courseNames.push(crs.name);
+          } catch (_) {}
+        }
+      }
+
+      if (branchIds && branchIds.length > 0 && (!branchNames || branchNames.length === 0)) {
+        branchNames = [];
+        for (const bid of branchIds) {
+          try {
+            const br = await this.sdms.getBranch(bid);
+            if (br?.name) branchNames.push(br.name);
+          } catch (_) {}
+        }
+      }
+    }
+
+    const primaryCollegeId = collegeIds !== undefined ? (collegeIds[0] ?? null) : undefined;
+    const primaryCourseId = courseIds !== undefined ? (courseIds[0] ?? null) : undefined;
+    const primaryBranchId = branchIds !== undefined ? (branchIds[0] ?? null) : undefined;
+
+    const primaryCollegeName = collegeNames !== undefined ? (collegeNames[0] ?? null) : undefined;
+    const primaryCourseName = courseNames !== undefined ? (courseNames[0] ?? null) : undefined;
+    const primaryBranchName = branchNames !== undefined ? (branchNames[0] ?? null) : undefined;
+
+    return {
+      collegeId: primaryCollegeId,
+      courseId: primaryCourseId,
+      branchId: primaryBranchId,
+      collegeName: primaryCollegeName,
+      courseName: primaryCourseName,
+      branchName: primaryBranchName,
+      collegeIds: collegeIds !== undefined ? (collegeIds.length > 0 ? collegeIds : null) : undefined,
+      courseIds: courseIds !== undefined ? (courseIds.length > 0 ? courseIds : null) : undefined,
+      branchIds: branchIds !== undefined ? (branchIds.length > 0 ? branchIds : null) : undefined,
+      collegeNames: collegeNames !== undefined ? (collegeNames.length > 0 ? collegeNames : null) : undefined,
+      courseNames: courseNames !== undefined ? (courseNames.length > 0 ? courseNames : null) : undefined,
+      branchNames: branchNames !== undefined ? (branchNames.length > 0 ? branchNames : null) : undefined,
+    };
   }
 
   normalizeEmail(email) {
@@ -301,6 +407,26 @@ class UsersService {
 
   serializeUser(user) {
     if (!user) return null;
+    const collegeIds = Array.isArray(user.collegeIds)
+      ? user.collegeIds.map(Number)
+      : (user.collegeId != null ? [Number(user.collegeId)] : []);
+    const courseIds = Array.isArray(user.courseIds)
+      ? user.courseIds.map(Number)
+      : (user.courseId != null ? [Number(user.courseId)] : []);
+    const branchIds = Array.isArray(user.branchIds)
+      ? user.branchIds.map(Number)
+      : (user.branchId != null ? [Number(user.branchId)] : []);
+
+    const collegeNames = Array.isArray(user.collegeNames)
+      ? user.collegeNames
+      : (user.collegeName ? [user.collegeName] : []);
+    const courseNames = Array.isArray(user.courseNames)
+      ? user.courseNames
+      : (user.courseName ? [user.courseName] : []);
+    const branchNames = Array.isArray(user.branchNames)
+      ? user.branchNames
+      : (user.branchName ? [user.branchName] : []);
+
     return {
       id: user.id,
       hrmsUserId: user.hrmsUserId,
@@ -309,6 +435,18 @@ class UsersService {
       email: user.email,
       fullName: user.fullName,
       isActive: user.isActive !== false,
+      collegeId: user.collegeId != null ? Number(user.collegeId) : null,
+      courseId: user.courseId != null ? Number(user.courseId) : null,
+      branchId: user.branchId != null ? Number(user.branchId) : null,
+      collegeName: user.collegeName || null,
+      courseName: user.courseName || null,
+      branchName: user.branchName || null,
+      collegeIds,
+      courseIds,
+      branchIds,
+      collegeNames,
+      courseNames,
+      branchNames,
       privileges: this.effectiveUserPrivileges(user),
       role: this.serializeRole(user.role),
       roleId: user.roleId,
@@ -588,6 +726,7 @@ class UsersService {
       throw AppError.badRequest('Select at least one privilege for this user');
     }
     this.assertPrivilegesAssignable(privileges, actor);
+    const scope = await this.resolveScope(dto);
     const user = await this.userRepo.save(
       this.userRepo.create({
         hrmsUserId,
@@ -599,6 +738,18 @@ class UsersService {
           email ||
           empNo,
         roleId: role.id,
+        collegeId: scope.collegeId ?? null,
+        courseId: scope.courseId ?? null,
+        branchId: scope.branchId ?? null,
+        collegeName: scope.collegeName ?? null,
+        courseName: scope.courseName ?? null,
+        branchName: scope.branchName ?? null,
+        collegeIds: scope.collegeIds ?? null,
+        courseIds: scope.courseIds ?? null,
+        branchIds: scope.branchIds ?? null,
+        collegeNames: scope.collegeNames ?? null,
+        courseNames: scope.courseNames ?? null,
+        branchNames: scope.branchNames ?? null,
         privileges: role.isSystemSuperAdmin ? [...ALL_PRIVILEGE_KEYS] : privileges,
         isActive: dto.isActive !== false,
         createdByEmail: actor?.email ?? actor?.username ?? null,
@@ -615,6 +766,12 @@ class UsersService {
       employeeNumber: user.employeeNumber,
       roleId: role.id,
       roleName: role.name,
+      collegeId: user.collegeId,
+      courseId: user.courseId,
+      branchId: user.branchId,
+      collegeIds: user.collegeIds,
+      courseIds: user.courseIds,
+      branchIds: user.branchIds,
       privileges: user.privileges,
     });
     return this.serializeUser(refreshed);
@@ -683,6 +840,51 @@ class UsersService {
       user.fullName = String(dto.fullName ?? '').trim() || user.fullName;
     }
 
+    const scope = await this.resolveScope(dto);
+    if (scope.collegeIds !== undefined || scope.collegeId !== undefined) {
+      user.collegeId = scope.collegeId ?? null;
+      user.collegeName = scope.collegeName ?? null;
+      user.collegeIds = scope.collegeIds ?? null;
+      user.collegeNames = scope.collegeNames ?? null;
+
+      // If colleges were cleared, clear courses and branches too if not explicitly provided
+      if (!user.collegeId && (!user.collegeIds || user.collegeIds.length === 0)) {
+        if (scope.courseIds === undefined && scope.courseId === undefined) {
+          user.courseId = null;
+          user.courseName = null;
+          user.courseIds = null;
+          user.courseNames = null;
+        }
+        if (scope.branchIds === undefined && scope.branchId === undefined) {
+          user.branchId = null;
+          user.branchName = null;
+          user.branchIds = null;
+          user.branchNames = null;
+        }
+      }
+    }
+    if (scope.courseIds !== undefined || scope.courseId !== undefined) {
+      user.courseId = scope.courseId ?? null;
+      user.courseName = scope.courseName ?? null;
+      user.courseIds = scope.courseIds ?? null;
+      user.courseNames = scope.courseNames ?? null;
+
+      if (!user.courseId && (!user.courseIds || user.courseIds.length === 0)) {
+        if (scope.branchIds === undefined && scope.branchId === undefined) {
+          user.branchId = null;
+          user.branchName = null;
+          user.branchIds = null;
+          user.branchNames = null;
+        }
+      }
+    }
+    if (scope.branchIds !== undefined || scope.branchId !== undefined) {
+      user.branchId = scope.branchId ?? null;
+      user.branchName = scope.branchName ?? null;
+      user.branchIds = scope.branchIds ?? null;
+      user.branchNames = scope.branchNames ?? null;
+    }
+
     if (dto.privileges !== undefined || dto.additionalPrivileges !== undefined) {
       const privileges = normalizePrivilegeList(
         dto.privileges ?? dto.additionalPrivileges,
@@ -702,10 +904,35 @@ class UsersService {
     });
     await this.writeAudit(actor, 'user.update', 'user', user.id, {
       roleId: refreshed.roleId,
+      collegeId: refreshed.collegeId,
+      courseId: refreshed.courseId,
+      branchId: refreshed.branchId,
+      collegeIds: refreshed.collegeIds,
+      courseIds: refreshed.courseIds,
+      branchIds: refreshed.branchIds,
       isActive: refreshed.isActive,
       privileges: refreshed.privileges || [],
     });
     return this.serializeUser(refreshed);
+  }
+
+  async deleteUser(id, actor = null) {
+    const user = await this.userRepo.findOne({
+      where: { id: Number(id) },
+      relations: ['role'],
+    });
+    if (!user) throw AppError.notFound('User not found');
+    if (user.role?.isSystemSuperAdmin && !actor?.isSuperAdmin) {
+      throw AppError.forbidden('Only Super Admins can remove another Super Admin');
+    }
+    await this.userRepo.remove(user);
+    await this.writeAudit(actor, 'user.delete', 'user', user.id, {
+      fullName: user.fullName,
+      email: user.email,
+      employeeNumber: user.employeeNumber,
+      roleId: user.roleId,
+    });
+    return { success: true };
   }
 
   async searchHrmsUsers({ q = '', page = 1, limit = 20, superAdminsOnly = false } = {}) {

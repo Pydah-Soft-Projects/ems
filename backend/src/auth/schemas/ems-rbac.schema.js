@@ -53,6 +53,18 @@ const EmsUser = new EntitySchema({
     email: { type: 'varchar', length: 180, nullable: true },
     fullName: { type: 'varchar', length: 180, nullable: true },
     roleId: { type: 'int' },
+    collegeId: { type: 'int', nullable: true },
+    courseId: { type: 'int', nullable: true },
+    branchId: { type: 'int', nullable: true },
+    collegeName: { type: 'varchar', length: 255, nullable: true },
+    courseName: { type: 'varchar', length: 255, nullable: true },
+    branchName: { type: 'varchar', length: 255, nullable: true },
+    collegeIds: { type: 'simple-json', nullable: true },
+    courseIds: { type: 'simple-json', nullable: true },
+    branchIds: { type: 'simple-json', nullable: true },
+    collegeNames: { type: 'simple-json', nullable: true },
+    courseNames: { type: 'simple-json', nullable: true },
+    branchNames: { type: 'simple-json', nullable: true },
     /**
      * Effective privileges for this user.
      * Role privileges are only a template when creating/editing — runtime

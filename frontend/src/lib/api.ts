@@ -1605,6 +1605,12 @@ export const api = {
     });
   },
 
+  deleteEmsUser(id: number) {
+    return request<{ success: boolean }>(`/user-management/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   searchHrmsUsers(params?: {
     q?: string;
     page?: number;
