@@ -19,6 +19,10 @@ out/
 # logs
 *.log
 npm-debug.log*
+logs/
+**/logs/
+.npm-ci-lockhash
+**/.npm-ci-lockhash
 
 # os / editor
 .DS_Store
