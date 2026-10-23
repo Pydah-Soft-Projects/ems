@@ -39,7 +39,7 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: |
-          npm ci
+          npm ci || npm install
 
       - name: Build frontend
         working-directory: frontend
@@ -123,7 +123,7 @@ jobs:
           if [ ! -d node_modules ] || [ "${CURRENT_HASH}" != "${PREV_HASH}" ]; then
             echo "==> Installing backend dependencies (lockfile changed or node_modules missing)..."
             if [ -f package-lock.json ]; then
-              npm ci --omit=dev
+              npm ci --omit=dev || npm install --omit=dev
             else
               npm install --omit=dev
             fi
@@ -155,7 +155,7 @@ jobs:
           if [ ! -d node_modules ] || [ "${FRONTEND_CURRENT_HASH}" != "${FRONTEND_PREV_HASH}" ]; then
             echo "==> Installing frontend dependencies (lockfile changed or node_modules missing)..."
             if [ -f package-lock.json ]; then
-              npm ci --omit=dev
+              npm ci --omit=dev || npm install --omit=dev
             else
               npm install --omit=dev
             fi
