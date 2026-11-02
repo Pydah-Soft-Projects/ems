@@ -2321,22 +2321,57 @@ class ExamService {
             }
             const allSelected = n === allExamSubjectIds.length &&
                 allExamSubjectIds.every((sid) => uniqueSelected.includes(sid));
-            // Selecting every paper in scope uses the package fee (tiers are 1…N−1 only).
+            const hasValidPkg = packageFee != null && !Number.isNaN(Number(packageFee));
+            const hasTierForN = Array.isArray(supplyFeesByCount) &&
+                supplyFeesByCount.length >= n &&
+                supplyFeesByCount[n - 1] != null &&
+                !Number.isNaN(Number(supplyFeesByCount[n - 1])) &&
+                Number(supplyFeesByCount[n - 1]) >= 0;
+
+            // Selecting every paper in scope uses the package fee when multiple papers exist
+            // and package fee is configured. For single-paper exams or when package fee is unset,
+            // prefer the configured supply tier fee.
             if (allSelected) {
-                if (packageFee == null || Number.isNaN(Number(packageFee))) {
-                    throw AppError.badRequest('Package fee is required when all subjects are selected');
+                if (allExamSubjectIds.length === 1 && hasTierForN) {
+                    const baseFee = Number(supplyFeesByCount[0]);
+                    return {
+                        breakdown: [
+                            {
+                                subjectId: 0,
+                                subjectCode: '1 subject',
+                                fee: baseFee,
+                            },
+                        ],
+                        baseFee,
+                    };
                 }
-                const baseFee = Number(packageFee);
-                return {
-                    breakdown: [
-                        {
-                            subjectId: 0,
-                            subjectCode: 'Package fee (all subjects)',
-                            fee: baseFee,
-                        },
-                    ],
-                    baseFee,
-                };
+                if (hasValidPkg) {
+                    const baseFee = Number(packageFee);
+                    return {
+                        breakdown: [
+                            {
+                                subjectId: 0,
+                                subjectCode: 'Package fee (all subjects)',
+                                fee: baseFee,
+                            },
+                        ],
+                        baseFee,
+                    };
+                }
+                if (hasTierForN) {
+                    const baseFee = Number(supplyFeesByCount[n - 1]);
+                    return {
+                        breakdown: [
+                            {
+                                subjectId: 0,
+                                subjectCode: `${n} subject${n === 1 ? '' : 's'}`,
+                                fee: baseFee,
+                            },
+                        ],
+                        baseFee,
+                    };
+                }
+                throw AppError.badRequest('Package fee is required when all subjects are selected');
             }
             if (!Array.isArray(supplyFeesByCount) || supplyFeesByCount.length === 0) {
                 throw AppError.badRequest('Supply fee schedule is not configured for this examination');

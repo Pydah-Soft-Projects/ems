@@ -127,14 +127,34 @@ export default function StudentExamApplyPage({
     const tiers = detail.exam.supplyFeeByCount ?? null;
     const pkg =
       detail.exam.packageFee != null ? Number(detail.exam.packageFee) : null;
+    const hasPkg = pkg != null && !Number.isNaN(pkg);
     if (enrollType === 'regular') {
-      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
+      return hasPkg ? pkg : 0;
     }
     const n = selected.size;
     if (n < 1) return 0;
-    // All papers selected → package fee (tiers are only 1…N−1).
-    if (n === subjects.length && subjects.every((s) => selected.has(s.subjectId))) {
-      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
+    const allSelected =
+      n === subjects.length && subjects.every((s) => selected.has(s.subjectId));
+    if (allSelected) {
+      if (
+        subjects.length === 1 &&
+        Array.isArray(tiers) &&
+        tiers.length >= 1 &&
+        tiers[0] != null &&
+        !Number.isNaN(Number(tiers[0]))
+      ) {
+        return Number(tiers[0]);
+      }
+      if (hasPkg) return pkg;
+      if (
+        Array.isArray(tiers) &&
+        tiers.length >= n &&
+        tiers[n - 1] != null &&
+        !Number.isNaN(Number(tiers[n - 1]))
+      ) {
+        return Number(tiers[n - 1]);
+      }
+      return 0;
     }
     if (!Array.isArray(tiers) || tiers.length < n) return 0;
     const amount = Number(tiers[n - 1]);
@@ -539,9 +559,13 @@ export default function StudentExamApplyPage({
             <p className="mb-3 text-xs text-[var(--muted)]">
               {enrollType === 'regular'
                 ? 'Regular enrollment includes all papers. Fee is the package amount for your branch.'
-                : enrollType === 'supply'
-                  ? 'Only failed results are selectable; if there is no prior result, you may choose the subject manually. Fee is by count (1…N−1); selecting all papers uses the package fee.'
-                  : 'Select the papers you are applying for. Fee is by count (1…N−1); selecting all papers uses the package fee.'}
+                : subjects.length === 1
+                  ? (enrollType === 'supply'
+                      ? 'Only failed results are selectable; if there is no prior result, you may choose the subject manually. Fee configured for 1 subject.'
+                      : 'Fee configured for 1 subject.')
+                  : enrollType === 'supply'
+                    ? 'Only failed results are selectable; if there is no prior result, you may choose the subject manually. Fee is by count (1…N−1); selecting all papers uses the package fee.'
+                    : 'Select the papers you are applying for. Fee is by count (1…N−1); selecting all papers uses the package fee.'}
               {enrollType === 'regular' && exam.packageFee != null
                 ? ` Package fee: ₹${exam.packageFee}.`
                 : ''}

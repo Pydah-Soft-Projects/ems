@@ -97,13 +97,34 @@ export function StaffApplyModal({
     const tiers = detail.exam.supplyFeeByCount ?? null;
     const pkg =
       detail.exam.packageFee != null ? Number(detail.exam.packageFee) : null;
+    const hasPkg = pkg != null && !Number.isNaN(pkg);
     if (enrollType === 'regular') {
-      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
+      return hasPkg ? pkg : 0;
     }
     const n = selected.size;
     if (n < 1) return 0;
-    if (n === subjects.length && subjects.every((s) => selected.has(s.subjectId))) {
-      return pkg != null && !Number.isNaN(pkg) ? pkg : 0;
+    const allSelected =
+      n === subjects.length && subjects.every((s) => selected.has(s.subjectId));
+    if (allSelected) {
+      if (
+        subjects.length === 1 &&
+        Array.isArray(tiers) &&
+        tiers.length >= 1 &&
+        tiers[0] != null &&
+        !Number.isNaN(Number(tiers[0]))
+      ) {
+        return Number(tiers[0]);
+      }
+      if (hasPkg) return pkg;
+      if (
+        Array.isArray(tiers) &&
+        tiers.length >= n &&
+        tiers[n - 1] != null &&
+        !Number.isNaN(Number(tiers[n - 1]))
+      ) {
+        return Number(tiers[n - 1]);
+      }
+      return 0;
     }
     if (!Array.isArray(tiers) || tiers.length < n) return 0;
     const amount = Number(tiers[n - 1]);
@@ -349,7 +370,7 @@ export function StaffApplyModal({
                   {enrollType === 'supply'
                     ? 'Only failed results are selectable; if there is no prior result, you may choose the subject manually. '
                     : ''}
-                  Fee by subject count (1…N−1); all subjects uses package fee
+                  {subjects.length > 1 ? 'Fee by subject count (1…N−1); all subjects uses package fee' : 'Fee configured for 1 subject'}
                   {Array.isArray(detail.exam.supplyFeeByCount) &&
                   detail.exam.supplyFeeByCount.length > 0
                     ? ` · tiers: ${detail.exam.supplyFeeByCount
