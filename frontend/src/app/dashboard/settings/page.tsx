@@ -410,72 +410,19 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader
-          title="Razorpay payments"
-          description="Only Key ID and Key Secret are required. Payments complete on your page via the Razorpay popup — no webhook URL needed."
+          title="UPI Payments (Pydah Payment Gateway)"
+          description="Online payments are handled via the central Pydah Payment Gateway (PPG) with automatic multi-tenant routing."
         />
         <CardBody>
-          {loading ? (
-            <p className="text-sm text-[var(--muted)]">Loading…</p>
-          ) : !settings && error ? (
-            <p className="text-sm text-[var(--muted)]">
-              Could not load saved Razorpay settings. Use Retry load above.
-            </p>
-          ) : (
-            <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
-              <label className="flex items-center gap-3 text-sm font-medium text-slate-800">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={(e) => setEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-                Enable online fee payments (Razorpay popup)
-              </label>
-
-              <Input
-                label="Razorpay Key ID"
-                value={keyId}
-                onChange={(e) => setKeyId(e.target.value)}
-                placeholder="rzp_live_… or rzp_test_…"
-                autoComplete="off"
-              />
-
-              <Input
-                label="Razorpay Key Secret"
-                type="password"
-                value={keySecret}
-                onChange={(e) => setKeySecret(e.target.value)}
-                placeholder={
-                  settings?.razorpayKeySecretMasked
-                    ? `Current ${settings.razorpayKeySecretMasked} — leave blank to keep`
-                    : 'Enter key secret'
-                }
-                autoComplete="new-password"
-              />
-
-              <div className="rounded-lg border border-[var(--border)] bg-slate-50 px-3.5 py-3 text-sm text-slate-600">
-                <p className="font-medium text-slate-800">How it works</p>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-[var(--muted)]">
-                  <li>Student or staff clicks Pay on the fee page</li>
-                  <li>EMS shows a payment dialog on the same page</li>
-                  <li>Razorpay opens as a popup overlay (UPI / card / netbanking)</li>
-                  <li>After pay, EMS verifies and shows the receipt — no redirect</li>
-                </ul>
-                <p className="mt-2 text-xs text-[var(--muted)]">
-                  Status:{' '}
-                  {settings?.configured
-                    ? enabled
-                      ? 'Ready'
-                      : 'Configured but disabled'
-                    : 'Add Key ID and Secret'}
-                </p>
-              </div>
-
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Save Razorpay settings'}
-              </Button>
-            </form>
-          )}
+          <div className="rounded-lg border border-[var(--border)] bg-slate-50 px-3.5 py-4 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Gateway Status & Architecture</p>
+            <ul className="mt-2 list-inside list-disc space-y-1.5 text-xs text-[var(--muted)]">
+              <li>Direct Server-to-Server (S2S) integration with the central PPG gateway</li>
+              <li>Automatic dynamic routing credits the student's designated college and course accounts</li>
+              <li>Students complete payments on-page via the seamless in-page UPI checkout modal</li>
+              <li>Zero gateway API keys or convenience fees needed in this client portal</li>
+            </ul>
+          </div>
         </CardBody>
       </Card>
 

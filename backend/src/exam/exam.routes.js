@@ -283,12 +283,24 @@ function createFeesRoutes(services) {
     asyncHandler(async (req, res) => {
       res.json(
         await services.exam.verifyRazorpayPayment({
+          businessReference: req.body.businessReference
+            ? String(req.body.businessReference)
+            : undefined,
+          feeRecordId: req.body.feeRecordId
+            ? parseInt(String(req.body.feeRecordId), 10)
+            : undefined,
           razorpayOrderId: String(req.body.razorpayOrderId ?? ''),
           razorpayPaymentId: String(req.body.razorpayPaymentId ?? ''),
           razorpaySignature: String(req.body.razorpaySignature ?? ''),
           paymentId: req.body.paymentId
             ? parseInt(String(req.body.paymentId), 10)
             : undefined,
+          actor: {
+            role: req.user?.role,
+            pinNo: req.user?.pinNo,
+            username: req.user?.username,
+            fullName: req.user?.fullName,
+          },
         }),
       );
     }),

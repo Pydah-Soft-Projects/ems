@@ -569,7 +569,18 @@ class CanaraQrService {
 
     payment.status = PaymentStatus.SUCCESS;
     payment.paidAt = new Date();
-    payment.receiptNumber = this.exam.generateReceiptNumber();
+    let sdmsStudent = null;
+    try {
+      sdmsStudent = await this.exam.sdms.findStudentByPin(feeRecord.studentRollNumber);
+    } catch {}
+    const { collegeCode, courseCode } = await this.exam.resolveCollegeAndCourseCodes(feeRecord, sdmsStudent);
+    payment.receiptNumber = await this.exam.allocateNextReceiptNumber({
+      studentRollNumber: feeRecord.studentRollNumber,
+      collegeCode,
+      courseCode,
+      feeHeadId: feeRecord.examId,
+      date: new Date(),
+    });
     const gw = this.exam.parseGateway(payment.gatewayResponse) ?? {};
     payment.gatewayResponse = JSON.stringify({
       ...gw,

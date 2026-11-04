@@ -11,6 +11,10 @@ import { LoadingBlock } from '@/components/ui/Spinner';
 import { SoftSearchField, StatusFilter, KpiTile } from '@/components/ui/SoftSearch';
 import { ApiError, api } from '@/lib/api';
 import { FeeStatusBadge, money } from '@/components/fees/CollectPaymentModal';
+import {
+  FeeStudentsTableSkeleton,
+  FeeLedgerTableSkeleton,
+} from '@/components/fees/FeeCollectionSkeleton';
 import { ExamFeeRecord } from '@/types/fee';
 import { EligibleExamStudent, Exam } from '@/types/exam';
 
@@ -72,11 +76,14 @@ function fromEligible(s: EligibleExamStudent): ListStudent {
   };
 }
 
+const feeRecordsCache = new Map<string, ExamFeeRecord[]>();
+let cachedExams: Exam[] | null = null;
+
 export default function FeesPage() {
   const router = useRouter();
 
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [loadingExams, setLoadingExams] = useState(true);
+  const [exams, setExams] = useState<Exam[]>(() => cachedExams || []);
+  const [loadingExams, setLoadingExams] = useState(() => !cachedExams);
   const [examsError, setExamsError] = useState('');
   const [examId, setExamId] = useState('');
   const [collectionType, setCollectionType] = useState<'EXAM' | 'REVALUATION'>('EXAM');
@@ -97,8 +104,8 @@ export default function FeesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
 
-  const [records, setRecords] = useState<ExamFeeRecord[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(true);
+  const [records, setRecords] = useState<ExamFeeRecord[]>(() => feeRecordsCache.get('EXAM__') || []);
+  const [loadingRecords, setLoadingRecords] = useState(() => !feeRecordsCache.has('EXAM__'));
   const [recordsError, setRecordsError] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>('pending');
 
@@ -113,19 +120,23 @@ export default function FeesPage() {
   }, [search]);
 
   useEffect(() => {
-    setLoadingExams(true);
+    if (!cachedExams) {
+      setLoadingExams(true);
+    }
     setExamsError('');
     api
       .getExams('published')
       .then((rows) => {
-        setExams(
-          [...rows].sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-          ),
+        const sorted = [...rows].sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
         );
+        cachedExams = sorted;
+        setExams(sorted);
       })
       .catch((err) => {
-        setExams([]);
+        if (!cachedExams) {
+          setExams([]);
+        }
         setExamsError(
           err instanceof ApiError ? err.message : 'Failed to load examinations.',
         );
@@ -241,16 +252,25 @@ export default function FeesPage() {
   }, [loadSearchStudents]);
 
   const loadRecords = useCallback(async () => {
-    setLoadingRecords(true);
+    const key = `${collectionType}_${revaluationId}_${examId}`;
+    const cached = feeRecordsCache.get(key);
+    if (cached) {
+      setRecords(cached);
+      setLoadingRecords(false);
+    } else {
+      setLoadingRecords(true);
+    }
     setRecordsError('');
     try {
-      setRecords(
-        await api.getFeeRecords(collectionType === 'REVALUATION'
-          ? { feeType: 'REVALUATION', revaluationNotificationId: revaluationId ? Number(revaluationId) : undefined }
-          : examId ? { examId: parseInt(examId, 10), feeType: 'EXAM' } : { feeType: 'EXAM' }),
-      );
+      const data = await api.getFeeRecords(collectionType === 'REVALUATION'
+        ? { feeType: 'REVALUATION', revaluationNotificationId: revaluationId ? Number(revaluationId) : undefined }
+        : examId ? { examId: parseInt(examId, 10), feeType: 'EXAM' } : { feeType: 'EXAM' });
+      feeRecordsCache.set(key, data);
+      setRecords(data);
     } catch (err) {
-      setRecords([]);
+      if (!feeRecordsCache.has(key)) {
+        setRecords([]);
+      }
       setRecordsError(
         err instanceof ApiError ? err.message : 'Failed to load fee records.',
       );
@@ -588,13 +608,7 @@ export default function FeesPage() {
               description="Select a published examination to list eligible students, or search by name, PIN, roll, or admission number."
             />
           ) : loadingStudents ? (
-            <LoadingBlock
-              label={
-                examMode
-                  ? 'Loading eligible students…'
-                  : 'Searching students…'
-              }
-            />
+            <FeeStudentsTableSkeleton />
           ) : (
             <>
               <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] pt-4">
@@ -779,7 +793,7 @@ export default function FeesPage() {
           {recordsError ? <Alert tone="danger">{recordsError}</Alert> : null}
 
           {loadingRecords ? (
-            <LoadingBlock label="Loading fee records…" />
+            <FeeLedgerTableSkeleton />
           ) : visibleRecords.length === 0 ? (
             <EmptyState
               title={

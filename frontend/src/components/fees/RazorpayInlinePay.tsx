@@ -9,7 +9,6 @@ import {
   phaseLabel,
   runInlineRazorpayPayment,
 } from '@/lib/runInlineRazorpayPayment';
-import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
 
 type RazorpayInlinePayProps = {
   open: boolean;
@@ -22,7 +21,7 @@ type RazorpayInlinePayProps = {
   onSuccess: (paymentId: number) => void;
   /** panel = on-page (preferred). overlay = legacy full-screen status card. */
   variant?: 'panel' | 'overlay';
-  /** When true with panel, auto-start Razorpay when open becomes true. */
+  /** When true with panel, auto-start checkout when open becomes true. */
   autoStart?: boolean;
 };
 
@@ -102,7 +101,6 @@ export function RazorpayInlinePay({
   if (!open || !record) return null;
 
   const examTitle = record.exam?.name ?? `Exam #${record.examId}`;
-  const split = calcUpiConvenienceFee(record.totalAmount, paymentMethod);
   const isTerminal =
     phase === 'success' || phase === 'failed' || phase === 'cancelled';
 
@@ -116,7 +114,7 @@ export function RazorpayInlinePay({
     >
       <div className="border-b border-[var(--border)] bg-[var(--primary-soft)] px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--primary)]">
-          Secure online payment
+          UPI Online Payment
         </p>
         <h2 id="rzp-inline-title" className="text-lg font-bold text-slate-900">
           Pay examination fee
@@ -129,26 +127,12 @@ export function RazorpayInlinePay({
           <p className="mt-1 text-xs text-[var(--muted)]">
             {record.studentName} · {record.studentRollNumber}
           </p>
-          {split.applies ? (
-            <div className="mt-3 space-y-1 text-sm tabular-nums">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Exam fee</span>
-                <span>{money(split.base)}</span>
-              </div>
-              <div className="flex justify-between text-amber-800">
-                <span>Convenience fee (2.2%)</span>
-                <span>{money(split.convenienceFee)}</span>
-              </div>
-              <div className="flex justify-between border-t border-[var(--border)] pt-2 text-base font-bold text-slate-900">
-                <span>Total payable</span>
-                <span>{money(split.total)}</span>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-3 text-2xl font-bold tabular-nums text-slate-900">
+          <div className="mt-3 flex items-baseline justify-between border-t border-[var(--border)] pt-3">
+            <span className="text-sm font-medium text-slate-600">Total payable</span>
+            <span className="text-2xl font-bold tabular-nums text-slate-900">
               {money(record.totalAmount)}
-            </p>
-          )}
+            </span>
+          </div>
         </div>
 
         <div className="flex items-start gap-3 rounded-[var(--radius)] border border-[var(--info-border)] bg-[var(--info-soft)] px-4 py-3">
@@ -160,8 +144,8 @@ export function RazorpayInlinePay({
             <p className="mt-0.5 text-xs text-[var(--muted)]">
               {detail ||
                 (phase === 'awaiting_payment'
-                  ? 'Complete payment in the Razorpay window. Stay on this page.'
-                  : 'Razorpay opens on this page — no redirect away from EMS.')}
+                  ? 'Complete payment in the UPI modal. Stay on this page.'
+                  : 'UPI checkout opens on this page — no redirect away from EMS.')}
             </p>
           </div>
         </div>
@@ -204,7 +188,7 @@ export function RazorpayInlinePay({
   if (variant === 'overlay') {
     return (
       <div
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
         role="dialog"
         aria-modal="true"
         aria-labelledby="rzp-inline-title"
@@ -216,10 +200,9 @@ export function RazorpayInlinePay({
 
   return (
     <div
-      className="mt-4"
+      className="mt-6"
       role="region"
-      aria-live="polite"
-      aria-labelledby="rzp-inline-title"
+      aria-label="UPI online payment checkout"
     >
       {body}
     </div>
@@ -229,28 +212,25 @@ export function RazorpayInlinePay({
 function StatusIcon({ phase }: { phase: InlinePayPhase }) {
   if (phase === 'success') {
     return (
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--success-soft)] text-[var(--success)]">
-        ✓
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--success-soft)] text-emerald-600">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
       </span>
     );
   }
   if (phase === 'failed' || phase === 'cancelled') {
     return (
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
-        !
-      </span>
-    );
-  }
-  if (phase !== 'idle') {
-    return (
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--info-border)] border-t-[var(--primary)]" />
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--danger-soft)] text-rose-600">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
       </span>
     );
   }
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-sm font-bold text-[var(--primary)]">
-      ₹
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
     </span>
   );
 }

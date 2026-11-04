@@ -1,7 +1,12 @@
 'use strict';
 
 const { createHmac, timingSafeEqual } = require('crypto');
-const Razorpay = require('razorpay');
+let Razorpay;
+try {
+  Razorpay = require('razorpay');
+} catch {
+  Razorpay = null;
+}
 const { AppError } = require('../common/errors');
 const { config } = require('../config');
 const { operationLogger } = require('../common/logger');
@@ -48,6 +53,7 @@ class ExamService {
             'exam.examSubjects.subject',
             'payments',
         ];
+        this.verificationLocks = new Map();
     }
     parseGateway(raw) {
         if (!raw)
@@ -79,26 +85,14 @@ class ExamService {
     roundMoney(amount) {
         return Math.round(Number(amount) * 100) / 100;
     }
-    applyUpiConvenienceFee(baseAmount, paymentMethod) {
+    applyUpiConvenienceFee(baseAmount, _paymentMethod) {
         const base = this.roundMoney(baseAmount);
-        const isUpi = (paymentMethod ?? PaymentMethod.UPI) === PaymentMethod.UPI;
-        if (!isUpi) {
-            return {
-                base,
-                convenienceFee: 0,
-                total: base,
-                applies: false,
-                rate: 0,
-            };
-        }
-        const convenienceFee = this.roundMoney(base * UPI_CONVENIENCE_FEE_RATE);
-        const total = this.roundMoney(base + convenienceFee);
         return {
             base,
-            convenienceFee,
-            total,
-            applies: true,
-            rate: UPI_CONVENIENCE_FEE_RATE,
+            convenienceFee: 0,
+            total: base,
+            applies: false,
+            rate: 0,
         };
     }
     isExamFeeLine(gw) {
@@ -2874,6 +2868,49 @@ class ExamService {
     }
 
     /**
+     * Atomically allocates the next official receipt number from the Fees System API.
+     * Endpoints: POST /api/public/transactions/next-receipt
+     */
+    async allocateNextReceiptNumber({ studentRollNumber, collegeCode, courseCode, feeHeadId, date = new Date() } = {}) {
+        const feesBaseUrl = config.feeManagement?.backendUrl || process.env.FEES_BACKEND_URL || 'http://localhost:5001';
+        try {
+            const response = await fetch(`${feesBaseUrl}/api/public/transactions/next-receipt`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studentId: studentRollNumber,
+                    collegeCode: collegeCode || undefined,
+                    courseCode: courseCode || undefined,
+                    groupCode: 'EXAM',
+                    feeHeadId: feeHeadId ? String(feeHeadId) : undefined,
+                    date,
+                    allocate: true,
+                }),
+            });
+            if (response.ok) {
+                const resJson = await response.json();
+                if (resJson.success && resJson.receiptNumber) {
+                    log.info({ receiptNumber: resJson.receiptNumber }, 'Allocated next receipt number from Fees API');
+                    return resJson.receiptNumber;
+                }
+            } else {
+                const errText = await response.text();
+                log.warn({ status: response.status, body: errText }, 'Fees API returned non-OK for next-receipt');
+            }
+        } catch (err) {
+            log.warn({ err: err.message }, 'Failed to fetch next receipt from Fees API, falling back');
+        }
+        if (this.feeManagement?.isEnabled?.()) {
+            try {
+                return await this.feeManagement.generateReceiptNumber(feeHeadId, collegeCode, courseCode);
+            } catch (err) {
+                log.warn({ err: err.message }, 'feeManagement.generateReceiptNumber failed');
+            }
+        }
+        return `${collegeCode || 'PCE'}/${courseCode || 'GEN'}/EXAM/${Date.now().toString().slice(-6)}`;
+    }
+
+    /**
      * Post exam-fee collection to Fee Management (append-only).
      * Exam-fee payments split into Exam Fee (EXM01) + Late Fee (LTF) lines;
      * UPI convenience-fee companion payments post under Bank Charges (BNKCH).
@@ -3084,6 +3121,80 @@ class ExamService {
     async payOnline(_feeRecordId, _dto) {
         throw AppError.badRequest('Simulated online pay is disabled. Use Razorpay Checkout (/fees/razorpay/order).');
     }
+    async resolveCollegeAndCourseCodes(feeRecord, sdmsStudent) {
+        const rawCollege = (sdmsStudent?.college || feeRecord.exam?.college || '').trim();
+        const rawCourse = (sdmsStudent?.course || feeRecord.exam?.course || '').trim();
+
+        let collegeCode = '';
+        let courseCode = '';
+        let collegeId = null;
+
+        // 1. Resolve college dynamically from SDMS colleges repository
+        try {
+            if (rawCollege && typeof this.sdms?.collegeRepo?.findOne === 'function') {
+                let collegeRow = await this.sdms.collegeRepo.findOne({
+                    where: [{ code: rawCollege }, { name: rawCollege }],
+                });
+                if (!collegeRow && typeof this.sdms.collegeRepo.createQueryBuilder === 'function') {
+                    collegeRow = await this.sdms.collegeRepo.createQueryBuilder('c')
+                        .where('LOWER(c.code) = LOWER(:val)', { val: rawCollege })
+                        .orWhere('LOWER(c.name) = LOWER(:val)', { val: rawCollege })
+                        .orWhere('LOWER(:val) LIKE CONCAT(\'%\', LOWER(c.code), \'%\')', { val: rawCollege })
+                        .orWhere('LOWER(c.name) LIKE CONCAT(\'%\', LOWER(:val), \'%\')', { val: rawCollege })
+                        .getOne();
+                }
+                if (collegeRow) {
+                    collegeCode = (collegeRow.code || '').trim().toUpperCase();
+                    collegeId = collegeRow.id;
+                }
+            }
+        } catch (err) {
+            log.warn({ err, rawCollege }, 'Error resolving college code dynamically');
+        }
+
+        if (!collegeCode && rawCollege) {
+            collegeCode = rawCollege.toUpperCase();
+        }
+
+        // 2. Resolve course dynamically from SDMS courses repository
+        try {
+            if (rawCourse && typeof this.sdms?.courseRepo?.findOne === 'function') {
+                let courseRow = null;
+                if (collegeId && typeof this.sdms.courseRepo.createQueryBuilder === 'function') {
+                    courseRow = await this.sdms.courseRepo.createQueryBuilder('course')
+                        .where('course.collegeId = :collegeId', { collegeId })
+                        .andWhere('(LOWER(course.code) = LOWER(:val) OR LOWER(course.name) = LOWER(:val))', { val: rawCourse })
+                        .getOne();
+                }
+                if (!courseRow) {
+                    courseRow = await this.sdms.courseRepo.findOne({
+                        where: [{ code: rawCourse }, { name: rawCourse }],
+                    });
+                }
+                if (!courseRow && typeof this.sdms.courseRepo.createQueryBuilder === 'function') {
+                    courseRow = await this.sdms.courseRepo.createQueryBuilder('course')
+                        .where('LOWER(course.code) = LOWER(:val) OR LOWER(course.name) = LOWER(:val)', { val: rawCourse })
+                        .orWhere('LOWER(:val) LIKE CONCAT(\'%\', LOWER(course.code), \'%\')', { val: rawCourse })
+                        .orWhere('LOWER(:val) LIKE CONCAT(\'%\', LOWER(course.name), \'%\')', { val: rawCourse })
+                        .getOne();
+                }
+                if (courseRow?.code) {
+                    courseCode = courseRow.code.trim().toUpperCase();
+                }
+            }
+        } catch (err) {
+            log.warn({ err, rawCourse }, 'Error resolving course code dynamically');
+        }
+
+        if (!courseCode && rawCourse) {
+            courseCode = rawCourse.toUpperCase();
+        }
+
+        return { collegeCode, courseCode };
+    }
+    async createPpgOrder(feeRecordId, opts = {}) {
+        return this.createRazorpayOrder(feeRecordId, opts);
+    }
     async createRazorpayOrder(feeRecordId, opts = {}) {
         const feeRecord = await this.getFeeRecord(feeRecordId);
         if (feeRecord.status === FeeStatus.PAID) {
@@ -3096,278 +3207,344 @@ class ExamService {
             }
         }
         await this.refreshLateFee(feeRecord);
-        const open = await this.paymentRepo.find({
-            where: { feeRecordId },
-        });
-        for (const p of open) {
-            if (p.status === PaymentStatus.PENDING ||
-                p.status === PaymentStatus.PROCESSING) {
-                p.status = PaymentStatus.FAILED;
-                const gw = this.parseGateway(p.gatewayResponse) ?? {
-                    provider: 'razorpay',
-                };
-                p.gatewayResponse = JSON.stringify({
-                    ...gw,
-                    event: 'superseded',
-                });
-                await this.paymentRepo.save(p);
-            }
-        }
-        const { cfg, client } = await this.getRazorpayClient();
-        const split = this.applyUpiConvenienceFee(feeRecord.totalAmount, opts.paymentMethod);
-        const chargePaise = Math.round(split.total * 100);
+
+        const totalAmt = Number(feeRecord.totalAmount);
+        const chargePaise = Math.round(totalAmt * 100);
         if (chargePaise < 100) {
             throw AppError.badRequest('Amount must be at least ₹1.00');
         }
-        const examPayment = this.paymentRepo.create({
-            feeRecordId,
-            amountPaid: split.base,
-            paymentMode: PaymentMode.ONLINE,
-            paymentMethod: opts.paymentMethod || PaymentMethod.UPI,
-            status: PaymentStatus.PENDING,
-            receiptNumber: this.generateReceiptNumber(),
-            transactionReference: null,
-            collectedBy: opts.actor?.fullName || opts.actor?.username || null,
-            collectorUsername: opts.actor?.role === 'student'
-                ? null
-                : opts.actor?.username || null,
-            remarks: null,
-            gatewayResponse: JSON.stringify({
-                provider: 'razorpay',
-                lineType: 'exam_fee',
-                event: 'order_creating',
-                baseFeeAmount: split.base,
-                convenienceFeeAmount: split.convenienceFee,
-                convenienceFeeRate: split.rate,
-            }),
-        });
-        const savedExam = await this.paymentRepo.save(examPayment);
-        let savedConvenience = null;
-        if (split.applies && split.convenienceFee > 0) {
-            savedConvenience = await this.paymentRepo.save(this.paymentRepo.create({
-                feeRecordId,
-                amountPaid: split.convenienceFee,
-                paymentMode: PaymentMode.ONLINE,
-                paymentMethod: PaymentMethod.UPI,
-                status: PaymentStatus.PENDING,
-                receiptNumber: this.generateReceiptNumber(),
-                transactionReference: null,
-                collectedBy: savedExam.collectedBy,
-                collectorUsername: savedExam.collectorUsername,
-                remarks: 'UPI convenience / bank charges (2.2%)',
-                gatewayResponse: JSON.stringify({
-                    provider: 'razorpay',
-                    lineType: 'convenience_fee',
-                    event: 'order_creating',
-                    companionPaymentId: savedExam.id,
-                    convenienceFeeRate: split.rate,
-                    baseFeeAmount: split.base,
-                }),
-            }));
-            savedExam.gatewayResponse = JSON.stringify({
-                provider: 'razorpay',
-                lineType: 'exam_fee',
-                event: 'order_creating',
-                companionPaymentId: savedConvenience.id,
-                baseFeeAmount: split.base,
-                convenienceFeeAmount: split.convenienceFee,
-                convenienceFeeRate: split.rate,
-            });
-            await this.paymentRepo.save(savedExam);
-            savedConvenience.gatewayResponse = JSON.stringify({
-                provider: 'razorpay',
-                lineType: 'convenience_fee',
-                event: 'order_creating',
-                companionPaymentId: savedExam.id,
-                convenienceFeeRate: split.rate,
-                baseFeeAmount: split.base,
-                convenienceFeeAmount: split.convenienceFee,
-            });
-            await this.paymentRepo.save(savedConvenience);
-        }
-        const order = await client.orders.create({
-            amount: chargePaise,
-            currency: 'INR',
-            receipt: `fee_${feeRecordId}_p${savedExam.id}`.slice(0, 40),
-            notes: {
-                feeRecordId: String(feeRecordId),
-                primaryPaymentId: String(savedExam.id),
-                companionPaymentId: savedConvenience
-                    ? String(savedConvenience.id)
-                    : '',
-                rollNumber: feeRecord.studentRollNumber,
-            },
-        });
-        const orderMeta = {
-            provider: 'razorpay',
-            orderId: order.id,
-            event: 'order_created',
-            method: opts.paymentMethod || PaymentMethod.UPI,
-        };
-        const examGw = this.parseGateway(savedExam.gatewayResponse) ?? {
-            provider: 'razorpay',
-            lineType: 'exam_fee',
-        };
-        savedExam.status = PaymentStatus.PROCESSING;
-        savedExam.gatewayResponse = JSON.stringify({
-            ...examGw,
-            ...orderMeta,
-        });
-        await this.paymentRepo.save(savedExam);
-        if (savedConvenience) {
-            const convGw = this.parseGateway(savedConvenience.gatewayResponse) ?? {
-                provider: 'razorpay',
-                lineType: 'convenience_fee',
-            };
-            savedConvenience.status = PaymentStatus.PROCESSING;
-            savedConvenience.gatewayResponse = JSON.stringify({
-                ...convGw,
-                ...orderMeta,
-            });
-            await this.paymentRepo.save(savedConvenience);
-        }
+
         let studentContact = null;
         let studentEmail = null;
+        let sdmsStudent = null;
         try {
-            const sdmsStudent = await this.sdms.findStudentByPin(feeRecord.studentRollNumber);
+            sdmsStudent = await this.sdms.findStudentByPin(feeRecord.studentRollNumber);
             if (sdmsStudent) {
                 studentContact = this.sdms.resolveStudentContact(sdmsStudent);
                 studentEmail = sdmsStudent.email?.trim() || null;
             }
+        } catch {}
+
+        const { collegeCode, courseCode } = await this.resolveCollegeAndCourseCodes(feeRecord, sdmsStudent);
+        const orderTimestamp = Date.now();
+        const businessReference = `EMS-FEE-${feeRecordId}-${orderTimestamp}`;
+        const ppgBaseUrl = config.ppg?.baseUrl || 'http://localhost:5005/api/v1';
+        const appKey = config.ppg?.appKey || '';
+        const appSecret = config.ppg?.appSecret || '';
+        const returnUrl = opts.returnUrl || (opts.actor?.role === 'student'
+            ? `${config.publicAppUrl}/student/receipt/ref/${businessReference}`
+            : `${config.publicAppUrl}/dashboard/fees/receipt/ref/${businessReference}`);
+
+        let checkoutUrl = '';
+        let ppgPaymentId = '';
+
+        if (appKey && appSecret && appKey !== 'app_key_xxxxxxxxxxxxxxxx') {
+            try {
+                const response = await fetch(`${ppgBaseUrl}/payments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-App-Key': appKey,
+                        'X-App-Secret': appSecret,
+                        'X-Idempotency-Key': `idemp-${businessReference}`,
+                    },
+                    body: JSON.stringify({
+                        businessReference,
+                        amount: chargePaise,
+                        currency: 'INR',
+                        description: feeRecord.exam?.name
+                            ? `Exam fee — ${feeRecord.exam.name}`
+                            : `Exam fee #${feeRecordId}`,
+                        college: collegeCode,
+                        course: courseCode,
+                        collegeCode: collegeCode,
+                        courseCode: courseCode,
+                        returnUrl,
+                        customer: {
+                            name: feeRecord.studentName || 'Student',
+                            ...(studentEmail ? { email: studentEmail } : {}),
+                            ...(studentContact ? { phone: studentContact } : {}),
+                        },
+                        notes: {
+                            studentId: feeRecord.studentRollNumber,
+                            feeRecordId: String(feeRecordId),
+                            collectorUsername: opts.actor?.username || '',
+                            collectorFullName: opts.actor?.fullName || '',
+                            paymentMethod: opts.paymentMethod || PaymentMethod.UPI,
+                        },
+                    }),
+                });
+                const resJson = await response.json();
+                if (!response.ok || resJson.success === false) {
+                    const errDetail = resJson.error?.message || resJson.error || resJson.message || 'PPG Order Creation Failed';
+                    throw new Error(errDetail);
+                }
+                const dataObj = resJson.data || resJson;
+                checkoutUrl = dataObj.checkoutUrl;
+                ppgPaymentId = dataObj.paymentId;
+            } catch (err) {
+                throw AppError.badRequest(`Payment Gateway Error: ${err.message}`);
+            }
+        } else {
+            // PPG credentials placeholder / fallback mode for development
+            ppgPaymentId = `PPG_${orderTimestamp}`;
+            const fallbackCheckout = config.ppg?.checkoutUrl || `${ppgBaseUrl.replace('/api/v1', '')}/checkout`;
+            checkoutUrl = `${fallbackCheckout.replace(/\/+$/, '')}/${ppgPaymentId}`;
         }
-        catch {
-        }
+
+        
         return {
-            keyId: cfg.keyId,
-            orderId: order.id,
-            amount: chargePaise,
-            currency: 'INR',
-            paymentId: savedExam.id,
-            companionPaymentId: savedConvenience?.id ?? null,
-            receiptNumber: savedExam.receiptNumber,
+            success: true,
+            orderId: ppgPaymentId,
+            keyId: appKey,
+            paymentId: null,
+            ppgPaymentId,
+            checkoutUrl,
+            returnUrl,
+            sdkUrl: config.ppg?.sdkUrl || 'http://localhost:5005/sdk/ppg.js',
+            receiptNumber: null,
             feeRecordId,
             studentName: feeRecord.studentName,
             studentRollNumber: feeRecord.studentRollNumber,
             studentContact,
             studentEmail,
-            baseAmount: split.base,
-            convenienceFee: split.convenienceFee,
-            totalAmount: split.total,
-            convenienceFeeApplied: split.applies,
-            convenienceFeeRate: split.rate,
+            amount: chargePaise,
+            currency: 'INR',
+            baseAmount: totalAmt,
+            convenienceFee: 0,
+            totalAmount: totalAmt,
+            convenienceFeeApplied: false,
+            convenienceFeeRate: 0,
             description: feeRecord.exam?.name
                 ? `Exam fee — ${feeRecord.exam.name}`
                 : `Exam fee #${feeRecordId}`,
         };
     }
-    async verifyRazorpayPayment(dto) {
-        const { cfg } = await this.getRazorpayClient();
-        const body = `${dto.razorpayOrderId}|${dto.razorpayPaymentId}`;
-        const expected = createHmac('sha256', cfg.keySecret)
-            .update(body)
-            .digest('hex');
-        if (!this.safeEqualHex(expected, dto.razorpaySignature)) {
-            throw AppError.forbidden('Invalid Razorpay payment signature');
-        }
-        const payment = await this.findPaymentForRazorpayOrder(dto.razorpayOrderId, dto.paymentId);
-        return this.markRazorpaySuccess(payment, {
-            paymentId: dto.razorpayPaymentId,
-            orderId: dto.razorpayOrderId,
-            signature: dto.razorpaySignature,
-            event: 'checkout_verified',
-        });
+    async verifyPpgPayment(dto) {
+        return this.verifyRazorpayPayment(dto);
     }
-    async handleRazorpayWebhook(rawBody, signatureHeader) {
-        const webhookSecret = await this.resolveWebhookSecret();
-        if (!webhookSecret) {
-            throw AppError.badRequest('Razorpay webhook secret is not configured');
+    async verifyRazorpayPayment(dto) {
+        const ppgPaymentId = dto.razorpayPaymentId || dto.ppgPaymentId || dto.razorpayOrderId;
+        const lockKey = ppgPaymentId || dto.businessReference || (dto.feeRecordId ? `fee_${dto.feeRecordId}` : null);
+
+        if (lockKey && this.verificationLocks.has(lockKey)) {
+            return await this.verificationLocks.get(lockKey);
         }
-        if (!signatureHeader) {
-            throw AppError.forbidden('Missing Razorpay signature');
+
+        const task = this.executeVerifyRazorpayPayment(dto, ppgPaymentId);
+        if (lockKey) {
+            this.verificationLocks.set(lockKey, task);
         }
-        const expected = createHmac('sha256', webhookSecret)
-            .update(rawBody)
-            .digest('hex');
-        if (!this.safeEqualHex(expected, signatureHeader)) {
-            throw AppError.forbidden('Invalid webhook signature');
+        try {
+            return await task;
+        } finally {
+            if (lockKey) {
+                this.verificationLocks.delete(lockKey);
+            }
         }
-        const payload = JSON.parse(rawBody.toString('utf8'));
-        const event = payload.event ?? '';
-        const paymentEntity = payload.payload?.payment?.entity;
-        const orderEntity = payload.payload?.order?.entity;
-        if (event === 'payment.captured' ||
-            event === 'payment.authorized' ||
-            event === 'order.paid') {
-            const orderId = String(paymentEntity?.order_id ?? orderEntity?.id ?? '');
-            const rzPaymentId = String(paymentEntity?.id ?? '');
-            if (!orderId) {
-                return { ok: true, ignored: true, reason: 'no_order_id' };
-            }
-            let payment;
-            try {
-                payment = await this.findPaymentForRazorpayOrder(orderId);
-            }
-            catch {
-                return { ok: true, ignored: true, reason: 'payment_not_found' };
-            }
-            if (payment.status === PaymentStatus.SUCCESS) {
-                return { ok: true, alreadyPaid: true, paymentId: payment.id };
-            }
-            await this.markRazorpaySuccess(payment, {
-                paymentId: rzPaymentId || undefined,
-                orderId,
-                event,
-                method: paymentEntity?.method
-                    ? String(paymentEntity.method)
-                    : undefined,
+    }
+
+    async executeVerifyRazorpayPayment(dto, ppgPaymentId) {
+        let payment = null;
+
+        if (dto.paymentId) {
+            payment = await this.paymentRepo.findOne({
+                where: { id: dto.paymentId },
+                relations: ['feeRecord', 'feeRecord.exam'],
             });
-            return { ok: true, paid: true, paymentId: payment.id };
         }
-        if (event === 'payment.failed') {
-            const orderId = String(paymentEntity?.order_id ?? '');
-            if (!orderId)
-                return { ok: true, ignored: true };
+        if (!payment && ppgPaymentId) {
+            payment = await this.paymentRepo.findOne({
+                where: { transactionReference: ppgPaymentId },
+                relations: ['feeRecord', 'feeRecord.exam'],
+            });
+        }
+        if (!payment && dto.razorpayOrderId) {
+            payment = await this.findPaymentForRazorpayOrder(dto.razorpayOrderId, dto.paymentId);
+        }
+
+        // If payment already recorded as SUCCESS, return immediately
+        if (payment && payment.status === PaymentStatus.SUCCESS) {
+            const feeRecord = payment.feeRecord || await this.getFeeRecord(payment.feeRecordId);
+            return {
+                payment: this.withVerificationMeta(payment),
+                feeRecord,
+                alreadyPaid: true,
+            };
+        }
+
+        // Determine feeRecord
+        let feeRecord = payment?.feeRecord || null;
+        if (!feeRecord && dto.feeRecordId) {
+            feeRecord = await this.getFeeRecord(dto.feeRecordId);
+        }
+        if (!feeRecord && dto.businessReference) {
+            const match = String(dto.businessReference).match(/EMS-FEE-(\d+)/);
+            if (match && match[1]) {
+                feeRecord = await this.getFeeRecord(parseInt(match[1], 10));
+            }
+        }
+
+        // Query PPG API to verify payment and read notes/status
+        let ppgObj = null;
+        if (ppgPaymentId) {
             try {
-                const payment = await this.findPaymentForRazorpayOrder(orderId);
-                if (payment && payment.status !== PaymentStatus.SUCCESS) {
-                    const gw = this.parseGateway(payment.gatewayResponse) ?? {
-                        provider: 'razorpay',
-                    };
-                    payment.status = PaymentStatus.FAILED;
-                    payment.gatewayResponse = JSON.stringify({
-                        ...gw,
-                        orderId,
-                        paymentId: paymentEntity?.id
-                            ? String(paymentEntity.id)
-                            : gw.paymentId,
-                        event: 'payment.failed',
+                const ppgBaseUrl = config.ppg?.baseUrl || 'http://localhost:5005/api/v1';
+                const appKey = config.ppg?.appKey || '';
+                const appSecret = config.ppg?.appSecret || '';
+                if (appKey && appSecret && appKey !== 'app_key_xxxxxxxxxxxxxxxx') {
+                    const ppgRes = await fetch(`${ppgBaseUrl}/payments/${ppgPaymentId}`, {
+                        headers: {
+                            'X-App-Key': appKey,
+                            'X-App-Secret': appSecret,
+                        },
                     });
-                    await this.paymentRepo.save(payment);
-                    const companion = await this.getLinkedPayment(gw.companionPaymentId);
-                    if (companion &&
-                        companion.status !== PaymentStatus.SUCCESS &&
-                        companion.status !== PaymentStatus.VOIDED) {
-                        const cgw = this.parseGateway(companion.gatewayResponse) ?? {
-                            provider: 'razorpay',
-                        };
-                        companion.status = PaymentStatus.FAILED;
-                        companion.gatewayResponse = JSON.stringify({
-                            ...cgw,
-                            orderId,
-                            event: 'payment.failed',
-                        });
-                        await this.paymentRepo.save(companion);
+                    if (ppgRes.ok) {
+                        const ppgData = await ppgRes.json();
+                        ppgObj = ppgData.data || ppgData;
+                        if (!feeRecord) {
+                            const recId = ppgObj.notes?.feeRecordId || ppgObj.notes?.fee_record_id;
+                            if (recId) {
+                                feeRecord = await this.getFeeRecord(parseInt(recId, 10));
+                            } else if (ppgObj.businessReference) {
+                                const match = String(ppgObj.businessReference).match(/EMS-FEE-(\d+)/);
+                                if (match && match[1]) {
+                                    feeRecord = await this.getFeeRecord(parseInt(match[1], 10));
+                                }
+                            }
+                        }
                     }
                 }
+            } catch (e) {
+                log.warn({ err: e.message }, 'Failed to query PPG during payment verification');
             }
-            catch {
+        }
+
+        if (!feeRecord) {
+            throw AppError.notFound('Fee record not found for payment verification');
+        }
+
+        // Idempotency: If fee record is already paid, return existing success payment
+        const existingPaid = await this.paymentRepo.findOne({
+            where: { feeRecordId: feeRecord.id, status: PaymentStatus.SUCCESS },
+            relations: ['feeRecord', 'feeRecord.exam'],
+            order: { id: 'DESC' },
+        });
+        if (existingPaid) {
+            return {
+                payment: this.withVerificationMeta(existingPaid),
+                feeRecord,
+                alreadyPaid: true,
+            };
+        }
+
+        // Idempotency check 2: Check by transactionReference right before allocation
+        if (ppgPaymentId) {
+            const existingTxn = await this.paymentRepo.findOne({
+                where: { transactionReference: ppgPaymentId, status: PaymentStatus.SUCCESS },
+                relations: ['feeRecord', 'feeRecord.exam'],
+            });
+            if (existingTxn) {
+                return {
+                    payment: this.withVerificationMeta(existingTxn),
+                    feeRecord: existingTxn.feeRecord || feeRecord,
+                    alreadyPaid: true,
+                };
             }
+        }
+
+        // Resolve college and course codes
+        let sdmsStudent = null;
+        try {
+            sdmsStudent = await this.sdms.findStudentByPin(feeRecord.studentRollNumber);
+        } catch {}
+        const { collegeCode, courseCode } = await this.resolveCollegeAndCourseCodes(feeRecord, sdmsStudent);
+
+        // Atomically allocate the next receipt number from Fees API on SUCCESS only
+        const receiptNumber = await this.allocateNextReceiptNumber({
+            studentRollNumber: feeRecord.studentRollNumber,
+            collegeCode,
+            courseCode,
+            feeHeadId: feeRecord.examId,
+            date: new Date(),
+        });
+
+        const newPayment = this.paymentRepo.create({
+            feeRecordId: feeRecord.id,
+            amountPaid: feeRecord.totalAmount,
+            paymentMode: PaymentMode.ONLINE,
+            paymentMethod: PaymentMethod.UPI,
+            status: PaymentStatus.SUCCESS,
+            paidAt: new Date(),
+            receiptNumber,
+            transactionReference: ppgPaymentId || `ppg_${Date.now()}`,
+            collectedBy: dto.actor?.fullName || dto.actor?.username || ppgObj?.notes?.collectorFullName || ppgObj?.notes?.collectorUsername || 'Online Portal',
+            collectorUsername: dto.actor?.role === 'student' ? null : (dto.actor?.username || ppgObj?.notes?.collectorUsername || null),
+            remarks: null,
+            gatewayResponse: JSON.stringify({
+                provider: 'ppg',
+                orderId: dto.razorpayOrderId || ppgPaymentId,
+                paymentId: ppgPaymentId,
+                signature: dto.razorpaySignature,
+                event: 'checkout_verified',
+            }),
+        });
+        const savedPayment = await this.paymentRepo.save(newPayment);
+
+        await this.feeRecordRepo.update(feeRecord.id, { status: FeeStatus.PAID });
+
+        await this.syncPaymentToFeeManagement(savedPayment, feeRecord, {
+            gatewayPaymentId: ppgPaymentId,
+        });
+
+        const refreshedPayment = await this.getPayment(savedPayment.id);
+        const refreshedFeeRecord = await this.getFeeRecord(feeRecord.id);
+
+        return {
+            payment: this.withVerificationMeta(refreshedPayment),
+            feeRecord: refreshedFeeRecord,
+            alreadyPaid: false,
+        };
+    }
+    async handleRazorpayWebhook(rawBody, signatureHeader) {
+        let payload;
+        try {
+            payload = typeof rawBody === 'string' || Buffer.isBuffer(rawBody)
+                ? JSON.parse(rawBody.toString('utf8'))
+                : rawBody;
+        } catch {
+            return { ok: false, error: 'Invalid JSON payload' };
+        }
+
+        // Support PPG Webhook event format: { event: 'payment.succeeded', data: { paymentId, businessReference, notes, ... } }
+        if (payload.event === 'payment.succeeded' || payload.event === 'payment.captured' || payload.event === 'order.paid') {
+            const data = payload.data || payload.payload?.payment?.entity || {};
+            const businessRef = data.businessReference || payload.businessReference;
+            const ppgPaymentId = data.paymentId || data.id || '';
+            const feeRecordIdFromNotes = data.notes?.feeRecordId || payload.notes?.feeRecordId;
+
+            const res = await this.verifyRazorpayPayment({
+                businessReference: businessRef,
+                feeRecordId: feeRecordIdFromNotes ? parseInt(String(feeRecordIdFromNotes), 10) : undefined,
+                razorpayOrderId: businessRef || ppgPaymentId,
+                razorpayPaymentId: ppgPaymentId,
+                razorpaySignature: 'ppg_webhook',
+                actor: {
+                    fullName: data.notes?.collectorFullName || 'Online Portal',
+                    username: data.notes?.collectorUsername || null,
+                },
+            });
+            return { ok: true, paid: true, paymentId: res.payment?.id, alreadyPaid: res.alreadyPaid };
+        }
+
+        if (payload.event === 'payment.failed') {
             return { ok: true, failed: true };
         }
-        return { ok: true, ignored: true, event };
+
+        return { ok: true, ignored: true, event: payload.event };
     }
     async resolveWebhookSecret() {
-        return this.settings.getWebhookSecret();
+        return config.ppg?.webhookSecret || this.settings.getWebhookSecret();
     }
     async findPaymentForRazorpayOrder(orderId, paymentId) {
         if (paymentId) {
@@ -3394,9 +3571,7 @@ class ExamService {
             const gw = this.parseGateway(p.gatewayResponse);
             return gw?.orderId === orderId;
         });
-        if (!match)
-            throw AppError.notFound('Payment for this order was not found');
-        return match;
+        return match || null;
     }
     async finalizeRazorpaySuccess(payment, meta) {
         const methodMap = {
@@ -3415,6 +3590,21 @@ class ExamService {
             row.paidAt = new Date();
             row.transactionReference =
                 meta.paymentId || row.transactionReference;
+            if (!row.receiptNumber || row.receiptNumber.startsWith('TMP-') || row.receiptNumber.startsWith('RCP-')) {
+                const fr = row.feeRecord || await this.feeRecordRepo.findOne({ where: { id: row.feeRecordId } });
+                let sdmsStudent = null;
+                try {
+                    sdmsStudent = await this.sdms.findStudentByPin(fr?.studentRollNumber);
+                } catch {}
+                const { collegeCode, courseCode } = await this.resolveCollegeAndCourseCodes(fr, sdmsStudent);
+                row.receiptNumber = await this.allocateNextReceiptNumber({
+                    studentRollNumber: fr?.studentRollNumber,
+                    collegeCode,
+                    courseCode,
+                    feeHeadId: fr?.examId,
+                    date: new Date(),
+                });
+            }
             if (this.isExamFeeLine(existing)) {
                 row.paymentMethod = rzMethod;
             }
@@ -3484,8 +3674,47 @@ class ExamService {
             alreadyPaid: false,
         };
     }
+    async syncPpgPaymentStatus(payment) {
+        if (!payment?.transactionReference || payment.status === PaymentStatus.SUCCESS) {
+            return payment;
+        }
+        try {
+            const ppgBaseUrl = config.ppg?.baseUrl || 'http://localhost:5005/api/v1';
+            const appKey = config.ppg?.appKey || '';
+            const appSecret = config.ppg?.appSecret || '';
+            if (!appKey || !appSecret || appKey === 'app_key_xxxxxxxxxxxxxxxx') {
+                return payment;
+            }
+
+            const res = await fetch(`${ppgBaseUrl}/payments/${payment.transactionReference}`, {
+                headers: {
+                    'X-App-Key': appKey,
+                    'X-App-Secret': appSecret,
+                },
+            });
+            if (!res.ok) return payment;
+            const resJson = await res.json();
+            const ppgData = resJson.data || resJson;
+            if (ppgData?.status === 'SUCCEEDED') {
+                await this.markRazorpaySuccess(payment, {
+                    paymentId: payment.transactionReference,
+                    orderId: payment.transactionReference,
+                    signature: 'ppg_synced',
+                    event: 'ppg_auto_synced',
+                });
+                payment.status = PaymentStatus.SUCCESS;
+            }
+        } catch (err) {
+            log.warn({ err, paymentId: payment.id }, 'Failed to sync payment status with PPG');
+        }
+        return payment;
+    }
     async getPaymentStatus(id) {
-        const payment = await this.getPayment(id);
+        let payment = await this.getPayment(id);
+        if (payment.status === PaymentStatus.PROCESSING && payment.transactionReference) {
+            await this.syncPpgPaymentStatus(payment);
+            payment = await this.getPayment(id);
+        }
         const fee = payment.feeRecord
             ? payment.feeRecord
             : await this.getFeeRecord(payment.feeRecordId);
@@ -3538,6 +3767,18 @@ class ExamService {
             throw AppError.badRequest('Fee already paid');
         }
         await this.refreshLateFee(feeRecord);
+        let sdmsStudent = null;
+        try {
+            sdmsStudent = await this.sdms.findStudentByPin(feeRecord.studentRollNumber);
+        } catch {}
+        const { collegeCode, courseCode } = await this.resolveCollegeAndCourseCodes(feeRecord, sdmsStudent);
+        const receiptNumber = await this.allocateNextReceiptNumber({
+            studentRollNumber: feeRecord.studentRollNumber,
+            collegeCode,
+            courseCode,
+            feeHeadId: feeRecord.examId,
+            date: new Date(),
+        });
         const payment = this.paymentRepo.create({
             feeRecordId: feeRecord.id,
             amountPaid: feeRecord.totalAmount,
@@ -3545,7 +3786,7 @@ class ExamService {
             paymentMethod: dto.paymentMethod,
             status: PaymentStatus.SUCCESS,
             paidAt: new Date(),
-            receiptNumber: this.generateReceiptNumber(),
+            receiptNumber,
             transactionReference: dto.transactionNumber?.trim() || null,
             collectedBy,
             collectorUsername: dto.collectorUsername?.trim() || null,
@@ -3675,12 +3916,19 @@ class ExamService {
         return qb.getMany();
     }
     async getPayment(id) {
-        const payment = await this.paymentRepo.findOne({
+        let payment = await this.paymentRepo.findOne({
             where: { id },
             relations: ['feeRecord', 'feeRecord.exam', 'feeRecord.exam.examSubjects'],
         });
         if (!payment)
             throw AppError.notFound('Payment / receipt not found');
+        if (payment.status === PaymentStatus.PROCESSING && payment.transactionReference) {
+            await this.syncPpgPaymentStatus(payment);
+            payment = await this.paymentRepo.findOne({
+                where: { id },
+                relations: ['feeRecord', 'feeRecord.exam', 'feeRecord.exam.examSubjects'],
+            });
+        }
         try {
             const rollNumber = payment.feeRecord?.studentRollNumber;
             if (rollNumber) {

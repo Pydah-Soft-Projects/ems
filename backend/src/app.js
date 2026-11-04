@@ -46,24 +46,39 @@ function createApp(services) {
     }),
   );
 
+    // PPG and Razorpay payment webhook endpoint
+  const webhookHandler = asyncHandler(async (req, res) => {
+    const raw = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(
+          typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
+        );
+    const signature = req.headers['x-ppg-signature'] || req.headers['x-razorpay-signature'];
+    res.json(
+      await services.exam.handleRazorpayWebhook(
+        raw,
+        typeof signature === 'string' ? signature : undefined,
+      ),
+    );
+  });
+
   app.post(
     `/${config.apiPrefix}/fees/razorpay/webhook`,
     express.raw({ type: '*/*' }),
-    asyncHandler(async (req, res) => {
-      const raw = Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(
-            typeof req.body === 'string' ? req.body : JSON.stringify(req.body),
-          );
-      const signature = req.headers['x-razorpay-signature'];
-      res.json(
-        await services.exam.handleRazorpayWebhook(
-          raw,
-          typeof signature === 'string' ? signature : undefined,
-        ),
-      );
-    }),
+    webhookHandler,
   );
+  app.post(
+    `/${config.apiPrefix}/fees/payments/webhook`,
+    express.raw({ type: '*/*' }),
+    webhookHandler,
+  );
+  app.post(
+    `/${config.apiPrefix}/payments/webhook`,
+    express.raw({ type: '*/*' }),
+    webhookHandler,
+  );
+
+
 
   // Canara Dynamic QR payment callback (bank → EMS). Must stay public (no JWT).
   app.post(

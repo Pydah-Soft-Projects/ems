@@ -24,6 +24,7 @@ module.exports = () => ({
   feeManagement: {
     mongodbUri: process.env.FEE_MANAGEMENT_MONGODB_URI || '',
     examFeeHeadCode: process.env.FEE_MANAGEMENT_EXAM_FEE_HEAD_CODE || 'EXM01',
+    backendUrl: process.env.FEES_BACKEND_URL || 'http://localhost:5001',
   },
   examPortalDb: {
     host:
@@ -50,10 +51,13 @@ module.exports = () => ({
     useSqlite: process.env.SIMULATE_USE_SQLITE === 'true',
     sqlitePath: process.env.SIMULATE_SQLITE_PATH || './data/simulate.sqlite',
   },
-  razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID || '',
-    keySecret: process.env.RAZORPAY_KEY_SECRET || '',
-    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
+  ppg: {
+    baseUrl: process.env.PPG_BASE_URL || 'http://localhost:5005/api/v1',
+    checkoutUrl: process.env.PPG_CHECKOUT_URL || '',
+    appKey: process.env.PPG_APP_KEY || '',
+    appSecret: process.env.PPG_APP_SECRET || '',
+    webhookSecret: process.env.PPG_WEBHOOK_SECRET || '',
+    sdkUrl: process.env.PPG_SDK_URL || 'http://localhost:5005/sdk/ppg.js',
   },
   selfOnline: {
     enabled: (process.env.SELF_ONLINE_ENABLED || '').toLowerCase() === 'true',

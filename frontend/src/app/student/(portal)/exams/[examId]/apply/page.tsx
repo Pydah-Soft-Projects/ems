@@ -720,11 +720,7 @@ export default function StudentExamApplyPage({
               <option value="credit_card">Credit card</option>
               <option value="net_banking">Net banking</option>
             </select>
-            {method === 'upi' && split && (
-              <p className="mt-2 text-xs text-amber-800">
-                UPI includes 2.2% convenience fee — total {money(split.total)}
-              </p>
-            )}
+            
             {!razorpayReady && (
               <p className="mt-2 text-sm text-[var(--danger)]">
                 Online payments are not configured. Contact the examination cell.
@@ -745,7 +741,7 @@ export default function StudentExamApplyPage({
               disabled={!razorpayReady}
               onClick={() => setPayOpen(true)}
             >
-              Pay with Razorpay
+              Pay with UPI
             </Button>
           </div>
         </div>

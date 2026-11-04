@@ -1127,6 +1127,8 @@ export const api = {
   },
 
   verifyRazorpayPayment(data: {
+    feeRecordId?: number;
+    businessReference?: string;
     razorpayOrderId: string;
     razorpayPaymentId: string;
     razorpaySignature: string;

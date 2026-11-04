@@ -5,10 +5,10 @@
   "private": true,
   "scripts": {
     "build": "node scripts/check-syntax.js",
-    "dev": "node --watch src/index.js",
+    "dev": "node --no-warnings=ExperimentalWarning --watch src/index.js",
     "predev": "kill-port 4000",
-    "start": "node src/index.js",
-    "start:dev": "node --watch src/index.js",
+    "start": "node --no-warnings=ExperimentalWarning src/index.js",
+    "start:dev": "node --no-warnings=ExperimentalWarning --watch src/index.js",
     "db:setup": "node scripts/create-exam-portal-db.js",
     "db:clear-exam-portal": "node scripts/clear-exam-portal-data.js",
     "cleanup:test-exam-2023": "node scripts/cleanup-test-exam-2023.js",

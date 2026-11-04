@@ -18,6 +18,7 @@ import { formatPaymentIST } from '@/lib/formatIST';
 import { StudentExamListItem } from '@/types/exam';
 import { SdmsStudent } from '@/types/sdms';
 import { money } from './money';
+import { FeeCollectionDeskSkeleton } from './FeeCollectionSkeleton';
 import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
@@ -518,7 +519,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
       }
       if (pendingToPay.length !== 1) {
         setSaving(false);
-        setPayError('Select exactly one fee row or fee head combination for online Razorpay payment.');
+        setPayError('Select exactly one fee row or fee head combination for online UPI payment.');
         return;
       }
       setSaving(false);
@@ -628,9 +629,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
     .join('');
 
   if (loading) {
-    return (
-      <p className="text-sm text-[var(--muted)]">Loading fee collection…</p>
-    );
+    return <FeeCollectionDeskSkeleton />;
   }
 
   if (error) {
@@ -663,7 +662,6 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
         prefillEmail={sdms?.email || undefined}
         onClose={() => {
           setRazorpayRecord(null);
-          void load();
         }}
         onSuccess={(paymentId) => {
           setRazorpayRecord(null);
@@ -1401,7 +1399,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   [
                     ['cash', 'Cash'],
                     ['bank_transfer', 'Bank'],
-                    ['razorpay', 'Razorpay'],
+                    ['razorpay', 'UPI'],
                     ['canara_dynamic_qr', 'Canara QR'],
                     ['self_online', 'Self Online'],
                   ] as const
@@ -1412,7 +1410,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                     (value === 'canara_dynamic_qr' && !canaraReady);
                   const title =
                     value === 'razorpay' && !razorpayReady
-                      ? 'Configure Razorpay in Settings'
+                      ? 'Configure UPI gateway in .env / Settings'
                       : value === 'self_online' && !selfOnlineReady
                         ? 'Configure Self Online UPI in Settings'
                         : value === 'canara_dynamic_qr' && !canaraReady
@@ -1436,19 +1434,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
                   );
                 })}
               </div>
-              {paymentMethod === 'razorpay' && selectedPending.length === 1 && (
-                <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
-                  UPI total{' '}
-                  {money(
-                    calcUpiConvenienceFee(
-                      selectedPending[0].totalAmount,
-                      'upi',
-                    ).total,
-                  )}{' '}
-                  (fee{' '}
-                  {money(selectedPending[0].totalAmount)} + 2.2% convenience)
-                </p>
-              )}
+              
               {paymentMethod === 'self_online' && (
                 <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
                   Exact fee amount via college UPI QR. Temporary acknowledgement
@@ -1457,7 +1443,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               )}
               {!razorpayReady && (
                 <p className="mt-2 text-xs text-amber-700">
-                  Razorpay offline — enable keys in{' '}
+                  UPI Gateway offline — configure in{' '}
                   <Link
                     href="/dashboard/settings"
                     className="font-semibold underline"
@@ -1567,7 +1553,7 @@ export function FeeCollectionDesk({ rollNumber }: FeeCollectionDeskProps) {
               {saving
                 ? 'Processing…'
                 : paymentMethod === 'razorpay'
-                  ? 'Pay with Razorpay'
+                  ? 'Pay with UPI'
                   : paymentMethod === 'self_online'
                     ? 'Open Self Online QR'
                     : 'Confirm payment'}

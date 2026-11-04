@@ -46,7 +46,7 @@ const PaymentStatus = {
   EXPIRED: 'expired',
 };
 
-const UPI_CONVENIENCE_FEE_RATE = 0.022;
+const UPI_CONVENIENCE_FEE_RATE = 0;
 
 module.exports = {
   ExamType,

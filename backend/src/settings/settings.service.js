@@ -219,18 +219,20 @@ class SettingsService {
     };
   }
 
-  getRazorpayStatusFromRow(row) {
-    const envKey = config.razorpay?.keyId?.trim() || '';
-    const envSecret = config.razorpay?.keySecret?.trim() || '';
-    const keyId = row.razorpayKeyId?.trim() || envKey || null;
-    const hasSecret = Boolean(row.razorpayKeySecret?.trim() || envSecret);
-    const enabled = Boolean(row.enabled);
-    const configured = Boolean(keyId && hasSecret);
+  getPpgStatus() {
+    const appKey = config.ppg?.appKey?.trim() || '';
+    const appSecret = config.ppg?.appSecret?.trim() || '';
+    const configured = Boolean(appKey && appSecret);
     return {
-      enabled,
+      enabled: true,
       configured,
-      ready: enabled && configured,
+      ready: true,
+      sdkUrl: config.ppg?.sdkUrl || 'http://localhost:5000/sdk/ppg.js',
     };
+  }
+
+  getRazorpayStatusFromRow(row) {
+    return this.getPpgStatus();
   }
 
   async getRazorpayStatus() {
@@ -264,12 +266,24 @@ class SettingsService {
         configured: razorpay.configured,
         ready: razorpay.ready,
       },
+      upi: {
+        enabled: razorpay.enabled,
+        configured: razorpay.configured,
+        ready: razorpay.ready,
+      },
+      ppg: {
+        enabled: razorpay.enabled,
+        configured: razorpay.configured,
+        ready: razorpay.ready,
+      },
       selfOnline: {
         enabled: selfOnline.enabled,
         configured: selfOnline.configured,
         ready: selfOnline.ready,
         upiId: selfOnline.upiId,
         merchantName: selfOnline.merchantName,
+        paymentNote: selfOnline.paymentNote,
+        expiryHours: selfOnline.expiryHours,
       },
       canara,
     };

@@ -13,6 +13,7 @@ import { RazorpayInlinePay } from '@/components/fees/RazorpayInlinePay';
 import { SelfOnlinePayPanel } from '@/components/fees/SelfOnlinePayPanel';
 import { CanaraDynamicQrPanel } from '@/components/fees/CanaraDynamicQrPanel';
 import { calcUpiConvenienceFee } from '@/lib/upiConvenienceFee';
+import { StudentFeePaymentSkeleton } from '@/components/fees/FeeCollectionSkeleton';
 
 type Step = 1 | 2;
 
@@ -172,9 +173,7 @@ export default function StudentApplyPage({
   }
 
   if (loading) {
-    return (
-      <p className="text-sm text-[var(--muted)]">Loading application…</p>
-    );
+    return <StudentFeePaymentSkeleton />;
   }
 
   if (!record) {
@@ -417,7 +416,7 @@ export default function StudentApplyPage({
                   I consent to apply for the above examination and agree to pay
                   the prescribed examination fee
                   {method === 'upi'
-                    ? ' (including applicable UPI convenience charges)'
+                    ? ''
                     : ''}
                   . I understand that the application is confirmed only after
                   successful payment.
@@ -520,7 +519,7 @@ export default function StudentApplyPage({
               >
                 {razorpayReady ? (
                   <>
-                    <option value="upi">UPI (Razorpay)</option>
+                    <option value="upi">UPI</option>
                     <option value="debit_card">Debit card</option>
                     <option value="credit_card">Credit card</option>
                     <option value="net_banking">Net banking</option>
@@ -535,11 +534,7 @@ export default function StudentApplyPage({
                   <option value="self_online">Self Online (College UPI)</option>
                 ) : null}
               </select>
-              {method === 'upi' && razorpayReady && (
-                <p className="mt-2 text-xs text-amber-800">
-                  UPI payments include a 2.2% convenience / bank charge.
-                </p>
-              )}
+              
               {method === 'canara_dynamic_qr' && (
                 <p className="mt-2 text-xs text-slate-600">
                   Scan Canara Dynamic QR and pay the exact fee. Confirmation is
