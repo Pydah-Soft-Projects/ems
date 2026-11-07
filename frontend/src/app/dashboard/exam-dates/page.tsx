@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { StatusFilter as StatusFilterBar } from '@/components/ui/SoftSearch';
+import { Pagination } from '@/components/ui/Pagination';
 import { ExamDatesEditor } from '@/components/exams/ExamDatesEditor';
 import { getStoredUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
@@ -74,6 +75,10 @@ export default function ExamDatesPage() {
 
   // Currently editing exam (inline page mode)
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -211,6 +216,24 @@ export default function ExamDatesPage() {
     selectedYear,
     selectedSemester,
   ]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    filter,
+    searchQuery,
+    selectedCollege,
+    selectedCourse,
+    selectedBranch,
+    selectedYear,
+    selectedSemester,
+  ]);
+
+  const paginatedExams = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredExams.slice(start, start + pageSize);
+  }, [filteredExams, currentPage, pageSize]);
 
   const metrics = useMemo(() => {
     let total = exams.length;
@@ -460,6 +483,17 @@ export default function ExamDatesPage() {
         <CardHeader
           title="Dates Notifications List"
           description={`Showing ${filteredExams.length} of ${exams.length} external examination notification(s)`}
+          action={
+            !loading && filteredExams.length > 0 ? (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredExams.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            ) : undefined
+          }
         />
         <CardBody className="!p-0">
           {loading ? (
@@ -501,7 +535,7 @@ export default function ExamDatesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {filteredExams.map((exam) => {
+                  {paginatedExams.map((exam) => {
                     const totalSubjects = exam.examSubjects?.length ?? 0;
                     const scheduledSubjects = (exam.examSubjects ?? []).filter(
                       (s) => !!s.examDate,

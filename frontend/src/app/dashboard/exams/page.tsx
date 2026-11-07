@@ -15,6 +15,7 @@ import { ExamTable } from '@/components/exams/ExamTable';
 import { PublishExamModal } from '@/components/exams/PublishExamModal';
 import { useToast } from '@/components/ui/Toast';
 import { StatusFilter as StatusFilterBar } from '@/components/ui/SoftSearch';
+import { Pagination } from '@/components/ui/Pagination';
 import { getStoredUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
 
@@ -45,6 +46,8 @@ export default function ExamsPage() {
   const [selected, setSelected] = useState<Exam | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [actionError, setActionError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const loadRegulations = useCallback(async () => {
     try {
@@ -325,6 +328,22 @@ export default function ExamsPage() {
     selectedYear,
     selectedSemester,
   ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    statusFilter,
+    selectedCollege,
+    selectedCourse,
+    selectedBranch,
+    selectedYear,
+    selectedSemester,
+  ]);
+
+  const paginatedExams = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredExams.slice(start, start + pageSize);
+  }, [filteredExams, currentPage, pageSize]);
 
   const hasActiveScopeFilters =
     selectedCollege !== 'all' ||
@@ -703,34 +722,45 @@ export default function ExamsPage() {
               : `${counts.total} examination${counts.total !== 1 ? 's' : ''}`
           }
           action={
-            statusFilter === 'published' && canWrite ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleSyncCalendar()}
-                disabled={syncingEvents}
-              >
-                <svg
-                  className={`h-3.5 w-3.5 ${syncingEvents ? 'animate-spin' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {statusFilter === 'published' && canWrite ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleSyncCalendar()}
+                  disabled={syncingEvents}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-                  />
-                </svg>
-                {syncingEvents ? 'Updating...' : 'Update calendar & notifications'}
-              </Button>
-            ) : undefined
+                  <svg
+                    className={`h-3.5 w-3.5 ${syncingEvents ? 'animate-spin' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                    />
+                  </svg>
+                  {syncingEvents ? 'Updating...' : 'Update calendar & notifications'}
+                </Button>
+              ) : null}
+              {!loading && filteredExams.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={filteredExams.length}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                />
+              )}
+            </div>
           }
         />
         <CardBody className="!p-0">
           <ExamTable
-            exams={filteredExams}
+            exams={paginatedExams}
             regulations={regulations}
             loading={loading}
             user={user}

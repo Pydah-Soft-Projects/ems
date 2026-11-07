@@ -19,6 +19,7 @@ import { ConfirmDialog, Dialog } from '@/components/ui/Dialog';
 import { TextareaField } from '@/components/ui/Field';
 import { Badge } from '@/components/ui/Badge';
 import { StatusFilter } from '@/components/ui/SoftSearch';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface InternalScopeOption {
   key: string;
@@ -609,6 +610,18 @@ export default function InternalExamsPage() {
       }),
     [exams, listBranch, listCollege, listCourse, listSemester, listYear, statusFilter],
   );
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [listCollege, listCourse, listBranch, listYear, listSemester, statusFilter]);
+
+  const paginatedExams = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredExams.slice(start, start + pageSize);
+  }, [filteredExams, currentPage, pageSize]);
 
   function changeRegulation(value: string) {
     setRegulationId(value);
@@ -1534,6 +1547,17 @@ export default function InternalExamsPage() {
         <CardHeader
           title={statusFilter === 'all' ? 'Internal examinations' : `${statusFilter.replace(/_/g, ' ')} internal examinations`}
           description={`${filteredExams.length} examination${filteredExams.length === 1 ? '' : 's'}`}
+          action={
+            !loading && filteredExams.length > 0 ? (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredExams.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+              />
+            ) : undefined
+          }
         />
         <CardBody className="!p-0">
           {loading ? (
@@ -1557,7 +1581,7 @@ export default function InternalExamsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
-                  {filteredExams.map((exam) => (
+                  {paginatedExams.map((exam) => (
                     <tr key={exam.id} className="transition hover:bg-slate-50/50">
                       <td className="px-5 py-4">
                         <p className="font-semibold text-slate-900">{exam.name}</p>
