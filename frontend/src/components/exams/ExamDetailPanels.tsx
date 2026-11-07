@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Exam, ExamAnalytics } from '@/types/exam';
 import { money } from '@/components/fees/money';
 import { ExamHallTicketsPanel } from '@/components/exams/ExamHallTicketsPanel';
@@ -487,8 +488,46 @@ export function ExamSubjectsPanel({ exam }: { exam: Exam }) {
     return section ? `${branch} · Section ${section}` : branch;
   };
 
+  const scheduledCount = subjects.filter((s) => !!s.examDate).length;
+
   return (
     <div className="space-y-5">
+      {scheduledCount < subjects.length ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-xs">
+          <div>
+            <p className="text-sm font-semibold text-amber-950">
+              Exam dates & timetable notification pending
+            </p>
+            <p className="text-xs text-amber-800">
+              {scheduledCount} of {subjects.length} papers have dates scheduled. You can schedule dates and timetable separately.
+            </p>
+          </div>
+          <Link
+            href={`/dashboard/exam-dates/${exam.id}`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-700"
+          >
+            Schedule Dates Notification →
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-xs">
+          <div>
+            <p className="text-sm font-semibold text-emerald-950">
+              All {subjects.length} papers scheduled
+            </p>
+            <p className="text-xs text-emerald-800">
+              Timetable window: {exam.examinationStartDate ? fmtDate(exam.examinationStartDate) : '—'} → {exam.examinationEndDate ? fmtDate(exam.examinationEndDate) : '—'}
+            </p>
+          </div>
+          <Link
+            href={`/dashboard/exam-dates/${exam.id}`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-emerald-700"
+          >
+            Edit Dates Notification →
+          </Link>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <MetricCard label="Total papers" value={String(subjects.length)} accent="indigo" />
         <MetricCard

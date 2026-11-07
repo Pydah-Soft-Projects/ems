@@ -294,9 +294,15 @@ export default function ExamDetailPage() {
                 variant="secondary"
                 onClick={() => router.push(`/dashboard/exams/${exam.id}/edit`)}
               >
-                Edit
+                Edit Fee Notification
               </Button>
             ) : null}
+            <Button
+              variant="primary"
+              onClick={() => router.push(`/dashboard/exam-dates/${exam.id}`)}
+            >
+              Dates Notification & Timetable
+            </Button>
             {(exam.status === 'draft' || exam.status === 'rejected') &&
             can(staff, 'exams:submit') ? (
               <Button onClick={() => void handleSubmit()} loading={saving}>

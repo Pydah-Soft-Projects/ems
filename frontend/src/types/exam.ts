@@ -116,11 +116,29 @@ export interface ExamSubjectFeeInput {
   branch?: string;
   section?: string;
   fee: number;
-  examDate: string;
+  examDate?: string | null;
   session?: ExamSession;
   startTime?: string;
   endTime?: string;
   durationMinutes?: number;
+}
+
+export interface ExamSubjectDateInput {
+  id?: number;
+  subjectId: number;
+  branch?: string | null;
+  section?: string | null;
+  examDate?: string | null;
+  session?: ExamSession | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  durationMinutes?: number | null;
+}
+
+export interface UpdateExamDatesInput {
+  examinationStartDate?: string | null;
+  examinationEndDate?: string | null;
+  subjects?: ExamSubjectDateInput[];
 }
 
 export interface LateFeeSlabInput {
@@ -172,11 +190,11 @@ export interface CreateExamInput {
   packageFees?: PackageFeeEntry[];
   supplyFeeByCount?: SupplyFeeByCount;
   supplyFeesByBranch?: SupplyFeeBranchEntry[];
-  examinationStartDate?: string;
-  examinationEndDate?: string;
-  applicationStartDate?: string;
-  applicationEndDate?: string;
-  lateFeeStartDate?: string;
+  examinationStartDate?: string | null;
+  examinationEndDate?: string | null;
+  applicationStartDate?: string | null;
+  applicationEndDate?: string | null;
+  lateFeeStartDate?: string | null;
   lateFeeSlabs?: LateFeeSlabInput[];
   instructions?: string;
   submitForApproval?: boolean;

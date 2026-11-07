@@ -251,11 +251,9 @@ class ExamService {
             return h * 60 + m;
         };
         return subjects.map((s) => {
-            const examDate = (s.examDate ?? '').trim();
-            if (!examDate) {
-                throw AppError.badRequest(`Exam date is required for subject ${s.subjectId}`);
-            }
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(examDate)) {
+            const rawExamDate = (s.examDate ?? '').trim();
+            const examDate = rawExamDate || null;
+            if (examDate && !/^\d{4}-\d{2}-\d{2}$/.test(examDate)) {
                 throw AppError.badRequest(`Invalid exam date for subject ${s.subjectId} (use YYYY-MM-DD)`);
             }
             const branch = (s.branch ?? '').trim() || null;
@@ -474,6 +472,7 @@ class ExamService {
     }
     assertSubjectDatesInWindow(subjects, examinationStartDate, examinationEndDate) {
         for (const s of subjects) {
+            if (!s.examDate) continue;
             if (examinationStartDate && s.examDate < examinationStartDate) {
                 throw AppError.badRequest(`Subject ${s.subjectId} exam date is before examination start`);
             }
@@ -966,6 +965,108 @@ class ExamService {
         }
         return savedExam;
     }
+    async updateExamDates(id, dto, actor = {}) {
+        const exam = await this.findOne(id, actor);
+        if (exam.status === ExamStatus.ARCHIVED) {
+            throw AppError.badRequest('Archived examinations cannot be updated');
+        }
+        const examinationStartDate = dto.examinationStartDate !== undefined
+            ? (dto.examinationStartDate?.trim() || null)
+            : exam.examinationStartDate;
+        const examinationEndDate = dto.examinationEndDate !== undefined
+            ? (dto.examinationEndDate?.trim() || null)
+            : exam.examinationEndDate;
+
+        this.validateDates({
+            applicationEndDate: exam.applicationEndDate,
+            examinationStartDate,
+            examinationEndDate,
+        });
+
+        exam.examinationStartDate = examinationStartDate;
+        exam.examinationEndDate = examinationEndDate;
+
+        if (Array.isArray(dto.subjects) && dto.subjects.length > 0) {
+            const timeToMinutes = (value) => {
+                const [h, m] = value.split(':').map((x) => parseInt(x, 10));
+                return h * 60 + m;
+            };
+
+            const existingSubjects = exam.examSubjects || [];
+            for (const input of dto.subjects) {
+                const rawDate = (input.examDate ?? '').trim();
+                const examDate = rawDate || null;
+                if (examDate && !/^\d{4}-\d{2}-\d{2}$/.test(examDate)) {
+                    throw AppError.badRequest(`Invalid exam date for subject ${input.subjectId} (use YYYY-MM-DD)`);
+                }
+                if (examDate && examinationStartDate && examDate < examinationStartDate) {
+                    throw AppError.badRequest(`Subject exam date ${examDate} is before examination start ${examinationStartDate}`);
+                }
+                if (examDate && examinationEndDate && examDate > examinationEndDate) {
+                    throw AppError.badRequest(`Subject exam date ${examDate} is after examination end ${examinationEndDate}`);
+                }
+                if (examDate && exam.applicationEndDate && examDate <= exam.applicationEndDate) {
+                    throw AppError.badRequest(`Subject exam date ${examDate} must be strictly after application closing date ${exam.applicationEndDate}`);
+                }
+
+                let session = (input.session ?? '').trim().toUpperCase() || null;
+                if (session && session !== 'FN' && session !== 'AN') {
+                    throw AppError.badRequest('Session must be FN or AN');
+                }
+
+                const startTime = (input.startTime ?? '').trim() || null;
+                const endTime = (input.endTime ?? '').trim() || null;
+                for (const [label, val] of [['start', startTime], ['end', endTime]]) {
+                    if (val && !/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) {
+                        throw AppError.badRequest(`Invalid ${label} time (use HH:MM)`);
+                    }
+                }
+
+                let durationMinutes = input.durationMinutes != null && input.durationMinutes !== ''
+                    ? parseInt(String(input.durationMinutes), 10)
+                    : null;
+                if (startTime && endTime) {
+                    const diff = timeToMinutes(endTime) - timeToMinutes(startTime);
+                    if (diff <= 0) {
+                        throw AppError.badRequest('End time must be after start time');
+                    }
+                    if (durationMinutes == null) durationMinutes = diff;
+                }
+                if (!session && startTime) {
+                    session = timeToMinutes(startTime) < 12 * 60 ? 'FN' : 'AN';
+                }
+
+                const target = existingSubjects.find((es) => {
+                    if (input.id && es.id === input.id) return true;
+                    const b1 = (es.branch || '').trim();
+                    const b2 = (input.branch || '').trim();
+                    const s1 = (es.section || '').trim();
+                    const s2 = (input.section || '').trim();
+                    return es.subjectId === input.subjectId && b1 === b2 && s1 === s2;
+                });
+
+                if (target) {
+                    target.examDate = examDate;
+                    target.session = session;
+                    target.startTime = startTime;
+                    target.endTime = endTime;
+                    target.durationMinutes = durationMinutes;
+                    await this.examSubjectRepo.save(target);
+                }
+            }
+        }
+
+        const savedExam = await this.examRepo.save(exam);
+        if (savedExam.status === ExamStatus.PUBLISHED) {
+            try {
+                const fullExam = await this.findOne(id, actor);
+                await this.sdms.createOrReplaceExamEventsForPublishedExam(fullExam, actor);
+            } catch (err) {
+                log.error({ err, examId: id }, 'Failed to sync SDMS exam events on dates update');
+            }
+        }
+        return this.findOne(id, actor);
+    }
     async updateInternal(id, dto) {
         const exam = await this.findOne(id);
         if (exam.examCategory !== 'INTERNAL') {
@@ -1099,10 +1200,6 @@ class ExamService {
         const exam = await this.findOne(id);
         if (exam.status !== ExamStatus.APPROVED) {
             throw AppError.badRequest('Only approved examinations can be published');
-        }
-        const missingDates = (exam.examSubjects ?? []).filter((es) => !es.examDate);
-        if (missingDates.length) {
-            throw AppError.badRequest('Set an exam date for every subject before publishing');
         }
         exam.status = ExamStatus.PUBLISHED;
         exam.publishedAt = new Date();

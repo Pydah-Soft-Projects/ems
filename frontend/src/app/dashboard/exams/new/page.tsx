@@ -38,11 +38,11 @@ export default function NewExamPage() {
     setError('');
     try {
       const created = await api.createExam(data);
-      toast.push('External examination created.', 'success');
+      toast.push('External fee notification created.', 'success');
       router.push(`/dashboard/exams/${created.id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Failed to create external examination.',
+        err instanceof ApiError ? err.message : 'Failed to create external fee notification.',
       );
       throw err;
     } finally {
@@ -55,13 +55,13 @@ export default function NewExamPage() {
       user={user}
       privilege="exams:write"
       fallback={
-        <AccessDenied description="You need Create / edit examinations privilege to create external examinations." />
+        <AccessDenied description="You need Create / edit examinations privilege to create external fee notifications." />
       }
     >
       <div className="space-y-6">
         <PageHeader
-          title="Create external examination"
-          description="Scope → mapped subjects & fees → dates → review."
+          title="Create external fee notification"
+          description="Scope → mapped subjects & fees → fee application dates & late fee slabs → review."
           action={
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
               Back to list

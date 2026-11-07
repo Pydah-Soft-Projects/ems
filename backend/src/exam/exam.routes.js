@@ -110,6 +110,13 @@ function createExamRoutes(services) {
       res.json(await services.exam.update(parseId(req.params.id), req.body, req.user));
     }),
   );
+  router.patch(
+    '/:id/dates',
+    requirePrivilege('exams:edit', 'exams:write'),
+    asyncHandler(async (req, res) => {
+      res.json(await services.exam.updateExamDates(parseId(req.params.id), req.body, req.user));
+    }),
+  );
   router.post(
     '/:id/submit',
     requirePrivilege('exams:submit'),

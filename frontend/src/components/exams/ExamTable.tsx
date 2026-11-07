@@ -14,6 +14,7 @@ interface ExamTableProps {
   user?: AuthUser | null;
   onEdit: (exam: Exam) => void;
   onView: (exam: Exam) => void;
+  onScheduleDates?: (exam: Exam) => void;
   onSubmit: (exam: Exam) => void;
   onApprove: (exam: Exam) => void;
   onReject: (exam: Exam) => void;
@@ -51,6 +52,7 @@ export function ExamTable({
   user,
   onEdit,
   onView,
+  onScheduleDates,
   onSubmit,
   onApprove,
   onReject,
@@ -68,9 +70,9 @@ export function ExamTable({
   if (exams.length === 0) {
     return (
       <div className="py-16 text-center">
-        <p className="text-sm font-medium text-slate-900">No external examinations found</p>
+        <p className="text-sm font-medium text-slate-900">No external fee notifications found</p>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Create an external examination with academic scope, subjects, fees, and dates.
+          Create an external fee notification with academic scope, subjects, and fee structures.
         </p>
       </div>
     );
@@ -94,6 +96,7 @@ export function ExamTable({
             <th className="px-5 py-3.5 font-semibold text-slate-600">Scope</th>
             <th className="px-5 py-3.5 font-semibold text-slate-600">Type</th>
             <th className="px-5 py-3.5 font-semibold text-slate-600">Subjects</th>
+            <th className="px-5 py-3.5 font-semibold text-slate-600">Exam Dates</th>
             <th className="px-5 py-3.5 font-semibold text-slate-600">Status</th>
             <th className="px-5 py-3.5 text-right font-semibold text-slate-600">
               Actions
@@ -164,6 +167,39 @@ export function ExamTable({
                   {exam.examSubjects?.length ?? 0}
                 </td>
                 <td className="px-5 py-4">
+                  {(() => {
+                    const total = exam.examSubjects?.length ?? 0;
+                    const scheduled = (exam.examSubjects ?? []).filter((s) => !!s.examDate).length;
+                    if (total === 0) {
+                      return <span className="text-xs text-[var(--muted)]">—</span>;
+                    }
+                    if (scheduled === total) {
+                      return (
+                        <div>
+                          <Badge variant="success">Dates Scheduled</Badge>
+                          {exam.examinationStartDate ? (
+                            <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                              {exam.examinationStartDate} → {exam.examinationEndDate || ''}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    }
+                    if (scheduled > 0) {
+                      return (
+                        <div>
+                          <Badge variant="warning">{scheduled}/{total} Scheduled</Badge>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div>
+                        <Badge variant="default">Dates Pending</Badge>
+                      </div>
+                    );
+                  })()}
+                </td>
+                <td className="px-5 py-4">
                   <Badge variant={statusVariant(exam.status)}>
                     {statusLabel(exam.status)}
                   </Badge>
@@ -177,6 +213,16 @@ export function ExamTable({
                     >
                       View
                     </Button>
+                    {onScheduleDates ? (
+                      <Button
+                        variant="secondary"
+                        className="!px-2.5 !py-1.5 text-xs font-medium"
+                        onClick={() => onScheduleDates(exam)}
+                        title="Schedule or update examination dates and timetable"
+                      >
+                        Dates Notification
+                      </Button>
+                    ) : null}
                     {editable && canEdit ? (
                       <Button
                         variant="ghost"

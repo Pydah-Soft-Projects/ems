@@ -71,11 +71,11 @@ export default function EditExamPage() {
       const update: UpdateExamInput = { ...data };
       delete (update as { submitForApproval?: boolean }).submitForApproval;
       await api.updateExam(exam.id, update);
-      toast.push('External examination updated.', 'success');
+      toast.push('External fee notification updated.', 'success');
       router.push(`/dashboard/exams/${exam.id}`);
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Failed to update external examination.',
+        err instanceof ApiError ? err.message : 'Failed to update external fee notification.',
       );
       throw err;
     } finally {
@@ -88,13 +88,13 @@ export default function EditExamPage() {
       user={user}
       privilege="exams:edit"
       fallback={
-        <AccessDenied description="You need Create / edit examinations privilege to edit external examinations." />
+        <AccessDenied description="You need Create / edit examinations privilege to edit external fee notifications." />
       }
     >
       <div className="space-y-6">
         <PageHeader
-          title={exam ? `Edit ${exam.name}` : 'Edit external examination'}
-          description="Update external examination details, subjects, fee structures, and timetable."
+          title={exam ? `Edit ${exam.name} (Fee Notification)` : 'Edit external fee notification'}
+          description="Update fee notification details, subjects, fee structures, and application schedule."
           action={
             <Button
               variant="secondary"
