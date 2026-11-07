@@ -27,6 +27,7 @@ import {
   Exam,
   CreateExamInput,
   UpdateExamInput,
+  UpdateExamDatesInput,
   PublishExamInput,
   ExamStatus,
   EligibleStudentsResponse,
@@ -718,6 +719,13 @@ export const api = {
 
   updateExam(id: number, data: UpdateExamInput) {
     return request<Exam>(`/exams/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateExamDates(id: number, data: UpdateExamDatesInput) {
+    return request<Exam>(`/exams/${id}/dates`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });

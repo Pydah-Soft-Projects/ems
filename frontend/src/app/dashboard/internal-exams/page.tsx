@@ -863,7 +863,10 @@ export default function InternalExamsPage() {
       });
     });
     const subjects = [...subjectsByScope.values()];
-    const dates = subjects.map((subject) => subject.examDate).sort();
+    const dates = subjects
+      .map((subject) => subject.examDate)
+      .filter((d): d is string => Boolean(d))
+      .sort();
     const uniqueBy = <T,>(values: T[]) => [...new Set(values)];
     const payload: CreateExamInput = {
       name: name.trim(),
@@ -904,8 +907,8 @@ export default function InternalExamsPage() {
         };
       }),
       subjects,
-      examinationStartDate: dates[0],
-      examinationEndDate: dates[dates.length - 1],
+      examinationStartDate: dates[0] ?? undefined,
+      examinationEndDate: dates[dates.length - 1] ?? undefined,
     };
 
     const isEditing = editingExamId !== null;

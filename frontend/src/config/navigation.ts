@@ -89,9 +89,16 @@ export const navigation: NavGroup[] = [
       },
       {
         href: '/dashboard/exams',
-        label: 'External Examinations',
-        description: 'Create and manage external exams',
+        label: 'External Fee Notifications',
+        description: 'Create and manage external fee notifications',
         icon: 'exams',
+        privilege: 'exams:read',
+      },
+      {
+        href: '/dashboard/exam-dates',
+        label: 'External Exam Dates Notifications',
+        description: 'Schedule exam dates, sessions, and timetables for fee notifications',
+        icon: 'exam-calendar',
         privilege: 'exams:read',
       },
       {

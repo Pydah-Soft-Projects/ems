@@ -944,10 +944,6 @@ export function ExamForm({
         const label = section
           ? `${branch} · Section ${section}`
           : branch || 'common';
-        if (!v.examDate) {
-          setError(`Set an exam date for every selected subject (${label} group).`);
-          return false;
-        }
         if (v.startTime && v.endTime) {
           if (computeDuration(v.startTime, v.endTime) == null) {
             setError(
@@ -1032,19 +1028,27 @@ export function ExamForm({
     }
     if (current === 3) {
       if (
+        applicationStartDate &&
         applicationEndDate &&
-        examinationStartDate &&
-        applicationEndDate >= examinationStartDate
+        applicationStartDate > applicationEndDate
       ) {
-        setError('Application end must be before examination start.');
+        setError('Application start date cannot be after application closing date.');
         return false;
       }
       if (
-        examinationStartDate &&
-        examinationEndDate &&
-        examinationStartDate > examinationEndDate
+        lateFeeStartDate &&
+        applicationStartDate &&
+        lateFeeStartDate < applicationStartDate
       ) {
-        setError('Examination start cannot be after end date.');
+        setError('Late fee start date cannot be earlier than application start date.');
+        return false;
+      }
+      if (
+        lateFeeStartDate &&
+        applicationEndDate &&
+        lateFeeStartDate > applicationEndDate
+      ) {
+        setError('Late fee start date cannot be after application closing date.');
         return false;
       }
       if (slabs.length > 0) {
@@ -1204,6 +1208,12 @@ export function ExamForm({
     const primaryBranch =
       selectedBranches[0]?.name ?? initial?.branch ?? '';
 
+    const safeExamStartDate =
+      examinationStartDate && applicationEndDate && examinationStartDate <= applicationEndDate
+        ? undefined
+        : examinationStartDate || undefined;
+    const safeExamEndDate = safeExamStartDate ? (examinationEndDate || undefined) : undefined;
+
     try {
       if (isEdit) {
         await onSubmit({
@@ -1231,8 +1241,8 @@ export function ExamForm({
           supplyFeesByBranch: supplyFeesByBranchPayload,
           applicationStartDate: applicationStartDate || undefined,
           applicationEndDate: applicationEndDate || undefined,
-          examinationStartDate: examinationStartDate || undefined,
-          examinationEndDate: examinationEndDate || undefined,
+          examinationStartDate: safeExamStartDate,
+          examinationEndDate: safeExamEndDate,
           lateFeeStartDate: lateFeeStartDate || undefined,
           lateFeeSlabs: slabs.filter((s) => s.fromDate && s.amount >= 0),
           instructions: instructions.trim() || undefined,
@@ -1263,8 +1273,8 @@ export function ExamForm({
           supplyFeesByBranch: supplyFeesByBranchPayload,
           applicationStartDate: applicationStartDate || undefined,
           applicationEndDate: applicationEndDate || undefined,
-          examinationStartDate: examinationStartDate || undefined,
-          examinationEndDate: examinationEndDate || undefined,
+          examinationStartDate: safeExamStartDate,
+          examinationEndDate: safeExamEndDate,
           lateFeeStartDate: lateFeeStartDate || undefined,
           lateFeeSlabs: slabs.filter((s) => s.fromDate && s.amount >= 0),
           instructions: instructions.trim() || undefined,
@@ -1366,7 +1376,7 @@ export function ExamForm({
         {[
           { n: 1, label: 'Scope' },
           { n: 2, label: 'Subjects & fees' },
-          { n: 3, label: 'Dates' },
+          { n: 3, label: 'Fee application dates' },
           { n: 4, label: 'Review' },
         ].map((item, idx) => (
           <div key={item.n} className="flex flex-1 items-center gap-2">
@@ -1837,12 +1847,12 @@ export function ExamForm({
             </p>
           ) : (
             <>
-            <p className="text-xs text-[var(--muted)]">
-              Papers are grouped by branch and section. Students only see their
-              own branch and section. Select a paper to set date, session, and
-              timings. Fees are configured below (package for Regular, count
-              tiers for Supply).
-            </p>
+            <div className="rounded-[var(--radius)] border border-sky-200 bg-sky-50/70 p-3.5 text-xs text-sky-900">
+              <p className="font-semibold text-sky-950 mb-1">
+                External Fee Notification · Paper Selection & Fee Structure
+              </p>
+              Select the papers included in this external fee notification. Fee schedules (package fees for Regular, count-based tiers for Supplementary) are configured below. Timetable dates, sessions, and timings are scheduled separately via <strong>External Exam Dates Notifications</strong>.
+            </div>
 
             <div className="grid gap-4 xl:grid-cols-2">
               {selectedBranches.map((b) => {
@@ -1932,14 +1942,14 @@ export function ExamForm({
                                       key={key}
                                       className={`rounded-[var(--radius)] border px-3 py-2.5 transition ${
                                         row.selected
-                                          ? 'border-[var(--primary)]/25 bg-[var(--primary-soft)]/20'
+                                          ? 'border-emerald-300 bg-emerald-50/30'
                                           : 'border-[var(--border)] bg-slate-50/40'
                                       }`}
                                     >
                                       <label className="flex cursor-pointer items-start gap-3">
                                         <input
                                           type="checkbox"
-                                          className="mt-0.5"
+                                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                           checked={row.selected}
                                           onChange={(e) =>
                                             update({ selected: e.target.checked })
@@ -1947,108 +1957,26 @@ export function ExamForm({
                                           aria-label={`Select ${subject.code}`}
                                         />
                                         <div className="min-w-0 flex-1">
-                                          <p className="text-sm font-semibold text-slate-900">
-                                            {subject.code}
-                                          </p>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-sm font-semibold text-slate-900">
+                                              {subject.code}
+                                            </p>
+                                            {row.selected ? (
+                                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                                                Selected for fee notification
+                                              </span>
+                                            ) : null}
+                                          </div>
                                           <p className="text-xs leading-snug text-[var(--muted)]">
                                             {subject.name}
                                           </p>
+                                          {row.selected && row.examDate ? (
+                                            <p className="mt-1 text-[11px] font-medium text-slate-600">
+                                              Scheduled Date: {row.examDate} ({row.session || 'FN'}{row.startTime ? ` · ${row.startTime} - ${row.endTime}` : ''})
+                                            </p>
+                                          ) : null}
                                         </div>
                                       </label>
-                                      {row.selected ? (
-                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-                                          <ConfigField label="Exam date">
-                                            <input
-                                              type="date"
-                                              value={row.examDate}
-                                              onChange={(e) =>
-                                                update({ examDate: e.target.value })
-                                              }
-                                              className={compactInputClass}
-                                              aria-label={`Exam date ${subject.code}`}
-                                            />
-                                          </ConfigField>
-                                          <ConfigField label="Session">
-                                            <select
-                                              value={row.session}
-                                              onChange={(e) =>
-                                                update({
-                                                  session: e.target.value as
-                                                    | ExamSession
-                                                    | '',
-                                                })
-                                              }
-                                              className={compactInputClass}
-                                              aria-label={`Session ${subject.code}`}
-                                            >
-                                              <option value="">Auto</option>
-                                              <option value="FN">Forenoon</option>
-                                              <option value="AN">Afternoon</option>
-                                            </select>
-                                          </ConfigField>
-                                          <ConfigField label="Start time">
-                                            <input
-                                              type="time"
-                                              value={row.startTime}
-                                              onChange={(e) => {
-                                                const startTime = e.target.value;
-                                                const d = computeDuration(
-                                                  startTime,
-                                                  row.endTime,
-                                                );
-                                                update({
-                                                  startTime,
-                                                  duration:
-                                                    d != null
-                                                      ? String(d)
-                                                      : row.duration,
-                                                });
-                                              }}
-                                              className={compactInputClass}
-                                              aria-label={`Start time ${subject.code}`}
-                                            />
-                                          </ConfigField>
-                                          <ConfigField label="End time">
-                                            <input
-                                              type="time"
-                                              value={row.endTime}
-                                              onChange={(e) => {
-                                                const endTime = e.target.value;
-                                                const d = computeDuration(
-                                                  row.startTime,
-                                                  endTime,
-                                                );
-                                                update({
-                                                  endTime,
-                                                  duration:
-                                                    d != null
-                                                      ? String(d)
-                                                      : row.duration,
-                                                });
-                                              }}
-                                              className={compactInputClass}
-                                              aria-label={`End time ${subject.code}`}
-                                            />
-                                          </ConfigField>
-                                          <ConfigField label="Duration (min)">
-                                            <input
-                                              type="number"
-                                              min={1}
-                                              value={row.duration}
-                                              onChange={(e) =>
-                                                update({ duration: e.target.value })
-                                              }
-                                              className={compactInputClass}
-                                              placeholder={
-                                                autoDuration != null
-                                                  ? String(autoDuration)
-                                                  : 'mins'
-                                              }
-                                              aria-label={`Duration ${subject.code}`}
-                                            />
-                                          </ConfigField>
-                                        </div>
-                                      ) : null}
                                     </div>
                                   );
                                 })}
@@ -2350,36 +2278,39 @@ export function ExamForm({
 
       {step === 3 && (
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-[var(--radius)] border border-sky-200 bg-sky-50/70 p-3.5 text-xs text-sky-900">
+            <p className="font-semibold text-sky-950 mb-1">Fee Notification Timeline</p>
+            <p>
+              <strong>1. Normal Fee Period:</strong> From <em>Application start date</em> up to the day before <em>Late fee start date</em>.
+            </p>
+            <p className="mt-1">
+              <strong>2. Late Fee Period:</strong> From <em>Late fee start date</em> until <em>Application closing date</em> according to the late fee slabs configured below.
+            </p>
+            <p className="mt-1 text-[11px] text-sky-800">
+              Examination dates and subject timetables are scheduled separately under <strong>External Exam Dates Notifications</strong>.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
             <Input
-              label="Application start"
+              label="Application start date"
+              hint="Registration opens without late fee"
               type="date"
               value={applicationStartDate}
               onChange={(e) => setApplicationStartDate(e.target.value)}
             />
             <Input
-              label="Application end"
-              type="date"
-              value={applicationEndDate}
-              onChange={(e) => setApplicationEndDate(e.target.value)}
-            />
-            <Input
-              label="Examination start"
-              type="date"
-              value={examinationStartDate}
-              onChange={(e) => setExaminationStartDate(e.target.value)}
-            />
-            <Input
-              label="Examination end"
-              type="date"
-              value={examinationEndDate}
-              onChange={(e) => setExaminationEndDate(e.target.value)}
-            />
-            <Input
-              label="Late fee start"
+              label="Late fee start date"
+              hint="Late fee begins from this date"
               type="date"
               value={lateFeeStartDate}
               onChange={(e) => setLateFeeStartDate(e.target.value)}
+            />
+            <Input
+              label="Application closing date"
+              hint="Final deadline with late fee"
+              type="date"
+              value={applicationEndDate}
+              onChange={(e) => setApplicationEndDate(e.target.value)}
             />
           </div>
 
@@ -2605,12 +2536,14 @@ export function ExamForm({
               })()}
             </p>
             <p className="mt-1 text-[var(--muted)]">
-              App: {applicationStartDate || '—'} → {applicationEndDate || '—'}
+              Application window: {applicationStartDate || '—'} → {applicationEndDate || '—'}
             </p>
+            {lateFeeStartDate ? (
+              <p className="text-[var(--muted)]">
+                Late fee begins from: {lateFeeStartDate}
+              </p>
+            ) : null}
             <p className="text-[var(--muted)]">
-              Exam: {examinationStartDate || '—'} → {examinationEndDate || '—'}
-            </p>
-            <p className="mt-1 text-[var(--muted)]">
               Late fee slabs: {slabs.length}
             </p>
           </div>
