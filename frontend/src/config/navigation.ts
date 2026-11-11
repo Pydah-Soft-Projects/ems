@@ -63,9 +63,9 @@ export const navigation: NavGroup[] = [
         privilege: 'regulations:read',
       },
       {
-        href: '/dashboard/regulation-internals',
-        label: 'Regulation Internals',
-        description: 'Regulation-based internal calculation formulas and test setup',
+        href: '/dashboard/regulation-marks',
+        label: 'Regulation Marks Setup',
+        description: 'Regulation-based internal (CIE), external (SEE), and combined pass rules',
         icon: 'regulation-internals',
         privilege: [
           'regulations:internals:read',

@@ -566,26 +566,26 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader
-          title="Regulation-Based Internal Marks Calculations"
-          description="Move from hardcoded formulas to dynamic, regulation-specific mid exam calculation rules (e.g. 80% best mid + 20% second mid, target max marks, pass cutoffs, and rounding)."
+          title="Regulation Marks & Assessment Setup"
+          description="Configure dynamic, regulation-specific marks calculation schemes: Continuous Internal Evaluation (CIE), Semester End Examination (SEE), and Combined Aggregate Pass Rules."
         />
         <CardBody>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-slate-50 px-3.5 py-3">
             <div>
-              <p className="text-sm font-medium text-slate-800">Configure Regulation Internal Calculation Rules</p>
+              <p className="text-sm font-medium text-slate-800">Configure Regulation Marks Schemes & Pass Rules</p>
               <p className="text-xs text-[var(--muted)]">
-                Define weighting schemes (80/20, 70/30, average, single-best), pass marks, and live simulation per academic regulation.
+                Define internal mid weighting schemes (80/20, average, single-best), external pass marks (e.g. 25/70), total pass criteria (e.g. 40/100), and test simulation per academic regulation.
               </p>
             </div>
             <Link
-              href="/dashboard/regulation-internals"
+              href="/dashboard/regulation-marks"
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
             >
               <svg className="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Manage Regulation Internals Setup
+              Manage Regulation Marks Setup
             </Link>
           </div>
         </CardBody>

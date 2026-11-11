@@ -114,10 +114,10 @@ function createSettingsRoutes(services) {
   );
 
   /**
-   * Regulation-Based Internal Marks Calculation Settings
+   * Regulation-Based Marks Calculation & Pass Rules Settings (Internal, External & Combo)
    */
   router.get(
-    '/regulation-internals',
+    ['/regulation-internals', '/regulation-marks'],
     requirePrivilege(
       'regulations:internals:read',
       'regulations:internals:write',
@@ -135,7 +135,7 @@ function createSettingsRoutes(services) {
   );
 
   router.get(
-    '/regulation-internals/:regulationIdOrCode',
+    ['/regulation-internals/:regulationIdOrCode', '/regulation-marks/:regulationIdOrCode'],
     requirePrivilege(
       'regulations:internals:read',
       'regulations:internals:write',
@@ -158,7 +158,7 @@ function createSettingsRoutes(services) {
   );
 
   router.post(
-    '/regulation-internals',
+    ['/regulation-internals', '/regulation-marks'],
     requirePrivilege(
       'regulations:internals:write',
       'settings:payments',
@@ -177,7 +177,7 @@ function createSettingsRoutes(services) {
   );
 
   router.delete(
-    '/regulation-internals/:id',
+    ['/regulation-internals/:id', '/regulation-marks/:id'],
     requirePrivilege(
       'regulations:internals:write',
       'settings:payments',
@@ -192,7 +192,7 @@ function createSettingsRoutes(services) {
   );
 
   router.post(
-    '/regulation-internals/simulate',
+    ['/regulation-internals/simulate', '/regulation-marks/simulate'],
     requirePrivilege(
       'regulations:internals:read',
       'regulations:internals:write',

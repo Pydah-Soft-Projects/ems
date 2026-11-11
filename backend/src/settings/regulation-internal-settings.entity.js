@@ -15,6 +15,13 @@ const RoundingRule = {
   FLOOR: 'FLOOR',
 };
 
+const PassStrategy = {
+  EXTERNAL_AND_TOTAL: 'EXTERNAL_AND_TOTAL', // Standard JNTU/Autonomous: External >= Min AND Total >= Min
+  ALL_THREE: 'ALL_THREE', // Internal >= Min AND External >= Min AND Total >= Min
+  TOTAL_ONLY: 'TOTAL_ONLY', // Total >= Min only
+  EXTERNAL_ONLY: 'EXTERNAL_ONLY', // External >= Min only
+};
+
 const RegulationInternalSetting = new EntitySchema({
   name: 'RegulationInternalSetting',
   tableName: 'regulation_internal_settings',
@@ -95,6 +102,76 @@ const RegulationInternalSetting = new EntitySchema({
         from: (v) => (v != null ? Number(v) : 0.0),
       },
     },
+    // External Marks (SEE) Configuration
+    maxExternalMarks: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 70.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 70.0),
+      },
+    },
+    minExternalPassMarks: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 25.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 25.0),
+      },
+    },
+    minExternalPassPercentage: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 35.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 35.0),
+      },
+    },
+    // Combo / Aggregate Total Configuration
+    maxTotalMarks: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 100.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 100.0),
+      },
+    },
+    minTotalPassMarks: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 40.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 40.0),
+      },
+    },
+    minTotalPassPercentage: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 40.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 40.0),
+      },
+    },
+    requireInternalPass: { type: 'boolean', default: false },
+    requireExternalPass: { type: 'boolean', default: true },
+    requireTotalPass: { type: 'boolean', default: true },
+    passStrategy: {
+      type: 'varchar',
+      length: 50,
+      default: PassStrategy.EXTERNAL_AND_TOTAL,
+    },
     status: { type: 'varchar', length: 20, default: 'ACTIVE' },
     remarks: { type: 'text', nullable: true },
     createdAt: { type: 'datetime', createDate: true },
@@ -106,5 +183,6 @@ module.exports = {
   RegulationInternalSetting,
   CalculationMethod,
   RoundingRule,
+  PassStrategy,
 };
 

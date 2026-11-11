@@ -2099,10 +2099,10 @@ export default function InternalMarksManagementPage() {
               )}
             </div>
             <Link
-              href="/dashboard/regulation-internals"
+              href="/dashboard/regulation-marks"
               className="inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900 hover:underline shrink-0"
             >
-              Configure Regulation Internals →
+              Configure Regulation Marks & Pass Rules →
             </Link>
           </div>
 

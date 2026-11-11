@@ -11,6 +11,7 @@ export function Dialog({
   children,
   footer,
   size = 'md',
+  className,
 }: {
   open: boolean;
   onClose: () => void;
@@ -18,7 +19,8 @@ export function Dialog({
   description?: string;
   children?: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | 'full';
+  className?: string;
 }) {
   const titleId = useId();
   const descId = useId();
@@ -62,11 +64,17 @@ export function Dialog({
 
   if (!open) return null;
 
-  const widths = {
+  const widths: Record<string, string> = {
     sm: 'max-w-md',
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
+    '2xl': 'max-w-5xl',
+    '3xl': 'max-w-6xl',
+    '4xl': 'max-w-7xl',
+    '5xl': 'max-w-[85rem]',
+    '6xl': 'max-w-[92rem]',
+    full: 'max-w-[96vw]',
   };
 
   return (
@@ -84,7 +92,7 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`relative z-10 w-full ${widths[size]} max-h-[90vh] overflow-y-auto rounded-[var(--radius-xl)] border border-[var(--border)] bg-white shadow-[var(--shadow-lg)] outline-none`}
+        className={`relative z-10 w-full ${widths[size] || widths.md} max-h-[92vh] overflow-y-auto rounded-[var(--radius-xl)] border border-[var(--border)] bg-white shadow-[var(--shadow-lg)] outline-none ${className || ''}`}
       >
         <div className="flex items-start justify-between gap-4 px-6 pb-2 pt-6">
           <div>

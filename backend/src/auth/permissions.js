@@ -23,16 +23,16 @@ const PRIVILEGE_GROUPS = [
     ],
   },
   {
-    id: 'regulation_internals',
-    label: 'Regulation Internals & Formulas',
+    id: 'regulation_marks',
+    label: 'Regulation Marks & Assessment Setup',
     privileges: [
       {
         key: 'regulations:internals:read',
-        label: 'View regulation internal calculation formulas & simulator',
+        label: 'View regulation marks setup & simulation workbench (Internal, External & Combo)',
       },
       {
         key: 'regulations:internals:write',
-        label: 'Configure, update, and reset regulation internal calculation formulas',
+        label: 'Configure, update, and reset regulation marks & pass rules (Internal, External & Combo)',
       },
     ],
   },

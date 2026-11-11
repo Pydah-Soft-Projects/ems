@@ -10,6 +10,7 @@ import {
 import {
   RegulationInternalSetting,
   RegulationInternalSettingsOverview,
+  RegulationMarksSimulationDto,
   CalculationSimulationResult,
 } from '@/types/regulation-internals';
 import {
@@ -1778,16 +1779,7 @@ export const api = {
     );
   },
 
-  simulateRegulationInternalCalculation(data: {
-    midEntries: Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>;
-    calculationMethod?: string;
-    bestMidWeightage?: number;
-    otherMidWeightage?: number;
-    maxInternalMarks?: number;
-    minPassMarks?: number;
-    roundingRule?: string;
-    minMidsRequired?: number;
-  }) {
+  simulateRegulationInternalCalculation(data: RegulationMarksSimulationDto) {
     return request<CalculationSimulationResult>(
       '/settings/regulation-internals/simulate',
       {
@@ -1795,5 +1787,22 @@ export const api = {
         body: JSON.stringify(data),
       }
     );
+  },
+
+  // Aliases for Regulation Marks Setup
+  getRegulationMarksSettings() {
+    return this.getRegulationInternalSettings();
+  },
+  getRegulationMarksSetting(regulationIdOrCode: string | number) {
+    return this.getRegulationInternalSetting(regulationIdOrCode);
+  },
+  saveRegulationMarksSetting(data: Partial<RegulationInternalSetting>) {
+    return this.saveRegulationInternalSetting(data);
+  },
+  resetRegulationMarksSetting(id: number) {
+    return this.resetRegulationInternalSetting(id);
+  },
+  simulateRegulationMarksCalculation(data: RegulationMarksSimulationDto) {
+    return this.simulateRegulationInternalCalculation(data);
   },
 };
