@@ -23,6 +23,20 @@ const PRIVILEGE_GROUPS = [
     ],
   },
   {
+    id: 'regulation_internals',
+    label: 'Regulation Internals & Formulas',
+    privileges: [
+      {
+        key: 'regulations:internals:read',
+        label: 'View regulation internal calculation formulas & simulator',
+      },
+      {
+        key: 'regulations:internals:write',
+        label: 'Configure, update, and reset regulation internal calculation formulas',
+      },
+    ],
+  },
+  {
     id: 'subjects',
     label: 'Subjects & mappings',
     privileges: [

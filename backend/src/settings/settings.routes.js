@@ -113,6 +113,102 @@ function createSettingsRoutes(services) {
     }),
   );
 
+  /**
+   * Regulation-Based Internal Marks Calculation Settings
+   */
+  router.get(
+    '/regulation-internals',
+    requirePrivilege(
+      'regulations:internals:read',
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:read',
+      'regulations:write',
+      'marks:read',
+      'marks:upload',
+      'internal_exams:read',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (_req, res) => {
+      res.json(await services.regulationInternalSettings.getAllSettings());
+    }),
+  );
+
+  router.get(
+    '/regulation-internals/:regulationIdOrCode',
+    requirePrivilege(
+      'regulations:internals:read',
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:read',
+      'regulations:write',
+      'marks:read',
+      'marks:upload',
+      'internal_exams:read',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (req, res) => {
+      const { regulationIdOrCode } = req.params;
+      res.json(
+        await services.regulationInternalSettings.getSettingForRegulation(
+          regulationIdOrCode,
+        ),
+      );
+    }),
+  );
+
+  router.post(
+    '/regulation-internals',
+    requirePrivilege(
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:write',
+      'marks:upload',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (req, res) => {
+      res.json(
+        await services.regulationInternalSettings.saveSetting(
+          req.body ?? {},
+          req.user,
+        ),
+      );
+    }),
+  );
+
+  router.delete(
+    '/regulation-internals/:id',
+    requirePrivilege(
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:write',
+      'marks:upload',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (req, res) => {
+      const id = parseInt(String(req.params.id), 10);
+      res.json(await services.regulationInternalSettings.resetSetting(id));
+    }),
+  );
+
+  router.post(
+    '/regulation-internals/simulate',
+    requirePrivilege(
+      'regulations:internals:read',
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:read',
+      'regulations:write',
+      'marks:read',
+      'marks:upload',
+      'internal_exams:read',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (req, res) => {
+      res.json(services.regulationInternalSettings.simulate(req.body ?? {}));
+    }),
+  );
+
   return router;
 }
 

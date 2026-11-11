@@ -66,6 +66,7 @@ class MarksService {
     internalMarksLockRepo = null,
     examSubjectRepo = null,
     emsAuditLogRepo = null,
+    regInternalSettings = null,
   ) {
     this.markRepo = studentMarkRepo;
     this.examRepo = examRepo;
@@ -78,6 +79,7 @@ class MarksService {
     this.lockRepo = internalMarksLockRepo;
     this.examSubjectRepo = examSubjectRepo;
     this.auditRepo = emsAuditLogRepo;
+    this.regInternalSettings = regInternalSettings;
   }
 
   /**
@@ -1154,10 +1156,24 @@ class MarksService {
     } else {
       exam = await this.examRepo.findOne({
         where: { id: notificationId },
-        relations: ['examSubjects', 'examSubjects.subject'],
+        relations: ['examSubjects', 'examSubjects.subject', 'regulation'],
       });
       if (!exam) throw AppError.notFound('Examination notification not found');
     }
+
+    // Load regulation internal calculation profile if applicable
+    let regSetting = null;
+    if (exam && this.regInternalSettings) {
+      try {
+        regSetting = await this.regInternalSettings.getSettingForRegulation(
+          exam.regulationId || exam.regulation?.code || null,
+        );
+      } catch (regErr) {
+        console.warn('Could not load regulation settings for upload validation:', regErr.message);
+      }
+    }
+    const regMaxInternal = regSetting?.maxInternalMarks ?? 30;
+    const regMinPassInternal = regSetting?.minPassMarks ?? 16;
 
     // Load available subjects for subject code validation
     const subjectMap = new Map();
@@ -1307,16 +1323,18 @@ class MarksService {
             errors.push({ row: lineNum, message: `Invalid internal marks "${rawVal}" for ${roll}` });
             return;
           }
-          const maxInt = parseFloat(row.maxInternalMarks || knownSub?.internalMarks || 30);
+          const maxInt = parseFloat(row.maxInternalMarks || knownSub?.internalMarks || regMaxInternal);
           if (intMarks > maxInt) {
             errors.push({ row: lineNum, message: `Internal marks (${intMarks}) exceed max marks (${maxInt}) for ${roll}` });
             return;
           }
           normRow.internalMarks = intMarks;
           normRow.maxInternalMarks = maxInt;
+          normRow.status = intMarks >= regMinPassInternal ? 'PASSED' : 'FAILED';
         } else {
           normRow.internalMarks = 0;
-          normRow.maxInternalMarks = parseFloat(row.maxInternalMarks || knownSub?.internalMarks || 30);
+          normRow.maxInternalMarks = parseFloat(row.maxInternalMarks || knownSub?.internalMarks || regMaxInternal);
+          normRow.status = 'ABSENT';
         }
         normRow.remarks = row.remarks || null;
       } else if (cat === 'EXTERNAL') {
@@ -1324,13 +1342,14 @@ class MarksService {
         const isAb = row.isAbsent || String(rawVal).toUpperCase() === 'AB' || String(rawVal).toUpperCase() === 'ABSENT';
         normRow.isAbsent = !!isAb;
 
+        const defaultExtMax = knownSub?.externalMarks || (knownSub?.totalMarks ? knownSub.totalMarks - regMaxInternal : (100 - regMaxInternal));
         if (!isAb) {
           const extMarks = parseFloat(rawVal);
           if (isNaN(extMarks) || extMarks < 0) {
             errors.push({ row: lineNum, message: `Invalid external marks "${rawVal}" for ${roll}` });
             return;
           }
-          const maxExt = parseFloat(row.maxExternalMarks || knownSub?.externalMarks || 70);
+          const maxExt = parseFloat(row.maxExternalMarks || defaultExtMax);
           if (extMarks > maxExt) {
             errors.push({ row: lineNum, message: `External marks (${extMarks}) exceed max marks (${maxExt}) for ${roll}` });
             return;
@@ -1339,7 +1358,7 @@ class MarksService {
           normRow.maxExternalMarks = maxExt;
         } else {
           normRow.externalMarks = 0;
-          normRow.maxExternalMarks = parseFloat(row.maxExternalMarks || knownSub?.externalMarks || 70);
+          normRow.maxExternalMarks = parseFloat(row.maxExternalMarks || defaultExtMax);
         }
         normRow.remarks = row.remarks || null;
       } else if (cat === 'RESULT') {
@@ -1904,6 +1923,18 @@ class MarksService {
     const enrolledStudents = details?.students || [];
     const notificationSubjects = details?.subjects || [];
 
+    // Load regulation internal calculation profile for this exam
+    let formula = null;
+    if (this.regInternalSettings) {
+      try {
+        formula = await this.regInternalSettings.getSettingForRegulation(
+          exam.regulationId || exam.regulation?.code || null,
+        );
+      } catch (err) {
+        console.warn('Could not load regulation formula for internal marks overview:', err.message);
+      }
+    }
+
     // Load manual lock overrides
     const lockRecords = this.lockRepo ? await this.lockRepo.find({ where: { examId: notificationId } }) : [];
     const lockMap = new Map();
@@ -2289,6 +2320,7 @@ class MarksService {
         examinationEndDate: exam.examinationEndDate,
         status: exam.status,
       },
+      formula: formula || null,
       branches: details?.branches || [],
       sections: Array.from(new Set(enrolledStudents.map((s) => s.section).filter(Boolean))),
       subjects: subjectSummaries,
@@ -2450,22 +2482,31 @@ class MarksService {
 
   /**
    * Calculate final internal marks from two or more mid-term exams.
-   * Rule:
-   *  - 80% marks from the best mid
-   *  - 20% marks from the other (second-best) mid
-   *  - Minimum marks to pass: 16 out of 30
-   *
-   * Example:
-   *  Mid 1 = 25, Mid 2 = 10 -> (25 * 0.8) + (10 * 0.2) = 20 + 2 = 22 (Pass >= 16)
-   *  Mid 1 = 10, Mid 2 = 25 -> (25 * 0.8) + (10 * 0.2) = 20 + 2 = 22 (Pass >= 16)
+   * Dynamically uses the regulation's internal calculation configuration from Settings if provided.
    *
    * @param {Array<number|{ marks: number, maxMarks?: number, isAbsent?: boolean }>} midEntries
-   * @param {number} [targetMax=30]
+   * @param {number|object} [ruleOrTargetMax=30]
    * @param {number} [minPass=16]
    */
-  calculateWeightedInternalMarks(midEntries, targetMax = 30, minPass = 16) {
+  calculateWeightedInternalMarks(midEntries, ruleOrTargetMax = 30, minPass = 16) {
+    if (this.regInternalSettings && typeof this.regInternalSettings.calculateInternalMarks === 'function') {
+      const config = typeof ruleOrTargetMax === 'object' && ruleOrTargetMax !== null
+        ? ruleOrTargetMax
+        : { maxInternalMarks: ruleOrTargetMax, minPassMarks: minPass };
+      return this.regInternalSettings.calculateInternalMarks(midEntries, config);
+    }
+
+    const config = typeof ruleOrTargetMax === 'object' && ruleOrTargetMax !== null
+      ? ruleOrTargetMax
+      : { maxInternalMarks: ruleOrTargetMax, minPassMarks: minPass, bestMidWeightage: 80, otherMidWeightage: 20 };
+
+    const targetMax = Number(config.maxInternalMarks ?? 30);
+    const passMarks = Number(config.minPassMarks ?? minPass);
+    const bestWeight = Number(config.bestMidWeightage ?? 80);
+    const otherWeight = Number(config.otherMidWeightage ?? 20);
+
     if (!Array.isArray(midEntries)) {
-      return { marks: null, status: 'PENDING', isPass: null, minPass };
+      return { marks: null, status: 'PENDING', isPass: null, minPass: passMarks, targetMax };
     }
 
     const validScores = [];
@@ -2490,7 +2531,8 @@ class MarksService {
         marks: null,
         status: 'PENDING',
         isPass: null,
-        minPass,
+        minPass: passMarks,
+        targetMax,
         bestMid: validScores[0] ? Number(validScores[0].toFixed(2)) : null,
         secondMid: null,
       };
@@ -2501,17 +2543,30 @@ class MarksService {
     const best = validScores[0];
     const second = validScores[1];
 
-    const finalMarks = Number((best * 0.8 + second * 0.2).toFixed(2));
-    const isPass = finalMarks >= minPass;
+    const finalMarks = Number((best * (bestWeight / 100) + second * (otherWeight / 100)).toFixed(2));
+    const isPass = finalMarks >= passMarks;
 
     return {
       marks: finalMarks,
       status: isPass ? 'PASS' : 'FAIL',
       isPass,
-      minPass,
+      minPass: passMarks,
+      targetMax,
       bestMid: Number(best.toFixed(2)),
       secondMid: Number(second.toFixed(2)),
     };
+  }
+
+  /**
+   * Calculate internal marks specifically for an academic regulation.
+   * Dynamically resolves the regulation's configured formula profile from the database.
+   */
+  async calculateInternalMarksForRegulation(midEntries, regulationIdOrCode) {
+    let config = null;
+    if (this.regInternalSettings && typeof this.regInternalSettings.getSettingForRegulation === 'function') {
+      config = await this.regInternalSettings.getSettingForRegulation(regulationIdOrCode);
+    }
+    return this.calculateWeightedInternalMarks(midEntries, config);
   }
 }
 

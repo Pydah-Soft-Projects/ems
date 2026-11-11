@@ -27,7 +27,8 @@ export type NavItem = {
     | 'reconcile'
     | 'professionals'
     | 'due-management'
-    | 'payment-reports';
+    | 'payment-reports'
+    | 'regulation-internals';
   /** Any of these privileges unlocks the nav item. */
   privilege?: string | string[];
 };
@@ -60,6 +61,21 @@ export const navigation: NavGroup[] = [
         description: 'Manage academic regulations',
         icon: 'regulations',
         privilege: 'regulations:read',
+      },
+      {
+        href: '/dashboard/regulation-internals',
+        label: 'Regulation Internals',
+        description: 'Regulation-based internal calculation formulas and test setup',
+        icon: 'regulation-internals',
+        privilege: [
+          'regulations:internals:read',
+          'regulations:internals:write',
+          'regulations:read',
+          'regulations:write',
+          'marks:read',
+          'marks:upload',
+          'settings:payments',
+        ],
       },
       {
         href: '/dashboard/subjects',
@@ -205,9 +221,9 @@ export const navigation: NavGroup[] = [
       {
         href: '/dashboard/settings',
         label: 'Settings',
-        description: 'Payment gateway and portal config',
+        description: 'Payments, gateways, and regulation internals setup',
         icon: 'settings',
-        privilege: 'settings:payments',
+        privilege: ['settings:payments', 'regulations:read', 'regulations:write'],
       },
       {
         href: '/dashboard/due-management',

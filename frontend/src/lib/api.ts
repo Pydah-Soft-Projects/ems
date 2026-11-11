@@ -8,6 +8,11 @@ import {
   ClaimedRegulationBatch,
 } from '@/types/regulation';
 import {
+  RegulationInternalSetting,
+  RegulationInternalSettingsOverview,
+  CalculationSimulationResult,
+} from '@/types/regulation-internals';
+import {
   Subject,
   CreateSubjectInput,
   UpdateSubjectInput,
@@ -1743,6 +1748,51 @@ export const api = {
       {
         method: 'POST',
         body: JSON.stringify({ rows }),
+      }
+    );
+  },
+
+  getRegulationInternalSettings() {
+    return request<RegulationInternalSettingsOverview>('/settings/regulation-internals');
+  },
+
+  getRegulationInternalSetting(regulationIdOrCode: string | number) {
+    return request<RegulationInternalSetting>(
+      `/settings/regulation-internals/${encodeURIComponent(String(regulationIdOrCode))}`
+    );
+  },
+
+  saveRegulationInternalSetting(data: Partial<RegulationInternalSetting>) {
+    return request<RegulationInternalSetting>('/settings/regulation-internals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  resetRegulationInternalSetting(id: number) {
+    return request<{ success: boolean; message: string }>(
+      `/settings/regulation-internals/${id}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  },
+
+  simulateRegulationInternalCalculation(data: {
+    midEntries: Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>;
+    calculationMethod?: string;
+    bestMidWeightage?: number;
+    otherMidWeightage?: number;
+    maxInternalMarks?: number;
+    minPassMarks?: number;
+    roundingRule?: string;
+    minMidsRequired?: number;
+  }) {
+    return request<CalculationSimulationResult>(
+      '/settings/regulation-internals/simulate',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
       }
     );
   },

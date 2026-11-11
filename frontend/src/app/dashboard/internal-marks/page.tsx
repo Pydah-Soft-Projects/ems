@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -9,6 +10,7 @@ import { MarksNotificationItem } from '@/types/marks-upload';
 import { EmsUser } from '@/types/user-management';
 import { Regulation, RegulationScope } from '@/types/regulation';
 import { SdmsCollege, SdmsCourse, SdmsBranch, SdmsBranchYearSemesters } from '@/types/sdms';
+import { RegulationInternalSetting } from '@/types/regulation-internals';
 
 interface RegulationOption {
   id: number;
@@ -106,9 +108,18 @@ export interface CalculatedInternalResult {
 export function getInternalMarksCalculation(
   subject: StudentSubjectRow,
   exams: ActiveExamColumn[],
-  targetMax = 30,
-  minMarks = 16,
+  setting?: RegulationInternalSetting | null,
 ): CalculatedInternalResult {
+  const targetMax = Number(setting?.maxInternalMarks ?? 30);
+  const minMarks = Number(setting?.minPassMarks ?? 16);
+  const method = setting?.calculationMethod || 'WEIGHTED_TWO_MIDS';
+  const bestWeight = Number(setting?.bestMidWeightage ?? 80);
+  const otherWeight = Number(setting?.otherMidWeightage ?? 20);
+  const minRequired = Number(
+    setting?.minMidsRequired ?? (method === 'BEST_SINGLE_MID' ? 1 : 2),
+  );
+  const rounding = setting?.roundingRule || 'ROUND_2_DECIMALS';
+
   const enteredScores: { score: number; examTitle: string }[] = [];
 
   for (const exam of exams) {
@@ -121,7 +132,7 @@ export function getInternalMarksCalculation(
     enteredScores.push({ score: normalized, examTitle: exam.title });
   }
 
-  if (enteredScores.length < 2) {
+  if (enteredScores.length < minRequired) {
     return {
       marks: null,
       status: 'PENDING',
@@ -132,13 +143,43 @@ export function getInternalMarksCalculation(
     };
   }
 
-  // Sort descending: best first, second-best second
-  enteredScores.sort((a, b) => b.score - a.score);
-  const best = enteredScores[0].score;
-  const second = enteredScores[1].score;
+  let unroundedMarks = 0;
+  let best = 0;
+  let second: number | null = null;
 
-  // 80% from best mid + 20% from another mid
-  const finalMarks = Number((best * 0.8 + second * 0.2).toFixed(2));
+  if (method === 'BEST_SINGLE_MID') {
+    enteredScores.sort((a, b) => b.score - a.score);
+    best = enteredScores[0].score;
+    unroundedMarks = best;
+  } else if (method === 'AVERAGE_ALL_MIDS') {
+    const sum = enteredScores.reduce((acc, s) => acc + s.score, 0);
+    unroundedMarks = sum / enteredScores.length;
+    best = Math.max(...enteredScores.map((s) => s.score));
+  } else {
+    // WEIGHTED_TWO_MIDS
+    enteredScores.sort((a, b) => b.score - a.score);
+    best = enteredScores[0].score;
+    second = enteredScores[1] ? enteredScores[1].score : 0;
+    unroundedMarks = best * (bestWeight / 100) + second * (otherWeight / 100);
+  }
+
+  let finalMarks = unroundedMarks;
+  switch (rounding) {
+    case 'ROUND_NEAREST_INT':
+      finalMarks = Math.round(unroundedMarks);
+      break;
+    case 'CEIL':
+      finalMarks = Math.ceil(unroundedMarks);
+      break;
+    case 'FLOOR':
+      finalMarks = Math.floor(unroundedMarks);
+      break;
+    case 'ROUND_2_DECIMALS':
+    default:
+      finalMarks = Number(unroundedMarks.toFixed(2));
+      break;
+  }
+
   const isPass = finalMarks >= minMarks;
 
   return {
@@ -146,16 +187,21 @@ export function getInternalMarksCalculation(
     status: isPass ? 'PASS' : 'FAIL',
     isPass,
     bestMid: Number(best.toFixed(2)),
-    secondMid: Number(second.toFixed(2)),
+    secondMid: second != null ? Number(second.toFixed(2)) : null,
     minMarks,
   };
 }
 
-function getStudentCalculatedTotal(student: GroupedStudentData, exams: ActiveExamColumn[]) {
+function getStudentCalculatedTotal(
+  student: GroupedStudentData,
+  exams: ActiveExamColumn[],
+  setting?: RegulationInternalSetting | null,
+) {
   if (student.subjects.length === 0) return null;
+  const maxPerSubject = Number(setting?.maxInternalMarks ?? 30);
 
   const results = student.subjects.map((subject) =>
-    getInternalMarksCalculation(subject, exams),
+    getInternalMarksCalculation(subject, exams, setting),
   );
   const completed = results.filter((r) => r.marks !== null);
   const passCount = completed.filter((r) => r.isPass === true).length;
@@ -164,7 +210,7 @@ function getStudentCalculatedTotal(student: GroupedStudentData, exams: ActiveExa
   if (completed.length !== results.length) {
     return {
       obtained: Number(completed.reduce((sum, r) => sum + (r.marks || 0), 0).toFixed(2)),
-      maximum: student.subjects.length * 30,
+      maximum: student.subjects.length * maxPerSubject,
       isFullyCalculated: false,
       passCount,
       failCount,
@@ -175,7 +221,7 @@ function getStudentCalculatedTotal(student: GroupedStudentData, exams: ActiveExa
   const total = Number(completed.reduce((sum, r) => sum + (r.marks || 0), 0).toFixed(2));
   return {
     obtained: total,
-    maximum: student.subjects.length * 30,
+    maximum: student.subjects.length * maxPerSubject,
     isFullyCalculated: true,
     passCount,
     failCount,
@@ -197,6 +243,7 @@ export default function InternalMarksManagementPage() {
 
   // Cascading Academic Hierarchy Selections (starts with NO selection by default)
   const [selectedRegulationId, setSelectedRegulationId] = useState<number | null>(null);
+  const [regulationFormula, setRegulationFormula] = useState<RegulationInternalSetting | null>(null);
   const [selectedCollegeId, setSelectedCollegeId] = useState<string>('ALL');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('ALL');
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL');
@@ -257,6 +304,21 @@ export default function InternalMarksManagementPage() {
       })
       .catch(() => undefined);
   }, []);
+
+  // Load dynamic calculation formula for selected regulation (or global default)
+  useEffect(() => {
+    if (!selectedRegulationId) {
+      void api
+        .getRegulationInternalSetting('GLOBAL_DEFAULT')
+        .then((cfg) => setRegulationFormula(cfg))
+        .catch(() => setRegulationFormula(null));
+      return;
+    }
+    void api
+      .getRegulationInternalSetting(selectedRegulationId)
+      .then((cfg) => setRegulationFormula(cfg))
+      .catch(() => setRegulationFormula(null));
+  }, [selectedRegulationId]);
 
   // Load Notifications without forcing any auto-selection
   const loadNotifications = useCallback(async () => {
@@ -932,7 +994,7 @@ export default function InternalMarksManagementPage() {
 
     for (const student of filteredStudents) {
       for (const sub of student.subjects) {
-        const res = getInternalMarksCalculation(sub, activeExams);
+        const res = getInternalMarksCalculation(sub, activeExams, regulationFormula);
         if (res.marks !== null) {
           totalEvaluated++;
           if (res.isPass) {
@@ -948,7 +1010,18 @@ export default function InternalMarksManagementPage() {
 
     const passRate = totalEvaluated > 0 ? Number(((totalPassed / totalEvaluated) * 100).toFixed(1)) : 0;
     return { totalEvaluated, totalPassed, totalFailed, totalPending, passRate };
-  }, [filteredStudents, activeExams]);
+  }, [filteredStudents, activeExams, regulationFormula]);
+
+  const formulaSubtitle = useMemo(() => {
+    if (!regulationFormula) return '80% Best + 20% Other · Min 16';
+    if (regulationFormula.calculationMethod === 'AVERAGE_ALL_MIDS') {
+      return `Average of all Mids · Min ${regulationFormula.minPassMarks}`;
+    }
+    if (regulationFormula.calculationMethod === 'BEST_SINGLE_MID') {
+      return `Best Mid (100%) · Min ${regulationFormula.minPassMarks}`;
+    }
+    return `${regulationFormula.bestMidWeightage}% Best + ${regulationFormula.otherMidWeightage}% Other · Min ${regulationFormula.minPassMarks}`;
+  }, [regulationFormula]);
 
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
   const paginatedStudents = filteredStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -970,6 +1043,10 @@ export default function InternalMarksManagementPage() {
       return;
     }
 
+    const targetMax = regulationFormula?.maxInternalMarks ?? 30;
+    const minPass = regulationFormula?.minPassMarks ?? 16;
+    const formulaDesc = regulationFormula?.formulaDescription || 'Dynamic Formula';
+
     const examHeaders = activeExams.map((e) => `${e.title} Marks`);
     const headers = [
       'S.No.',
@@ -986,8 +1063,8 @@ export default function InternalMarksManagementPage() {
       'Subject Code',
       'Subject Name',
       ...examHeaders,
-      'Final Internal Marks (80% Best + 20% Other / 30)',
-      'Internal Result Status (Min 16 to Pass)',
+      `Final Internal Marks (${formulaDesc} / ${targetMax})`,
+      `Internal Result Status (Min ${minPass} to Pass)`,
     ];
 
     const csvRows: string[][] = [];
@@ -1002,7 +1079,7 @@ export default function InternalMarksManagementPage() {
           if (m.isAbsent) return 'Absent';
           return `${m.marksObtained} / ${m.maxMarks}`;
         });
-        const calc = getInternalMarksCalculation(sub, activeExams);
+        const calc = getInternalMarksCalculation(sub, activeExams, regulationFormula);
 
         csvRows.push([
           String(sNo++),
@@ -2004,6 +2081,31 @@ export default function InternalMarksManagementPage() {
       ) : (
         /* TAB 1: MARKS DETAILS & CANDIDATE STUDENTS LIST */
         <div className="space-y-3">
+          {/* Dynamic Calculation Formula Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <div className="flex items-center flex-wrap gap-2">
+              <span className="font-semibold text-slate-700">Internal Formula:</span>
+              <span className="font-bold text-sky-900 bg-sky-100/70 px-2 py-0.5 rounded border border-sky-200">
+                {regulationFormula?.formulaDescription || formulaSubtitle}
+              </span>
+              {regulationFormula?.isCustomized ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                  Custom {selectedRegulation?.code} Rule
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-200 text-slate-700">
+                  Global Default
+                </span>
+              )}
+            </div>
+            <Link
+              href="/dashboard/regulation-internals"
+              className="inline-flex items-center gap-1 font-semibold text-sky-700 hover:text-sky-900 hover:underline shrink-0"
+            >
+              Configure Regulation Internals →
+            </Link>
+          </div>
+
           <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-xs">
@@ -2024,8 +2126,8 @@ export default function InternalMarksManagementPage() {
                       </th>
                     ))}
                     <th className="px-3 py-3 text-center font-semibold min-w-[160px] border-l border-slate-200/80 bg-slate-50/70">
-                      <div className="text-slate-900 font-bold">Final Internal (/30)</div>
-                      <div className="text-[10px] text-slate-500 font-normal">80% Best + 20% Other · Min 16</div>
+                      <div className="text-slate-900 font-bold">Final Internal (/{regulationFormula?.maxInternalMarks ?? 30})</div>
+                      <div className="text-[10px] text-slate-500 font-normal">{formulaSubtitle}</div>
                     </th>
                   </tr>
                 </thead>
@@ -2033,7 +2135,7 @@ export default function InternalMarksManagementPage() {
                   {paginatedStudents.map((student, sIdx) => {
                     const studentNumber = (currentPage - 1) * pageSize + sIdx + 1;
                     const subjectCount = Math.max(1, student.subjects.length);
-                    const calculatedTotal = getStudentCalculatedTotal(student, activeExams);
+                    const calculatedTotal = getStudentCalculatedTotal(student, activeExams, regulationFormula);
 
                     if (student.subjects.length === 0) {
                       return (
@@ -2063,7 +2165,7 @@ export default function InternalMarksManagementPage() {
                       const isFirst = subIdx === 0;
                       const isLast = subIdx === subjectCount - 1;
                       const studentBorderClass = isLast ? 'border-b border-slate-200' : 'border-b border-slate-100';
-                      const calcResult = getInternalMarksCalculation(sub, activeExams);
+                      const calcResult = getInternalMarksCalculation(sub, activeExams, regulationFormula);
 
                       return (
                         <tr
@@ -2215,12 +2317,12 @@ export default function InternalMarksManagementPage() {
                             ) : calcResult.isPass ? (
                               <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-xs bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs">
                                 <span className="text-sm font-extrabold text-emerald-700">{calcResult.marks}</span>
-                                <span className="text-[10px] text-emerald-600 font-medium">/ 30</span>
+                                <span className="text-[10px] text-emerald-600 font-medium">/ {regulationFormula?.maxInternalMarks ?? 30}</span>
                               </div>
                             ) : (
                               <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold text-xs bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs">
                                 <span className="text-sm font-extrabold text-rose-700">{calcResult.marks}</span>
-                                <span className="text-[10px] text-rose-600 font-medium">/ 30</span>
+                                <span className="text-[10px] text-rose-600 font-medium">/ {regulationFormula?.maxInternalMarks ?? 30}</span>
                               </div>
                             )}
                           </td>
@@ -2490,7 +2592,8 @@ export default function InternalMarksManagementPage() {
 
             {/* Student Quick Stats */}
             {(() => {
-              const summary = getStudentCalculatedTotal(selectedStudentDetail, activeExams);
+              const summary = getStudentCalculatedTotal(selectedStudentDetail, activeExams, regulationFormula);
+              const minPass = regulationFormula?.minPassMarks ?? 16;
               return (
                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 text-center">
@@ -2498,11 +2601,11 @@ export default function InternalMarksManagementPage() {
                     <p className="text-sm font-bold text-slate-900 mt-0.5">{selectedStudentDetail.subjects.length}</p>
                   </div>
                   <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Passed (≥16)</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Passed (≥{minPass})</p>
                     <p className="text-sm font-bold text-emerald-800 mt-0.5">{summary?.passCount ?? 0}</p>
                   </div>
                   <div className="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-center">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700">Below 16</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700">Below {minPass}</p>
                     <p className="text-sm font-bold text-rose-800 mt-0.5">{summary?.failCount ?? 0}</p>
                   </div>
                   <div className="rounded-lg bg-sky-50 border border-sky-200 p-2.5 text-center">
@@ -2527,14 +2630,14 @@ export default function InternalMarksManagementPage() {
                       </th>
                     ))}
                     <th className="px-3 py-2.5 text-center border-l border-slate-200 bg-slate-100/50">
-                      Final Internal (/30)
+                      Final Internal (/{regulationFormula?.maxInternalMarks ?? 30})
                     </th>
                     <th className="px-3 py-2.5 text-center border-l border-slate-200">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {selectedStudentDetail.subjects.map((sub) => {
-                    const calc = getInternalMarksCalculation(sub, activeExams);
+                    const calc = getInternalMarksCalculation(sub, activeExams, regulationFormula);
                     return (
                       <tr key={sub.subjectCode} className="hover:bg-slate-50/50">
                         <td className="px-3 py-2.5">
@@ -2590,11 +2693,11 @@ export default function InternalMarksManagementPage() {
                             </span>
                           ) : calc.isPass ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              {calc.marks} / 30
+                              {calc.marks} / {regulationFormula?.maxInternalMarks ?? 30}
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-extrabold bg-rose-50 text-rose-700 border border-rose-200">
-                              {calc.marks} / 30
+                              {calc.marks} / {regulationFormula?.maxInternalMarks ?? 30}
                             </span>
                           )}
                         </td>
@@ -2605,11 +2708,11 @@ export default function InternalMarksManagementPage() {
                             </span>
                           ) : calc.isPass ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
-                              PASS (≥16)
+                              PASS (≥{regulationFormula?.minPassMarks ?? 16})
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200">
-                              FAIL (&lt;16)
+                              FAIL (&lt;{regulationFormula?.minPassMarks ?? 16})
                             </span>
                           )}
                         </td>

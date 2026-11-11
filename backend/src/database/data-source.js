@@ -44,6 +44,9 @@ const { CanaraVPA } = require('../settings/canara-vpa.entity');
 const {
   CanaraOauthAudit,
 } = require('../settings/canara-oauth-audit.entity');
+const {
+  RegulationInternalSetting,
+} = require('../settings/regulation-internal-settings.entity');
 const { Professional } = require('../remuneration/schemas/professional.schema');
 const {
   RemunerationBill,
@@ -84,6 +87,7 @@ const entities = [
   CanaraPaymentSettings,
   CanaraVPA,
   CanaraOauthAudit,
+  RegulationInternalSetting,
   Professional,
   RemunerationBill,
   EmsRole,

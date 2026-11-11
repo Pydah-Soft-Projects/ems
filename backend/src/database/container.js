@@ -44,11 +44,17 @@ const {
   CanaraOauthAudit,
 } = require('../settings/canara-oauth-audit.entity');
 const { CanaraVPA } = require('../settings/canara-vpa.entity');
+const {
+  RegulationInternalSetting,
+} = require('../settings/regulation-internal-settings.entity');
 const { SettingsService } = require('../settings/settings.service');
 const {
   CanaraSettingsService,
 } = require('../settings/canara-settings.service');
 const { CanaraVpaService } = require('../settings/canara-vpa.service');
+const {
+  RegulationInternalSettingsService,
+} = require('../settings/regulation-internal-settings.service');
 const {
   FeeManagementService,
 } = require('../fee-management/fee-management.service');
@@ -142,6 +148,11 @@ function createServices(dataSource, studentDataSource) {
   canaraSettings.canaraVpas = canaraVpas;
   settings.setCanaraSettings(canaraSettings);
 
+  const regulationInternalSettings = new RegulationInternalSettingsService(
+    dataSource.getRepository(RegulationInternalSetting),
+    dataSource.getRepository(Regulation),
+  );
+
   const feeHeads = new FeeHeadsService(
     dataSource.getRepository(FeeHeadEntity),
     feeManagement,
@@ -203,6 +214,7 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(InternalMarksLock),
     dataSource.getRepository(ExamSubject),
     dataSource.getRepository(EmsAuditLog),
+    regulationInternalSettings,
   );
 
   const auth = new AuthService(sdms, users);
@@ -239,6 +251,7 @@ function createServices(dataSource, studentDataSource) {
     feeHeads,
     results,
     marks,
+    regulationInternalSettings,
     professionals,
     remuneration,
   };
