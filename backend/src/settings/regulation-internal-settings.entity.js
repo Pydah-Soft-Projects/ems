@@ -172,6 +172,7 @@ const RegulationInternalSetting = new EntitySchema({
       length: 50,
       default: PassStrategy.EXTERNAL_AND_TOTAL,
     },
+    gradingScale: { type: 'simple-json', nullable: true },
     status: { type: 'varchar', length: 20, default: 'ACTIVE' },
     remarks: { type: 'text', nullable: true },
     createdAt: { type: 'datetime', createDate: true },
@@ -179,10 +180,22 @@ const RegulationInternalSetting = new EntitySchema({
   },
 });
 
+const DEFAULT_GRADING_SCALE = [
+  { minPercentage: 90, maxPercentage: 100, grade: 'S', gradeDescription: 'Superior', gradePoints: 10, isPass: true },
+  { minPercentage: 80, maxPercentage: 89, grade: 'A', gradeDescription: 'Excellent', gradePoints: 9, isPass: true },
+  { minPercentage: 70, maxPercentage: 79, grade: 'B', gradeDescription: 'Very Good', gradePoints: 8, isPass: true },
+  { minPercentage: 60, maxPercentage: 69, grade: 'C', gradeDescription: 'Good', gradePoints: 7, isPass: true },
+  { minPercentage: 50, maxPercentage: 59, grade: 'D', gradeDescription: 'Average', gradePoints: 6, isPass: true },
+  { minPercentage: 40, maxPercentage: 49, grade: 'E', gradeDescription: 'Pass', gradePoints: 5, isPass: true },
+  { minPercentage: 0, maxPercentage: 39, grade: 'F', gradeDescription: 'Fail', gradePoints: 0, isPass: false },
+  { minPercentage: 0, maxPercentage: 0, grade: 'Ab', gradeDescription: 'Absent', gradePoints: 0, isPass: false },
+];
+
 module.exports = {
   RegulationInternalSetting,
   CalculationMethod,
   RoundingRule,
   PassStrategy,
+  DEFAULT_GRADING_SCALE,
 };
 

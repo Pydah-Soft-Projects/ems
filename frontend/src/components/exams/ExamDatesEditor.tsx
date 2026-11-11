@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { downloadTimetableNotificationPdf } from '@/lib/printExamNotificationPdf';
 
 interface SubjectScheduleState {
   id?: number;
@@ -376,6 +377,41 @@ export function ExamDatesEditor({
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={onCancel} disabled={savingDates}>
               ← Back to Notifications
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const previewExam: Exam = {
+                  ...exam,
+                  examinationStartDate: examinationStartDate || exam.examinationStartDate,
+                  examinationEndDate: examinationEndDate || exam.examinationEndDate,
+                  examSubjects: subjectRows.map((r, idx) => ({
+                    id: r.id ?? idx + 1,
+                    examId: exam.id,
+                    subjectId: r.subjectId,
+                    branch: r.branch || null,
+                    section: r.section || null,
+                    fee: 0,
+                    examDate: r.examDate || null,
+                    session: (r.session as ExamSession) || null,
+                    startTime: r.startTime || null,
+                    endTime: r.endTime || null,
+                    durationMinutes: Number(r.durationMinutes) || null,
+                    subject: {
+                      id: r.subjectId,
+                      code: r.code,
+                      name: r.name,
+                    },
+                  })),
+                };
+                downloadTimetableNotificationPdf({ exam: previewExam });
+              }}
+              title="Download Timetable Notification PDF"
+            >
+              <svg className="mr-1 h-3.5 w-3.5 text-slate-600 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Download Timetable PDF
             </Button>
             <Button variant="primary" onClick={() => void handleSaveDates()} loading={savingDates}>
               Save Dates Notification

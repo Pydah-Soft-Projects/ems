@@ -23,6 +23,10 @@ import { TextareaField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { getStoredUser } from '@/lib/auth';
 import { can } from '@/lib/permissions';
+import {
+  downloadFeeNotificationPdf,
+  downloadTimetableNotificationPdf,
+} from '@/lib/printExamNotificationPdf';
 
 type DetailTab = 'overview' | 'subjects' | 'analytics' | 'hall-tickets' | 'results';
 
@@ -288,6 +292,26 @@ export default function ExamDetailPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => router.push('/dashboard/exams')}>
               Back
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => downloadFeeNotificationPdf({ exam })}
+              title="Download official Fee Notification Circular PDF"
+            >
+              <svg className="mr-1 h-3.5 w-3.5 text-slate-600 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Fee PDF
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => downloadTimetableNotificationPdf({ exam })}
+              title="Download Timetable Notification PDF"
+            >
+              <svg className="mr-1 h-3.5 w-3.5 text-slate-600 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Timetable PDF
             </Button>
             {canEdit ? (
               <Button

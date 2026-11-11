@@ -6,6 +6,7 @@ const {
   CalculationMethod,
   RoundingRule,
   PassStrategy,
+  DEFAULT_GRADING_SCALE,
 } = require('./regulation-internal-settings.entity');
 
 const DEFAULT_GLOBAL_CONFIG = {
@@ -34,9 +35,30 @@ const DEFAULT_GLOBAL_CONFIG = {
   requireInternalPass: false,
   requireTotalPass: true,
   passStrategy: PassStrategy ? PassStrategy.EXTERNAL_AND_TOTAL : 'EXTERNAL_AND_TOTAL',
+  gradingScale: DEFAULT_GRADING_SCALE,
   status: 'ACTIVE',
   remarks: 'Standard 30 Internal + 70 External = 100 Total (Pass: Ext ≥ 25, Total ≥ 40)',
 };
+
+function sanitizeGradingScale(scale) {
+  if (!Array.isArray(scale) || scale.length === 0) {
+    return DEFAULT_GRADING_SCALE;
+  }
+  return scale.map((g) => {
+    const rawMin = Number(g.minPercentage ?? 0);
+    const rawMax = Number(g.maxPercentage ?? 100);
+    const cleanMin = Math.round(rawMin);
+    const cleanMax = rawMax >= 100 ? 100 : Math.floor(rawMax);
+    return {
+      minPercentage: cleanMin,
+      maxPercentage: cleanMax,
+      grade: String(g.grade ?? '').trim(),
+      gradeDescription: String(g.gradeDescription ?? '').trim(),
+      gradePoints: Math.round(Number(g.gradePoints ?? 0)),
+      isPass: g.isPass !== false,
+    };
+  });
+}
 
 class RegulationInternalSettingsService {
   constructor(regInternalSettingRepo, regulationRepo = null, auditRepo = null) {
@@ -123,6 +145,7 @@ class RegulationInternalSettingsService {
       requireInternalPass: Boolean(row.requireInternalPass),
       requireTotalPass: row.requireTotalPass !== false,
       passStrategy: row.passStrategy || 'EXTERNAL_AND_TOTAL',
+      gradingScale: sanitizeGradingScale(row.gradingScale),
       status: row.status || 'ACTIVE',
       remarks: row.remarks || null,
       isCustomized,
@@ -289,6 +312,7 @@ class RegulationInternalSettingsService {
       minTotalPassPercentage: Number(entity.minTotalPassPercentage ?? 40),
       requireInternalPass: Boolean(entity.requireInternalPass),
       passStrategy: entity.passStrategy || 'EXTERNAL_AND_TOTAL',
+      gradingScale: sanitizeGradingScale(entity.gradingScale),
       remarks: entity.remarks || null,
     };
   }
@@ -307,6 +331,7 @@ class RegulationInternalSettingsService {
       bestMidWeightage: 'Best Mid Weightage (%)',
       otherMidWeightage: 'Second-Best Mid Weightage (%)',
       passStrategy: 'Evaluation Pass Strategy',
+      gradingScale: 'Grading Structure & Grade Points Scale',
       roundingRule: 'Decimal Rounding Rule',
       requireExternalPass: 'Mandatory External Pass',
       requireInternalPass: 'Strict Internal Cutoff Required',
@@ -594,6 +619,12 @@ class RegulationInternalSettingsService {
     targetEntity.requireTotalPass = dto.requireTotalPass !== false;
     targetEntity.passStrategy = strategy;
 
+    if (Array.isArray(dto.gradingScale) && dto.gradingScale.length > 0) {
+      targetEntity.gradingScale = sanitizeGradingScale(dto.gradingScale);
+    } else if (dto.gradingScale === null) {
+      targetEntity.gradingScale = null;
+    }
+
     targetEntity.status = dto.status || 'ACTIVE';
     targetEntity.remarks = dto.remarks || null;
 
@@ -781,6 +812,65 @@ class RegulationInternalSettingsService {
   }
 
   /**
+   * Evaluate Grade & Grade Points according to dynamic regulation grading scale
+   */
+  evaluateGradeAndPoints(percentage, isPass, isAbsent, scale = DEFAULT_GRADING_SCALE) {
+    const activeScale = Array.isArray(scale) && scale.length > 0 ? scale : DEFAULT_GRADING_SCALE;
+
+    if (isAbsent) {
+      const abRule = activeScale.find((s) => String(s.grade).toUpperCase() === 'AB') || {
+        grade: 'Ab',
+        gradeDescription: 'Absent',
+        gradePoints: 0,
+      };
+      return {
+        grade: abRule.grade,
+        gradeDescription: abRule.gradeDescription || 'Absent',
+        gradePoints: Number(abRule.gradePoints ?? 0),
+      };
+    }
+
+    if (!isPass) {
+      const failRule = activeScale.find((s) => !s.isPass && String(s.grade).toUpperCase() !== 'AB') || {
+        grade: 'F',
+        gradeDescription: 'Fail',
+        gradePoints: 0,
+      };
+      return {
+        grade: failRule.grade,
+        gradeDescription: failRule.gradeDescription || 'Fail',
+        gradePoints: Number(failRule.gradePoints ?? 0),
+      };
+    }
+
+    // Sort descending by minPercentage
+    const passingRules = [...activeScale]
+      .filter((s) => s.isPass && String(s.grade).toUpperCase() !== 'AB')
+      .sort((a, b) => Number(b.minPercentage) - Number(a.minPercentage));
+
+    for (const rule of passingRules) {
+      if (percentage >= Number(rule.minPercentage)) {
+        return {
+          grade: rule.grade,
+          gradeDescription: rule.gradeDescription || 'Pass',
+          gradePoints: Number(rule.gradePoints ?? 0),
+        };
+      }
+    }
+
+    const lowestPass = passingRules[passingRules.length - 1];
+    if (lowestPass) {
+      return {
+        grade: lowestPass.grade,
+        gradeDescription: lowestPass.gradeDescription || 'Pass',
+        gradePoints: Number(lowestPass.gradePoints ?? 0),
+      };
+    }
+
+    return { grade: 'E', gradeDescription: 'Pass', gradePoints: 5 };
+  }
+
+  /**
    * Comprehensive Assessment Simulation (Internal, External, and Combined Total)
    */
   simulate(dto) {
@@ -824,6 +914,7 @@ class RegulationInternalSettingsService {
     let overallStatus = 'PENDING';
     let comboStep = '';
     let grade = null;
+    let gradeDescription = null;
     let gradePoints = null;
 
     if (internalRes.marks !== null && externalMarks !== null) {
@@ -834,8 +925,6 @@ class RegulationInternalSettingsService {
       if (isExtAbsent) {
         overallPass = false;
         overallStatus = 'ABSENT';
-        grade = 'AB';
-        gradePoints = 0;
       } else {
         if (passStrategy === 'ALL_THREE') {
           overallPass = internalRes.isPass && isExternalPass && isTotalPass;
@@ -849,37 +938,17 @@ class RegulationInternalSettingsService {
         }
 
         overallStatus = overallPass ? 'PASS' : 'FAIL';
-
-        // Grade allocation
-        const percentage = (totalMarks / maxTotal) * 100;
-        if (!overallPass) {
-          grade = 'F';
-          gradePoints = 0;
-        } else if (percentage >= 90) {
-          grade = 'O';
-          gradePoints = 10;
-        } else if (percentage >= 80) {
-          grade = 'A+';
-          gradePoints = 9;
-        } else if (percentage >= 70) {
-          grade = 'A';
-          gradePoints = 8;
-        } else if (percentage >= 60) {
-          grade = 'B+';
-          gradePoints = 7;
-        } else if (percentage >= 50) {
-          grade = 'B';
-          gradePoints = 6;
-        } else if (percentage >= 40) {
-          grade = 'C';
-          gradePoints = 5;
-        } else {
-          grade = 'F';
-          gradePoints = 0;
-        }
       }
 
-      comboStep = `Internal (${internalRes.marks}) + External (${externalMarks}) = ${totalMarks} / ${maxTotal}. Cutoffs: External (≥ ${minExternalPass}: ${isExternalPass ? 'Yes' : 'No'}), Total Aggregate (≥ ${minTotalPass}: ${isTotalPass ? 'Yes' : 'No'}) → Overall: ${overallStatus} (Grade: ${grade})`;
+      // Dynamic Grade and Points allocation via regulation's configured grading scale
+      const percentage = (totalMarks / maxTotal) * 100;
+      const scale = sanitizeGradingScale(dto.gradingScale);
+      const evaluated = this.evaluateGradeAndPoints(percentage, overallPass, isExtAbsent, scale);
+      grade = evaluated.grade;
+      gradeDescription = evaluated.gradeDescription;
+      gradePoints = evaluated.gradePoints;
+
+      comboStep = `Internal (${internalRes.marks}) + External (${externalMarks}) = ${totalMarks} / ${maxTotal} (${percentage.toFixed(1)}%). Cutoffs: External (≥ ${minExternalPass}: ${isExternalPass ? 'Yes' : 'No'}), Total Aggregate (≥ ${minTotalPass}: ${isTotalPass ? 'Yes' : 'No'}) → Overall: ${overallStatus} | Grade: ${grade} (${gradeDescription}, ${gradePoints} Points)`;
     }
 
     return {
@@ -891,6 +960,9 @@ class RegulationInternalSettingsService {
       minPass: internalRes.minPass,
       bestMid: internalRes.bestMid,
       secondMid: internalRes.secondMid,
+      grade,
+      gradeDescription,
+      gradePoints,
       formulaDescription: this.formatFormulaDescription({
         ...dto,
         maxInternalMarks: internalRes.targetMax,
@@ -922,6 +994,7 @@ class RegulationInternalSettingsService {
       combo: {
         totalMarks,
         targetMax: maxTotal,
+        percentage: totalMarks !== null ? Number(((totalMarks / maxTotal) * 100).toFixed(2)) : null,
         minPass: minTotalPass,
         minPassPercentage: minTotalPct,
         isTotalPass,
@@ -929,6 +1002,7 @@ class RegulationInternalSettingsService {
         overallStatus,
         passStrategy,
         grade,
+        gradeDescription,
         gradePoints,
         formulaStep: comboStep,
       },

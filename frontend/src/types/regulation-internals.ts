@@ -15,6 +15,37 @@ export type PassStrategy =
   | 'TOTAL_ONLY' // Total aggregate >= Min only
   | 'EXTERNAL_ONLY'; // External >= Min only
 
+export interface GradePointRule {
+  minPercentage: number;
+  maxPercentage: number;
+  grade: string;
+  gradeDescription: string;
+  gradePoints: number;
+  isPass: boolean;
+}
+
+export const DEFAULT_GRADING_SCALE: GradePointRule[] = [
+  { minPercentage: 90, maxPercentage: 100, grade: 'S', gradeDescription: 'Superior', gradePoints: 10, isPass: true },
+  { minPercentage: 80, maxPercentage: 89, grade: 'A', gradeDescription: 'Excellent', gradePoints: 9, isPass: true },
+  { minPercentage: 70, maxPercentage: 79, grade: 'B', gradeDescription: 'Very Good', gradePoints: 8, isPass: true },
+  { minPercentage: 60, maxPercentage: 69, grade: 'C', gradeDescription: 'Good', gradePoints: 7, isPass: true },
+  { minPercentage: 50, maxPercentage: 59, grade: 'D', gradeDescription: 'Average', gradePoints: 6, isPass: true },
+  { minPercentage: 40, maxPercentage: 49, grade: 'E', gradeDescription: 'Pass', gradePoints: 5, isPass: true },
+  { minPercentage: 0, maxPercentage: 39, grade: 'F', gradeDescription: 'Fail', gradePoints: 0, isPass: false },
+  { minPercentage: 0, maxPercentage: 0, grade: 'Ab', gradeDescription: 'Absent', gradePoints: 0, isPass: false },
+];
+
+export const UGC_GRADING_SCALE: GradePointRule[] = [
+  { minPercentage: 90, maxPercentage: 100, grade: 'O', gradeDescription: 'Outstanding', gradePoints: 10, isPass: true },
+  { minPercentage: 80, maxPercentage: 89, grade: 'A+', gradeDescription: 'Excellent', gradePoints: 9, isPass: true },
+  { minPercentage: 70, maxPercentage: 79, grade: 'A', gradeDescription: 'Very Good', gradePoints: 8, isPass: true },
+  { minPercentage: 60, maxPercentage: 69, grade: 'B+', gradeDescription: 'Good', gradePoints: 7, isPass: true },
+  { minPercentage: 50, maxPercentage: 59, grade: 'B', gradeDescription: 'Above Average', gradePoints: 6, isPass: true },
+  { minPercentage: 40, maxPercentage: 49, grade: 'C', gradeDescription: 'Pass', gradePoints: 5, isPass: true },
+  { minPercentage: 0, maxPercentage: 39, grade: 'F', gradeDescription: 'Fail', gradePoints: 0, isPass: false },
+  { minPercentage: 0, maxPercentage: 0, grade: 'Ab', gradeDescription: 'Absent', gradePoints: 0, isPass: false },
+];
+
 export interface RegulationInternalSetting {
   id: number | null;
   regulationId: number | null;
@@ -45,6 +76,7 @@ export interface RegulationInternalSetting {
   requireInternalPass: boolean;
   requireTotalPass: boolean;
   passStrategy: PassStrategy;
+  gradingScale?: GradePointRule[];
 
   status: string;
   remarks?: string | null;
@@ -85,6 +117,7 @@ export interface RegulationMarksSimulationDto {
   requireInternalPass?: boolean;
   requireExternalPass?: boolean;
   requireTotalPass?: boolean;
+  gradingScale?: GradePointRule[];
 }
 
 export interface RegulationMarksDiff {
@@ -158,7 +191,9 @@ export interface CalculationSimulationResult {
     overallStatus: 'PASS' | 'FAIL' | 'ABSENT' | 'PENDING';
     passStrategy: string;
     grade?: string | null;
+    gradeDescription?: string | null;
     gradePoints?: number | null;
+    percentage?: number | null;
     formulaStep?: string;
   };
 }

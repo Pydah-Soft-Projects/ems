@@ -15,10 +15,15 @@ import type {
   CalculationMethod,
   RoundingRule,
   PassStrategy,
+  GradePointRule,
   RegulationInternalSetting,
   RegulationInternalSettingsOverview,
   RegulationMarksAuditRecord,
   CalculationSimulationResult,
+} from '@/types/regulation-internals';
+import {
+  DEFAULT_GRADING_SCALE,
+  UGC_GRADING_SCALE,
 } from '@/types/regulation-internals';
 
 const CALCULATION_METHODS: { value: CalculationMethod; label: string; description: string }[] = [
@@ -209,6 +214,9 @@ export default function RegulationMarksPage() {
   const [formPassStrategy, setFormPassStrategy] = useState<PassStrategy>('EXTERNAL_AND_TOTAL');
   const [formRemarks, setFormRemarks] = useState('');
 
+  // Form Fields - Grading Structure & Points Evaluation (Section 3.4)
+  const [formGradingScale, setFormGradingScale] = useState<GradePointRule[]>(DEFAULT_GRADING_SCALE);
+
   // Simulator / Testing Workbench State
   const [testRegulationCode, setTestRegulationCode] = useState<string>('GLOBAL_DEFAULT');
   const [testMid1, setTestMid1] = useState('24');
@@ -340,13 +348,29 @@ export default function RegulationMarksPage() {
 
     const pct = totMax > 0 ? (sampleTotal / totMax) * 100 : 0;
     let grade = 'F';
-    if (overallPass) {
-      if (pct >= 90) grade = 'O (Outstanding)';
-      else if (pct >= 80) grade = 'A+ (Excellent)';
-      else if (pct >= 70) grade = 'A (Very Good)';
-      else if (pct >= 60) grade = 'B+ (Good)';
-      else if (pct >= 50) grade = 'B (Above Average)';
-      else if (pct >= 40) grade = 'C (Pass)';
+    let gradeDescription = 'Fail';
+    let gradePoints = 0;
+
+    if (!overallPass) {
+      const failRule = (formGradingScale || DEFAULT_GRADING_SCALE).find((r) => !r.isPass && r.grade.toUpperCase() !== 'AB');
+      grade = failRule?.grade || 'F';
+      gradeDescription = failRule?.gradeDescription || 'Fail';
+      gradePoints = failRule?.gradePoints ?? 0;
+    } else {
+      const passRules = [...(formGradingScale || DEFAULT_GRADING_SCALE)]
+        .filter((r) => r.isPass && r.grade.toUpperCase() !== 'AB')
+        .sort((a, b) => Number(b.minPercentage) - Number(a.minPercentage));
+      const matched = passRules.find((r) => pct >= Number(r.minPercentage));
+      if (matched) {
+        grade = matched.grade;
+        gradeDescription = matched.gradeDescription;
+        gradePoints = matched.gradePoints;
+      } else {
+        const lowestPass = passRules[passRules.length - 1];
+        grade = lowestPass?.grade || 'E';
+        gradeDescription = lowestPass?.gradeDescription || 'Pass';
+        gradePoints = lowestPass?.gradePoints ?? 5;
+      }
     }
 
     return {
@@ -362,6 +386,8 @@ export default function RegulationMarksPage() {
       reason,
       pct: pct.toFixed(1),
       grade,
+      gradeDescription,
+      gradePoints,
     };
   }, [
     formMaxInternal,
@@ -375,6 +401,7 @@ export default function RegulationMarksPage() {
     formPassStrategy,
     formRequireExternalPass,
     formRequireInternalPass,
+    formGradingScale,
   ]);
 
   // Filtered History for Tab 3
@@ -430,6 +457,25 @@ export default function RegulationMarksPage() {
     setFormRequireInternalPass(Boolean(item.requireInternalPass));
     setFormPassStrategy(item.passStrategy || 'EXTERNAL_AND_TOTAL');
     setFormRemarks(item.remarks || '');
+
+    // Grading Scale (Section 3.4) - Clean any legacy decimals (.99) to whole integers
+    const rawScale = Array.isArray(item.gradingScale) && item.gradingScale.length > 0
+      ? item.gradingScale
+      : DEFAULT_GRADING_SCALE;
+
+    const cleanScale = rawScale.map((rule) => {
+      const rawMin = Number(rule.minPercentage ?? 0);
+      const rawMax = Number(rule.maxPercentage ?? 100);
+      return {
+        ...rule,
+        minPercentage: Math.round(rawMin),
+        maxPercentage: rawMax >= 100 ? 100 : Math.floor(rawMax),
+        gradePoints: Math.round(Number(rule.gradePoints ?? 0)),
+      };
+    });
+
+    setFormGradingScale(cleanScale);
+
     setIsModalOpen(true);
   };
 
@@ -493,6 +539,38 @@ export default function RegulationMarksPage() {
     if (!isNaN(num) && num >= 0 && num <= 100) {
       setFormOtherWeight(String(Math.max(0, 100 - num)));
     }
+  };
+
+  // Grading Scale Management (Section 3.4)
+  const handleUpdateGradeRule = (index: number, field: keyof GradePointRule, value: any) => {
+    setFormGradingScale((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleAddGradeRule = () => {
+    setFormGradingScale((prev) => [
+      ...prev,
+      {
+        minPercentage: 0,
+        maxPercentage: 0,
+        grade: 'NEW',
+        gradeDescription: 'Custom Grade',
+        gradePoints: 0,
+        isPass: true,
+      },
+    ]);
+  };
+
+  const handleDeleteGradeRule = (index: number) => {
+    setFormGradingScale((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleApplyGradingPreset = (scale: GradePointRule[], name: string) => {
+    setFormGradingScale(scale);
+    toast.push(`Applied "${name}" grading scale`, 'info');
   };
 
   // Reset custom regulation rules back to global default
@@ -578,6 +656,7 @@ export default function RegulationMarksPage() {
         requireInternalPass: formRequireInternalPass,
         requireTotalPass: true,
         passStrategy: formPassStrategy,
+        gradingScale: formGradingScale,
         remarks: formRemarks.trim() || null,
       });
 
@@ -675,6 +754,7 @@ export default function RegulationMarksPage() {
         minTotalPassPercentage: activeTestFormula.minTotalPassPercentage ?? 40,
         passStrategy: activeTestFormula.passStrategy ?? 'EXTERNAL_AND_TOTAL',
         requireInternalPass: activeTestFormula.requireInternalPass,
+        gradingScale: activeTestFormula.gradingScale,
       });
       setTestServerResult(res);
     } catch (err) {
@@ -1295,66 +1375,92 @@ export default function RegulationMarksPage() {
                   </div>
                 </div>
 
-                {/* Simulation Trigger & Presets */}
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <Button
-                    onClick={() => void handleRunSimulation()}
-                    disabled={testingServer}
-                  >
-                    {testingServer ? 'Simulating…' : 'Run Complete Evaluation'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setTestMid1('24');
-                      setTestMid2('18');
-                      setTestExternalScore('42');
-                      setTestAbsent1(false);
-                      setTestAbsent2(false);
-                      setTestExternalAbsent(false);
-                    }}
-                  >
-                    Sample 1: Clear Pass (66 Total)
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setTestMid1('16');
-                      setTestMid2('16');
-                      setTestExternalScore('25');
-                      setTestAbsent1(false);
-                      setTestAbsent2(false);
-                      setTestExternalAbsent(false);
-                    }}
-                  >
-                    Sample 2: Borderline Pass (41 Total)
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setTestMid1('28');
-                      setTestMid2('26');
-                      setTestExternalScore('20');
-                      setTestAbsent1(false);
-                      setTestAbsent2(false);
-                      setTestExternalAbsent(false);
-                    }}
-                  >
-                    Sample 3: External Fail (High Internal, Ext &lt; 25)
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setTestMid1('24');
-                      setTestMid2('20');
-                      setTestExternalScore('0');
-                      setTestAbsent1(false);
-                      setTestAbsent2(false);
-                      setTestExternalAbsent(true);
-                    }}
-                  >
-                    Sample 4: External Absent
-                  </Button>
+                {/* Simulation Trigger & Presets (Directly matching Section 3.3 Verification Matrix) */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🧪</span> Section 3.3 Verification Benchmark Scenarios (From Academic Specification):
+                    </span>
+                    <span className="text-[11px] text-slate-500">Click to instantly load & test formula</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={() => void handleRunSimulation()}
+                      disabled={testingServer}
+                    >
+                      {testingServer ? 'Simulating…' : 'Run Custom Test'}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestMid1('25');
+                        setTestMid2('25');
+                        setTestExternalScore('15');
+                        setTestAbsent1(false);
+                        setTestAbsent2(false);
+                        setTestExternalAbsent(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 cursor-pointer shadow-2xs transition-colors"
+                    >
+                      Case 1: 25 Int + 15 Ext = 40 (FAIL · Ext &lt; 25)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestMid1('5');
+                        setTestMid2('5');
+                        setTestExternalScore('35');
+                        setTestAbsent1(false);
+                        setTestAbsent2(false);
+                        setTestExternalAbsent(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer shadow-2xs transition-colors"
+                    >
+                      Case 2: 05 Int + 35 Ext = 40 (PASS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestMid1('16');
+                        setTestMid2('16');
+                        setTestExternalScore('25');
+                        setTestAbsent1(false);
+                        setTestAbsent2(false);
+                        setTestExternalAbsent(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer shadow-2xs transition-colors"
+                    >
+                      Case 3: 16 Int + 25 Ext = 41 (PASS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestMid1('0');
+                        setTestMid2('0');
+                        setTestExternalScore('40');
+                        setTestAbsent1(false);
+                        setTestAbsent2(false);
+                        setTestExternalAbsent(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 cursor-pointer shadow-2xs transition-colors"
+                    >
+                      Case 4: 00 Int + 40 Ext = 40 (PASS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTestMid1('30');
+                        setTestMid2('30');
+                        setTestExternalScore('10');
+                        setTestAbsent1(false);
+                        setTestAbsent2(false);
+                        setTestExternalAbsent(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 cursor-pointer shadow-2xs transition-colors"
+                    >
+                      Case 5: 30 Int + 10 Ext = 40 (FAIL · Ext &lt; 25)
+                    </button>
+                  </div>
                 </div>
 
                 {/* SIMULATION OUTCOME PRESENTATION */}
@@ -1381,9 +1487,26 @@ export default function RegulationMarksPage() {
                       </div>
 
                       {testServerResult.combo?.grade && (
-                        <div className="text-right">
-                          <span className="text-[10px] uppercase font-bold text-slate-400">Awarded Letter Grade</span>
-                          <p className="text-2xl font-black text-sky-800">{testServerResult.combo.grade}</p>
+                        <div className="flex items-center gap-4 text-right">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400">Awarded Letter Grade</span>
+                            <p className="text-2xl font-black text-sky-800 flex items-center justify-end gap-1.5">
+                              <span>{testServerResult.combo.grade}</span>
+                              {testServerResult.combo.gradeDescription && (
+                                <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                                  {testServerResult.combo.gradeDescription}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="border-l border-sky-200 pl-4">
+                            <span className="text-[10px] uppercase font-bold text-indigo-500">Grade Points</span>
+                            <p className="text-2xl font-black text-indigo-700 font-mono">
+                              {testServerResult.combo.gradePoints !== undefined && testServerResult.combo.gradePoints !== null
+                                ? `${testServerResult.combo.gradePoints} GP`
+                                : '—'}
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1609,7 +1732,7 @@ export default function RegulationMarksPage() {
         size="5xl"
         className="max-w-[85rem] p-1 sm:p-2"
       >
-        <form onSubmit={(e) => void handleSaveScheme(e)} className="space-y-6">
+        <form onSubmit={(e) => void handleSaveScheme(e)} noValidate className="space-y-6">
           {/* Header Context Note */}
           <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-3.5 text-xs text-sky-900">
             <p className="font-semibold">
@@ -2171,12 +2294,277 @@ export default function RegulationMarksPage() {
                     {previewDataFlow.sampleTotal} <span className="text-xs text-slate-500">/{currentCalculatedSum}</span> ({previewDataFlow.pct}%)
                   </p>
                   <p className="text-[10px] text-purple-900 font-semibold">
-                    Grade: <strong className="text-purple-800">{previewDataFlow.grade}</strong>
+                    Grade: <strong className="text-purple-800">{previewDataFlow.grade} ({previewDataFlow.gradeDescription}) · {previewDataFlow.gradePoints} GP</strong>
                     {!previewDataFlow.overallPass && ` · ${previewDataFlow.reason}`}
                   </p>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* SECTION 3.3: UNIVERSITY RESULT CALCULATION MATRIX REFERENCE (FROM SPECIFICATION) */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                  <span>📊</span> 3.3 Result Calculation Matrix & Benchmark Verification Cases
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  University rules dictate passing when <strong>External ≥ {formMinPassExternal} marks ({formMinPassExternalPct}%)</strong> AND <strong>Total Aggregate ≥ {formMinPassTotal} marks ({formMinPassTotalPct}%)</strong>.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
+                Specification Reference Standard
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-2xs">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-100/80 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+                    <th className="py-2 px-3">Benchmark Case</th>
+                    <th className="py-2 px-3 text-center">Internal CIE (/{formMaxInternal})</th>
+                    <th className="py-2 px-3 text-center">External SEE (/{formMaxExternal})</th>
+                    <th className="py-2 px-3 text-center">Course Total (/{currentCalculatedSum})</th>
+                    <th className="py-2 px-3 text-center">Result Status</th>
+                    <th className="py-2 px-3">Academic Pass / Fail Determination Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-sans font-semibold text-slate-800">Case 1 (High CIE, Low SEE)</td>
+                    <td className="py-2 px-3 text-center font-bold text-sky-800">25</td>
+                    <td className="py-2 px-3 text-center font-bold text-rose-700">15</td>
+                    <td className="py-2 px-3 text-center font-bold text-slate-900">40</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-sans">
+                        FAIL
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans text-rose-700 text-[11px]">
+                      Failed External minimum cutoff (scored 15 &lt; {formMinPassExternal} required cutoff).
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-sans font-semibold text-slate-800">Case 2 (Low CIE, High SEE)</td>
+                    <td className="py-2 px-3 text-center font-bold text-sky-800">05</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-700">35</td>
+                    <td className="py-2 px-3 text-center font-bold text-slate-900">40</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 font-sans">
+                        PASS
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans text-emerald-800 text-[11px]">
+                      Passed External (35 ≥ {formMinPassExternal}) AND Total reached aggregate cutoff (40 ≥ {formMinPassTotal}).
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-sans font-semibold text-slate-800">Case 3 (Borderline Pass)</td>
+                    <td className="py-2 px-3 text-center font-bold text-sky-800">16</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-700">25</td>
+                    <td className="py-2 px-3 text-center font-bold text-slate-900">41</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 font-sans">
+                        PASS
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans text-emerald-800 text-[11px]">
+                      Cleared External cutoff exactly (25 ≥ {formMinPassExternal}) and aggregate cleared (41 ≥ {formMinPassTotal}).
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-sans font-semibold text-slate-800">Case 4 (Zero CIE, Pure SEE)</td>
+                    <td className="py-2 px-3 text-center font-bold text-sky-800">00</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-700">40</td>
+                    <td className="py-2 px-3 text-center font-bold text-slate-900">40</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 font-sans">
+                        PASS
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans text-emerald-800 text-[11px]">
+                      Student scored 0 in internal, but external 40 ≥ {formMinPassExternal} and total 40 ≥ {formMinPassTotal} yields PASS.
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/50">
+                    <td className="py-2 px-3 font-sans font-semibold text-slate-800">Case 5 (Max CIE, Deficient SEE)</td>
+                    <td className="py-2 px-3 text-center font-bold text-sky-800">30</td>
+                    <td className="py-2 px-3 text-center font-bold text-rose-700">10</td>
+                    <td className="py-2 px-3 text-center font-bold text-slate-900">40</td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-sans">
+                        FAIL
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 font-sans text-rose-700 text-[11px]">
+                      Failed External minimum cutoff (scored 10 &lt; {formMinPassExternal} required cutoff).
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* SECTION 3.4: STRUCTURE OF GRADING OF ACADEMIC PERFORMANCE & GRADE POINTS EVALUATION */}
+          <div className="rounded-xl border border-indigo-200 bg-gradient-to-r from-indigo-50/30 via-sky-50/20 to-purple-50/30 p-4 space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-2.5">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                  <span>🎓</span> 3.4 Structure of Grading of Academic Performance & Points Evaluation
+                </h4>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Configure dynamic letter grades, percentage boundaries, academic classification, and Grade Points (GP) assigned for <strong>{editingItem?.regulationCode}</strong>.
+                </p>
+              </div>
+
+              {/* Scale Presets and Actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyGradingPreset(DEFAULT_GRADING_SCALE, 'Standard University (S/A/B/C/D/E/F, 10-5 GP)')}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-white border border-indigo-300 text-indigo-900 hover:bg-indigo-50 cursor-pointer shadow-2xs transition-colors"
+                >
+                  Apply Standard University (S-A-B-C-D-E-F)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyGradingPreset(UGC_GRADING_SCALE, 'UGC National Scale (O/A+/A/B+/B/C/F, 10-5 GP)')}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-white border border-slate-300 text-slate-800 hover:bg-slate-50 cursor-pointer shadow-2xs transition-colors"
+                >
+                  Apply UGC Scale (O-A+-A-B+-B-C-F)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddGradeRule}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer shadow-2xs transition-colors"
+                >
+                  + Add Grade Tier
+                </button>
+              </div>
+            </div>
+
+            {/* Grading Table */}
+            <div className="overflow-x-auto rounded-lg border border-indigo-100 bg-white shadow-2xs">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-indigo-50/70 text-[11px] font-bold text-indigo-900 uppercase tracking-wider border-b border-indigo-100">
+                    <th className="py-2.5 px-3">Range in Which Marks Fall (%)</th>
+                    <th className="py-2.5 px-3">Grade</th>
+                    <th className="py-2.5 px-3">Performance Description</th>
+                    <th className="py-2.5 px-3 text-center">Grade Points Assigned</th>
+                    <th className="py-2.5 px-3 text-center">Course Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {formGradingScale.map((rule, idx) => {
+                    const isAb = rule.grade.toUpperCase() === 'AB';
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        {/* Range */}
+                        <td className="py-2 px-3">
+                          {isAb ? (
+                            <span className="font-semibold text-slate-500 font-sans text-xs">Absent from Examination</span>
+                          ) : (
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="any"
+                                value={rule.minPercentage}
+                                onChange={(e) => handleUpdateGradeRule(idx, 'minPercentage', e.target.value === '' ? 0 : Math.round(parseFloat(e.target.value) || 0))}
+                                className="w-14 px-1.5 py-1 rounded text-xs border border-slate-200 text-center font-bold"
+                              />
+                              <span className="text-slate-400 font-sans">% to</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="any"
+                                value={rule.maxPercentage}
+                                onChange={(e) => handleUpdateGradeRule(idx, 'maxPercentage', e.target.value === '' ? 0 : Math.round(parseFloat(e.target.value) || 0))}
+                                className="w-14 px-1.5 py-1 rounded text-xs border border-slate-200 text-center font-bold"
+                              />
+                              <span className="text-slate-400 font-sans">%</span>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Grade Letter */}
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={rule.grade}
+                            onChange={(e) => handleUpdateGradeRule(idx, 'grade', e.target.value)}
+                            className="w-16 px-2 py-1 rounded text-xs border border-slate-200 font-black text-indigo-900 bg-indigo-50/40 text-center uppercase"
+                          />
+                        </td>
+
+                        {/* Performance Description */}
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={rule.gradeDescription}
+                            onChange={(e) => handleUpdateGradeRule(idx, 'gradeDescription', e.target.value)}
+                            className="w-40 px-2 py-1 rounded text-xs border border-slate-200 font-medium text-slate-800"
+                          />
+                        </td>
+
+                        {/* Grade Points */}
+                        <td className="py-2 px-3 text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            max={10}
+                            step="any"
+                            value={rule.gradePoints}
+                            onChange={(e) => handleUpdateGradeRule(idx, 'gradePoints', e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0)}
+                            className="w-14 px-2 py-1 rounded text-xs border border-slate-200 font-bold text-center font-mono text-indigo-700 bg-slate-50"
+                          />
+                        </td>
+
+                        {/* Status (Pass / Fail) */}
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateGradeRule(idx, 'isPass', !rule.isPass)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                              rule.isPass
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : isAb
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-rose-100 text-rose-800 border border-rose-200'
+                            }`}
+                          >
+                            {rule.isPass ? 'PASS' : isAb ? 'ABSENT' : 'FAIL'}
+                          </button>
+                        </td>
+
+                        {/* Delete Row */}
+                        <td className="py-2 px-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGradeRule(idx)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Delete this grade row"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="text-[10px] text-slate-500 italic">
+              Note: When marks evaluation is executed for student mark entries, the system matches the student percentage against the active regulation's grading rules, assigning the corresponding letter grade and Grade Points (GP) automatically.
+            </p>
           </div>
 
           {/* Remarks */}
