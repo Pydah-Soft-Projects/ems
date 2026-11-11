@@ -17,6 +17,7 @@ import type {
   PassStrategy,
   RegulationInternalSetting,
   RegulationInternalSettingsOverview,
+  RegulationMarksAuditRecord,
   CalculationSimulationResult,
 } from '@/types/regulation-internals';
 
@@ -154,13 +155,29 @@ const PRESET_TEMPLATES: StandardPreset[] = [
 
 export default function RegulationMarksPage() {
   const toast = useToast();
-  const [activeMainTab, setActiveMainTab] = useState<'schemes' | 'simulator'>('schemes');
+  const [activeMainTab, setActiveMainTab] = useState<'schemes' | 'simulator' | 'history'>('schemes');
   const [schemeViewFilter, setSchemeViewFilter] = useState<'ALL' | 'INTERNAL' | 'EXTERNAL' | 'COMBO'>('ALL');
 
   const [data, setData] = useState<RegulationInternalSettingsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // History State
+  const [allHistoryLogs, setAllHistoryLogs] = useState<RegulationMarksAuditRecord[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyRegulationFilter, setHistoryRegulationFilter] = useState('ALL');
+  const [historyActionFilter, setHistoryActionFilter] = useState<'ALL' | 'CREATED' | 'UPDATED' | 'RESET_TO_DEFAULT'>('ALL');
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+
+  // Individual Regulation History Modal State
+  const [selectedHistoryRegulation, setSelectedHistoryRegulation] = useState<{
+    code: string;
+    name?: string | null;
+  } | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [individualHistoryLogs, setIndividualHistoryLogs] = useState<RegulationMarksAuditRecord[]>([]);
+  const [loadingIndividualHistory, setLoadingIndividualHistory] = useState(false);
 
   // Formula Editor Modal State
   const [editingItem, setEditingItem] = useState<RegulationInternalSetting | null>(null);
@@ -223,9 +240,38 @@ export default function RegulationMarksPage() {
     }
   }, []);
 
+  // Load Audit History Logs
+  const loadHistory = useCallback(async () => {
+    try {
+      setLoadingHistory(true);
+      const logs = await api.getRegulationMarksHistory();
+      setAllHistoryLogs(logs);
+    } catch (err) {
+      console.error('Failed to load regulation marks history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  // Open Individual Regulation History Modal
+  const handleOpenIndividualHistory = async (regCode: string, regName?: string | null) => {
+    setSelectedHistoryRegulation({ code: regCode, name: regName });
+    setIsHistoryModalOpen(true);
+    try {
+      setLoadingIndividualHistory(true);
+      const logs = await api.getRegulationMarksHistoryForRegulation(regCode);
+      setIndividualHistoryLogs(logs);
+    } catch (err) {
+      toast.push(err instanceof ApiError ? err.message : 'Failed to load history for this regulation', 'danger');
+    } finally {
+      setLoadingIndividualHistory(false);
+    }
+  };
+
   useEffect(() => {
     void loadSettings();
-  }, [loadSettings]);
+    void loadHistory();
+  }, [loadSettings, loadHistory]);
 
   // Derived current mathematical sum
   const currentInternalNum = parseFloat(formMaxInternal) || 0;
@@ -330,6 +376,28 @@ export default function RegulationMarksPage() {
     formRequireExternalPass,
     formRequireInternalPass,
   ]);
+
+  // Filtered History for Tab 3
+  const filteredHistoryLogs = useMemo(() => {
+    return allHistoryLogs.filter((log) => {
+      if (historyRegulationFilter !== 'ALL' && log.regulationCode !== historyRegulationFilter) {
+        return false;
+      }
+      if (historyActionFilter !== 'ALL' && log.action !== historyActionFilter) {
+        return false;
+      }
+      if (historySearchQuery.trim()) {
+        const q = historySearchQuery.toLowerCase();
+        const matchesCode = (log.regulationCode || '').toLowerCase().includes(q);
+        const matchesName = (log.regulationName || '').toLowerCase().includes(q);
+        const matchesUser = (log.changedByName || '').toLowerCase().includes(q);
+        const matchesEmail = (log.changedByEmail || '').toLowerCase().includes(q);
+        const matchesRemarks = (log.remarks || '').toLowerCase().includes(q);
+        return matchesCode || matchesName || matchesUser || matchesEmail || matchesRemarks;
+      }
+      return true;
+    });
+  }, [allHistoryLogs, historyRegulationFilter, historyActionFilter, historySearchQuery]);
 
   // Open modal to configure marks rules
   const handleOpenEdit = (item: RegulationInternalSetting) => {
@@ -438,6 +506,7 @@ export default function RegulationMarksPage() {
       await api.resetRegulationMarksSetting(item.id);
       toast.push(`Marks setup for ${item.regulationCode} reset to Global Default`, 'success');
       void loadSettings();
+      void loadHistory();
     } catch (err) {
       toast.push(err instanceof ApiError ? err.message : 'Failed to reset marks setup', 'danger');
     }
@@ -520,6 +589,7 @@ export default function RegulationMarksPage() {
       );
       setIsModalOpen(false);
       void loadSettings();
+      void loadHistory();
     } catch (err) {
       toast.push(err instanceof ApiError ? err.message : 'Failed to save marks setup', 'danger');
     } finally {
@@ -691,6 +761,29 @@ export default function RegulationMarksPage() {
           </svg>
           Marks Testing & Simulation Workbench
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveMainTab('history');
+            void loadHistory();
+          }}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            activeMainTab === 'history'
+              ? 'bg-sky-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Audit History & Change Log
+          {allHistoryLogs.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-sky-800 text-white font-black">
+              {allHistoryLogs.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* TAB 1: REGULATION MARKS SCHEMES */}
@@ -716,6 +809,17 @@ export default function RegulationMarksPage() {
                   </div>
 
                   <div className="inline-flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleOpenIndividualHistory('GLOBAL_DEFAULT', 'Global Standard Assessment Baseline')}
+                      className="text-indigo-700 border border-indigo-200 bg-white hover:bg-indigo-50"
+                    >
+                      <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Baseline History
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -938,7 +1042,18 @@ export default function RegulationMarksPage() {
 
                           {/* Actions */}
                           <td className="px-4 py-3 text-right">
-                            <div className="inline-flex items-center gap-2">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void handleOpenIndividualHistory(reg.regulationCode, reg.regulationName)}
+                                className="text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md px-2.5 py-1.5 font-bold transition-colors cursor-pointer flex items-center gap-1"
+                                title={`View revision history for ${reg.regulationCode}`}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                History
+                              </button>
                               {reg.isCustomized && (
                                 <button
                                   type="button"
@@ -1339,6 +1454,141 @@ export default function RegulationMarksPage() {
                         </p>
                       </div>
                     </div>
+                  </div>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB 3: AUDIT HISTORY & CHANGE LOG */}
+      {activeMainTab === 'history' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader
+              title="Assessment Schemes Revision History & Audit Trail"
+              description="Chronological log of all modifications made to academic regulation assessment formulas, pass cutoffs, and scheme configurations with 'From ➔ To' parameter comparisons."
+              action={
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void loadHistory()}
+                    disabled={loadingHistory}
+                  >
+                    {loadingHistory ? 'Refreshing…' : 'Refresh Audit Log'}
+                  </Button>
+                </div>
+              }
+            />
+            <CardBody>
+              <div className="space-y-6">
+                {/* Stats Summary Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70">
+                    <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Total Revisions</span>
+                    <p className="text-2xl font-black text-slate-900 mt-0.5">{allHistoryLogs.length}</p>
+                    <p className="text-[11px] text-slate-500 mt-1">Logged configuration changes</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-sky-100 bg-sky-50/50">
+                    <span className="text-[10px] font-bold uppercase text-sky-800 tracking-wider">Updates</span>
+                    <p className="text-2xl font-black text-sky-900 mt-0.5">
+                      {allHistoryLogs.filter((l) => l.action === 'UPDATED').length}
+                    </p>
+                    <p className="text-[11px] text-sky-700 mt-1">Scheme modifications</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-emerald-100 bg-emerald-50/50">
+                    <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider">Creations</span>
+                    <p className="text-2xl font-black text-emerald-900 mt-0.5">
+                      {allHistoryLogs.filter((l) => l.action === 'CREATED').length}
+                    </p>
+                    <p className="text-[11px] text-emerald-700 mt-1">New regulation schemes</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-amber-100 bg-amber-50/50">
+                    <span className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">Resets</span>
+                    <p className="text-2xl font-black text-amber-900 mt-0.5">
+                      {allHistoryLogs.filter((l) => l.action === 'RESET_TO_DEFAULT').length}
+                    </p>
+                    <p className="text-[11px] text-amber-700 mt-1">Reverted to Baseline</p>
+                  </div>
+                </div>
+
+                {/* Filters & Search Control Bar */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Regulation Filter */}
+                    <div>
+                      <select
+                        value={historyRegulationFilter}
+                        onChange={(e) => setHistoryRegulationFilter(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-white border border-slate-300 font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-sky-500"
+                      >
+                        <option value="ALL">All Regulations</option>
+                        <option value="GLOBAL_DEFAULT">GLOBAL_DEFAULT (Baseline)</option>
+                        {data?.regulations.map((r) => (
+                          <option key={r.regulationCode} value={r.regulationCode}>
+                            {r.regulationCode} — {r.regulationName || 'Regulation'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Action Filter */}
+                    <div className="inline-flex items-center p-0.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold">
+                      {(['ALL', 'UPDATED', 'CREATED', 'RESET_TO_DEFAULT'] as const).map((act) => (
+                        <button
+                          key={act}
+                          type="button"
+                          onClick={() => setHistoryActionFilter(act)}
+                          className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                            historyActionFilter === act
+                              ? 'bg-sky-600 text-white shadow-2xs font-bold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {act === 'ALL' ? 'All Actions' : act === 'UPDATED' ? 'Updates' : act === 'CREATED' ? 'Creations' : 'Resets'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Search Query */}
+                  <div className="w-full md:w-80">
+                    <input
+                      type="text"
+                      placeholder="Search by user, email, regulation, remarks..."
+                      value={historySearchQuery}
+                      onChange={(e) => setHistorySearchQuery(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg text-xs bg-white border border-slate-300 text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Audit Records List */}
+                {loadingHistory ? (
+                  <div className="py-12 text-center text-slate-400 text-sm">
+                    <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-sky-600 mb-2"></div>
+                    <p>Loading historical audit records…</p>
+                  </div>
+                ) : filteredHistoryLogs.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500 text-sm rounded-xl border border-dashed border-slate-200 p-8 space-y-1">
+                    <p className="font-bold text-slate-800 text-base">No audit history entries found</p>
+                    <p className="text-xs text-slate-400">
+                      {historyRegulationFilter !== 'ALL' || historyActionFilter !== 'ALL' || historySearchQuery
+                        ? 'No records match your selected filters. Try clearing filters or searching for another regulation.'
+                        : 'Every configuration change, formula update, or reset will automatically be audited and versioned here.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {filteredHistoryLogs.map((log) => (
+                      <HistoryLogItemCard
+                        key={log.id}
+                        log={log}
+                        onViewIndividual={(code: string) => void handleOpenIndividualHistory(code)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -1940,21 +2190,248 @@ export default function RegulationMarksPage() {
           </div>
 
           {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsModalOpen(false)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving Scheme…' : `Save Scheme (${formMaxInternal} Int + ${formMaxExternal} Ext = ${currentCalculatedSum} Total)`}
-            </Button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200">
+            <div>
+              {editingItem && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleOpenIndividualHistory(editingItem.regulationCode, editingItem.regulationName);
+                  }}
+                  className="text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md px-3 py-1.5 font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  View Revision History for {editingItem.regulationCode}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsModalOpen(false)}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving Scheme…' : `Save Scheme (${formMaxInternal} Int + ${formMaxExternal} Ext = ${currentCalculatedSum} Total)`}
+              </Button>
+            </div>
           </div>
         </form>
       </Dialog>
+
+      {/* INDIVIDUAL REGULATION REVISION HISTORY MODAL */}
+      <Dialog
+        open={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        title={`Audit History & Change Log: ${selectedHistoryRegulation?.code || 'Regulation'}`}
+        size="4xl"
+        className="max-w-[72rem]"
+      >
+        <div className="space-y-4">
+          {/* Header Context Banner */}
+          <div className="p-3.5 rounded-xl border border-indigo-200 bg-linear-to-r from-indigo-50/70 via-sky-50/50 to-white flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div>
+              <p className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <span>🕒</span> Change History for:
+                <span className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200 text-indigo-900 font-black">
+                  {selectedHistoryRegulation?.code}
+                </span>
+                {selectedHistoryRegulation?.name && (
+                  <span className="text-slate-600 font-medium">({selectedHistoryRegulation.name})</span>
+                )}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Chronological log showing where the form changed, by whom, exact timestamp, and parameter diffs from ➔ to.
+              </p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
+              {individualHistoryLogs.length} Revisions Logged
+            </span>
+          </div>
+
+          {/* Individual History Content */}
+          {loadingIndividualHistory ? (
+            <div className="py-12 text-center text-slate-400 text-sm">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600 mb-2"></div>
+              <p>Fetching revision history for {selectedHistoryRegulation?.code}…</p>
+            </div>
+          ) : individualHistoryLogs.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 text-sm rounded-xl border border-dashed border-slate-200 p-8 space-y-1">
+              <p className="font-bold text-slate-700">No revisions logged yet for {selectedHistoryRegulation?.code}</p>
+              <p className="text-xs text-slate-400 mt-1">
+                When an administrator customizes, updates, or resets this regulation scheme, the complete audit record with exact From ➔ To values and timestamps will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3.5 max-h-[65vh] overflow-y-auto pr-1">
+              {individualHistoryLogs.map((log) => (
+                <HistoryLogItemCard key={log.id} log={log} />
+              ))}
+            </div>
+          )}
+
+          {/* Modal Footer */}
+          <div className="flex items-center justify-end pt-3 border-t border-slate-200">
+            <Button variant="secondary" onClick={() => setIsHistoryModalOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Audit History Record Card Component
+ */
+function HistoryLogItemCard({
+  log,
+  onViewIndividual,
+}: {
+  log: RegulationMarksAuditRecord;
+  onViewIndividual?: (code: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3 transition-all hover:border-slate-300">
+      {/* Top Header Row: Where, Action, When, Who */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Where: Regulation Tag */}
+          <span className="font-mono text-xs font-black px-2.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-900">
+            {log.regulationCode}
+          </span>
+          {log.regulationName && (
+            <span className="text-xs text-slate-600 font-medium truncate max-w-xs">
+              {log.regulationName}
+            </span>
+          )}
+
+          {/* Action Badge */}
+          <span
+            className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${
+              log.action === 'CREATED'
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                : log.action === 'RESET_TO_DEFAULT'
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : 'bg-sky-100 text-sky-800 border-sky-300'
+            }`}
+          >
+            {log.action === 'RESET_TO_DEFAULT' ? 'RESET TO DEFAULT' : log.action}
+          </span>
+        </div>
+
+        {/* When: Time and Date */}
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <span className="flex items-center gap-1 font-mono text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {log.formattedDate || (log.createdAt ? new Date(log.createdAt).toLocaleString('en-IN') : 'N/A')}
+          </span>
+        </div>
+      </div>
+
+      {/* Actor & Remarks Meta */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        {/* Who made the change */}
+        <div className="flex flex-wrap items-center gap-2 text-slate-700">
+          <span className="text-slate-400 font-semibold">Changed By:</span>
+          <span className="font-bold text-slate-900">{log.changedByName || 'Administrator'}</span>
+          {log.changedByEmail && (
+            <span className="text-slate-500 font-mono text-[11px]">&lt;{log.changedByEmail}&gt;</span>
+          )}
+          {log.changedByRole && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              {log.changedByRole}
+            </span>
+          )}
+        </div>
+
+        {onViewIndividual && log.regulationCode && (
+          <button
+            type="button"
+            onClick={() => onViewIndividual(log.regulationCode)}
+            className="text-[11px] text-indigo-700 hover:text-indigo-900 font-bold hover:underline cursor-pointer"
+          >
+            Filter strictly for {log.regulationCode} ➔
+          </button>
+        )}
+      </div>
+
+      {/* Remarks */}
+      {log.remarks && (
+        <div className="text-xs text-slate-600 bg-slate-50/80 p-2 rounded-md border border-slate-100 flex items-start gap-1.5">
+          <span className="text-slate-400">💬</span>
+          <span className="italic">{log.remarks}</span>
+        </div>
+      )}
+
+      {/* From ➔ To Comparison Section */}
+      <div className="space-y-1.5 pt-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Form Parameters Changed ({log.changes?.length || 0}):
+          </span>
+          {log.changes && log.changes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              className="text-[11px] text-sky-700 hover:text-sky-900 font-semibold cursor-pointer"
+            >
+              {expanded ? 'Collapse Diff' : 'Expand Diff'}
+            </button>
+          )}
+        </div>
+
+        {expanded && (
+          <div>
+            {!log.changes || log.changes.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No parameter diff recorded for this event.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-50/40">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100/80 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">
+                    <tr>
+                      <th className="px-3 py-1.5">Form Parameter (Where)</th>
+                      <th className="px-3 py-1.5">Previous Value (From)</th>
+                      <th className="px-1 py-1.5 text-center">➔</th>
+                      <th className="px-3 py-1.5">New Configured Value (To)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {log.changes.map((ch, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80">
+                        <td className="px-3 py-2 font-semibold text-slate-800">
+                          {ch.label || ch.field}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-rose-700">
+                          <span className="bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                            {ch.from === null || ch.from === undefined ? '—' : String(ch.from)}
+                          </span>
+                        </td>
+                        <td className="px-1 py-2 text-center text-slate-400 font-black">➔</td>
+                        <td className="px-3 py-2 font-mono font-bold text-emerald-800">
+                          <span className="bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                            {ch.to === null || ch.to === undefined ? '—' : String(ch.to)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

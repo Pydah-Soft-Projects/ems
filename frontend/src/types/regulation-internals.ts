@@ -87,6 +87,30 @@ export interface RegulationMarksSimulationDto {
   requireTotalPass?: boolean;
 }
 
+export interface RegulationMarksDiff {
+  field: string;
+  label: string;
+  from: any;
+  to: any;
+}
+
+export interface RegulationMarksAuditRecord {
+  id: number;
+  regulationId: number | null;
+  regulationCode: string;
+  regulationName: string | null;
+  action: 'CREATED' | 'UPDATED' | 'RESET_TO_DEFAULT';
+  changedByEmail: string | null;
+  changedByName: string | null;
+  changedByRole: string | null;
+  fromState: Record<string, any> | null;
+  toState: Record<string, any> | null;
+  changes: RegulationMarksDiff[];
+  remarks: string | null;
+  createdAt: string;
+  formattedDate?: string;
+}
+
 export interface CalculationSimulationResult {
   // Top-level / legacy fields
   marks: number | null;

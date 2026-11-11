@@ -47,6 +47,9 @@ const {
 const {
   RegulationInternalSetting,
 } = require('../settings/regulation-internal-settings.entity');
+const {
+  RegulationMarksAuditLog,
+} = require('../settings/regulation-marks-audit.entity');
 const { Professional } = require('../remuneration/schemas/professional.schema');
 const {
   RemunerationBill,
@@ -88,6 +91,7 @@ const entities = [
   CanaraVPA,
   CanaraOauthAudit,
   RegulationInternalSetting,
+  RegulationMarksAuditLog,
   Professional,
   RemunerationBill,
   EmsRole,

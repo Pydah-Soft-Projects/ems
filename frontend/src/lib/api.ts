@@ -11,6 +11,7 @@ import {
   RegulationInternalSetting,
   RegulationInternalSettingsOverview,
   RegulationMarksSimulationDto,
+  RegulationMarksAuditRecord,
   CalculationSimulationResult,
 } from '@/types/regulation-internals';
 import {
@@ -1804,5 +1805,18 @@ export const api = {
   },
   simulateRegulationMarksCalculation(data: RegulationMarksSimulationDto) {
     return this.simulateRegulationInternalCalculation(data);
+  },
+  getRegulationMarksHistory(params?: { regulationCode?: string; action?: string; limit?: number }) {
+    const q = new URLSearchParams();
+    if (params?.regulationCode) q.set('regulationCode', params.regulationCode);
+    if (params?.action && params.action !== 'ALL') q.set('action', params.action);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const queryStr = q.toString() ? `?${q.toString()}` : '';
+    return request<RegulationMarksAuditRecord[]>(`/settings/regulation-marks/history${queryStr}`);
+  },
+  getRegulationMarksHistoryForRegulation(regulationIdOrCode: string | number) {
+    return request<RegulationMarksAuditRecord[]>(
+      `/settings/regulation-marks/history/${encodeURIComponent(String(regulationIdOrCode))}`
+    );
   },
 };

@@ -135,6 +135,50 @@ function createSettingsRoutes(services) {
   );
 
   router.get(
+    ['/regulation-internals/history', '/regulation-marks/history'],
+    requirePrivilege(
+      'regulations:internals:read',
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:read',
+      'regulations:write',
+      'marks:read',
+      'marks:upload',
+      'internal_exams:read',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (req, res) => {
+      res.json(await services.regulationInternalSettings.getHistory(req.query));
+    }),
+  );
+
+  router.get(
+    [
+      '/regulation-internals/history/:regulationIdOrCode',
+      '/regulation-marks/history/:regulationIdOrCode',
+    ],
+    requirePrivilege(
+      'regulations:internals:read',
+      'regulations:internals:write',
+      'settings:payments',
+      'regulations:read',
+      'regulations:write',
+      'marks:read',
+      'marks:upload',
+      'internal_exams:read',
+      'internal_exams:write',
+    ),
+    asyncHandler(async (req, res) => {
+      const { regulationIdOrCode } = req.params;
+      res.json(
+        await services.regulationInternalSettings.getHistoryForRegulation(
+          regulationIdOrCode,
+        ),
+      );
+    }),
+  );
+
+  router.get(
     ['/regulation-internals/:regulationIdOrCode', '/regulation-marks/:regulationIdOrCode'],
     requirePrivilege(
       'regulations:internals:read',
@@ -187,7 +231,7 @@ function createSettingsRoutes(services) {
     ),
     asyncHandler(async (req, res) => {
       const id = parseInt(String(req.params.id), 10);
-      res.json(await services.regulationInternalSettings.resetSetting(id));
+      res.json(await services.regulationInternalSettings.resetSetting(id, req.user));
     }),
   );
 

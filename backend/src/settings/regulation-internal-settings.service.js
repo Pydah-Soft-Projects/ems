@@ -39,9 +39,10 @@ const DEFAULT_GLOBAL_CONFIG = {
 };
 
 class RegulationInternalSettingsService {
-  constructor(regInternalSettingRepo, regulationRepo = null) {
+  constructor(regInternalSettingRepo, regulationRepo = null, auditRepo = null) {
     this.repo = regInternalSettingRepo;
     this.regulationRepo = regulationRepo;
+    this.auditRepo = auditRepo;
   }
 
   /**
@@ -268,9 +269,184 @@ class RegulationInternalSettingsService {
   }
 
   /**
+   * Snapshot state for audit trail
+   */
+  extractStateSnapshot(entity) {
+    if (!entity) return null;
+    return {
+      calculationMethod: entity.calculationMethod,
+      bestMidWeightage: Number(entity.bestMidWeightage ?? 80),
+      otherMidWeightage: Number(entity.otherMidWeightage ?? 20),
+      maxInternalMarks: Number(entity.maxInternalMarks ?? 30),
+      minPassMarks: Number(entity.minPassMarks ?? 16),
+      roundingRule: entity.roundingRule || 'ROUND_2_DECIMALS',
+      maxExternalMarks: Number(entity.maxExternalMarks ?? 70),
+      minExternalPassMarks: Number(entity.minExternalPassMarks ?? 25),
+      minExternalPassPercentage: Number(entity.minExternalPassPercentage ?? 35),
+      requireExternalPass: entity.requireExternalPass !== false,
+      maxTotalMarks: Number(entity.maxTotalMarks ?? 100),
+      minTotalPassMarks: Number(entity.minTotalPassMarks ?? 40),
+      minTotalPassPercentage: Number(entity.minTotalPassPercentage ?? 40),
+      requireInternalPass: Boolean(entity.requireInternalPass),
+      passStrategy: entity.passStrategy || 'EXTERNAL_AND_TOTAL',
+      remarks: entity.remarks || null,
+    };
+  }
+
+  formatFieldLabel(key) {
+    const map = {
+      maxInternalMarks: 'Max Internal Marks (CIE)',
+      maxExternalMarks: 'Max External Marks (SEE)',
+      maxTotalMarks: 'Course Maximum Total Marks',
+      minPassMarks: 'Internal Pass Cutoff',
+      minExternalPassMarks: 'External Min Pass Marks',
+      minExternalPassPercentage: 'External Pass % Cutoff',
+      minTotalPassMarks: 'Min Total Pass Marks',
+      minTotalPassPercentage: 'Total Aggregate Pass %',
+      calculationMethod: 'Internal Calculation Method',
+      bestMidWeightage: 'Best Mid Weightage (%)',
+      otherMidWeightage: 'Second-Best Mid Weightage (%)',
+      passStrategy: 'Evaluation Pass Strategy',
+      roundingRule: 'Decimal Rounding Rule',
+      requireExternalPass: 'Mandatory External Pass',
+      requireInternalPass: 'Strict Internal Cutoff Required',
+      remarks: 'Scheme Remarks / Reference',
+    };
+    return map[key] || key;
+  }
+
+  computeStateDiff(fromState, toState) {
+    if (!toState) return [];
+    const trackedKeys = [
+      'maxInternalMarks',
+      'maxExternalMarks',
+      'maxTotalMarks',
+      'minPassMarks',
+      'minExternalPassMarks',
+      'minExternalPassPercentage',
+      'minTotalPassMarks',
+      'minTotalPassPercentage',
+      'calculationMethod',
+      'bestMidWeightage',
+      'otherMidWeightage',
+      'passStrategy',
+      'roundingRule',
+      'requireExternalPass',
+      'requireInternalPass',
+      'remarks',
+    ];
+
+    if (!fromState) {
+      return trackedKeys.map((key) => ({
+        field: key,
+        label: this.formatFieldLabel(key),
+        from: null,
+        to: toState[key] ?? null,
+      }));
+    }
+
+    const diffs = [];
+    for (const key of trackedKeys) {
+      const fromVal = fromState[key];
+      const toVal = toState[key];
+      if (fromVal != toVal) {
+        diffs.push({
+          field: key,
+          label: this.formatFieldLabel(key),
+          from: fromVal !== undefined ? fromVal : null,
+          to: toVal !== undefined ? toVal : null,
+        });
+      }
+    }
+    return diffs;
+  }
+
+  async recordAuditLog({
+    regulationId,
+    regulationCode,
+    regulationName,
+    action,
+    actor,
+    fromState,
+    toState,
+    changes,
+    remarks,
+  }) {
+    if (!this.auditRepo) return null;
+    try {
+      const actorEmail = actor?.email || actor?.username || 'system';
+      const actorName = actor?.fullName || actor?.name || actor?.email || 'Administrator';
+      const actorRole = actor?.role?.name || actor?.roleName || (actor?.isSuperAdmin ? 'Super Admin' : 'Admin');
+
+      const log = this.auditRepo.create({
+        regulationId: regulationId ? Number(regulationId) : null,
+        regulationCode: regulationCode || 'GLOBAL_DEFAULT',
+        regulationName: regulationName || null,
+        action,
+        changedByEmail: actorEmail,
+        changedByName: actorName,
+        changedByRole: actorRole,
+        fromState: fromState || null,
+        toState: toState || null,
+        changes: changes || [],
+        remarks: remarks || null,
+      });
+
+      return await this.auditRepo.save(log);
+    } catch (err) {
+      console.error('Failed to write regulation marks audit log:', err);
+      return null;
+    }
+  }
+
+  async getHistory(filters = {}) {
+    if (!this.auditRepo) return [];
+    try {
+      const query = this.auditRepo.createQueryBuilder('log');
+
+      if (filters.regulationCode) {
+        query.andWhere('log.regulationCode = :code', { code: String(filters.regulationCode).trim() });
+      } else if (filters.regulationId) {
+        query.andWhere('log.regulationId = :regId', { regId: Number(filters.regulationId) });
+      }
+
+      if (filters.action && filters.action !== 'ALL') {
+        query.andWhere('log.action = :action', { action: String(filters.action).trim() });
+      }
+
+      query.orderBy('log.createdAt', 'DESC');
+      const limit = Math.min(Number(filters.limit || 100), 500);
+      query.take(limit);
+
+      const logs = await query.getMany();
+      return logs.map((l) => ({
+        ...l,
+        formattedDate: l.createdAt
+          ? new Date(l.createdAt).toLocaleString('en-IN', {
+              dateStyle: 'medium',
+              timeStyle: 'medium',
+            })
+          : 'N/A',
+      }));
+    } catch (err) {
+      console.error('Failed to query regulation marks audit history:', err);
+      return [];
+    }
+  }
+
+  async getHistoryForRegulation(regulationIdOrCode) {
+    if (!this.auditRepo) return [];
+    const numericId = Number(regulationIdOrCode);
+    if (!isNaN(numericId) && numericId > 0) {
+      return this.getHistory({ regulationId: numericId });
+    }
+    return this.getHistory({ regulationCode: String(regulationIdOrCode).trim() });
+  }
+
+  /**
    * Save or update marks calculation settings.
    */
-  async saveSetting(dto) {
+  async saveSetting(dto, actor = null) {
     const isGlobal =
       dto.regulationId == null ||
       dto.regulationCode === 'GLOBAL_DEFAULT' ||
@@ -389,6 +565,10 @@ class RegulationInternalSettingsService {
       }
     }
 
+    // Snapshot prior state for audit tracking
+    const isNew = !targetEntity.id;
+    const fromState = this.extractStateSnapshot(isNew ? null : targetEntity);
+
     // Assign Internal
     targetEntity.calculationMethod = method;
     targetEntity.bestMidWeightage = bestWeight;
@@ -418,13 +598,29 @@ class RegulationInternalSettingsService {
     targetEntity.remarks = dto.remarks || null;
 
     const saved = await this.repo.save(targetEntity);
+
+    // Record audit history entry
+    const toState = this.extractStateSnapshot(saved);
+    const changes = this.computeStateDiff(fromState, toState);
+    await this.recordAuditLog({
+      regulationId: saved.regulationId,
+      regulationCode: saved.regulationCode,
+      regulationName: saved.regulationName,
+      action: isNew ? 'CREATED' : 'UPDATED',
+      actor,
+      fromState,
+      toState,
+      changes,
+      remarks: saved.remarks,
+    });
+
     return this.normalizeRecord(saved, !isGlobal, false);
   }
 
   /**
    * Reset a regulation's custom settings back to Global Default
    */
-  async resetSetting(id) {
+  async resetSetting(id, actor = null) {
     const existing = await this.repo.findOne({ where: { id } });
     if (!existing) {
       throw AppError.notFound('Setting record not found');
@@ -432,7 +628,27 @@ class RegulationInternalSettingsService {
     if (existing.regulationCode === 'GLOBAL_DEFAULT' || existing.regulationId == null) {
       throw AppError.badRequest('Cannot delete the global default calculation configuration');
     }
+
+    const fromState = this.extractStateSnapshot(existing);
+    const globalDefault = await this.getGlobalDefault();
+    const toState = this.extractStateSnapshot(globalDefault);
+    const changes = this.computeStateDiff(fromState, toState);
+
     await this.repo.delete(id);
+
+    // Record audit history for reset
+    await this.recordAuditLog({
+      regulationId: existing.regulationId,
+      regulationCode: existing.regulationCode,
+      regulationName: existing.regulationName,
+      action: 'RESET_TO_DEFAULT',
+      actor,
+      fromState,
+      toState,
+      changes,
+      remarks: 'Reset custom regulation setup to inherit Global Baseline',
+    });
+
     return { success: true, message: 'Regulation marks setup reset to Global Default' };
   }
 

@@ -47,6 +47,9 @@ const { CanaraVPA } = require('../settings/canara-vpa.entity');
 const {
   RegulationInternalSetting,
 } = require('../settings/regulation-internal-settings.entity');
+const {
+  RegulationMarksAuditLog,
+} = require('../settings/regulation-marks-audit.entity');
 const { SettingsService } = require('../settings/settings.service');
 const {
   CanaraSettingsService,
@@ -151,6 +154,7 @@ function createServices(dataSource, studentDataSource) {
   const regulationInternalSettings = new RegulationInternalSettingsService(
     dataSource.getRepository(RegulationInternalSetting),
     dataSource.getRepository(Regulation),
+    dataSource.getRepository(RegulationMarksAuditLog),
   );
 
   const feeHeads = new FeeHeadsService(
