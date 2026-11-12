@@ -766,7 +766,6 @@ export default function ExamsPage() {
             user={user}
             onEdit={(exam) => router.push(`/dashboard/exams/${exam.id}/edit`)}
             onView={(exam) => router.push(`/dashboard/exams/${exam.id}`)}
-            onScheduleDates={(exam) => router.push(`/dashboard/exam-dates/${exam.id}`)}
             onSubmit={(exam) => void handleSubmit(exam)}
             onApprove={(exam) => void handleApprove(exam)}
             onReject={openReject}

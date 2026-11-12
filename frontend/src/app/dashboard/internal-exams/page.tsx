@@ -204,6 +204,32 @@ function groupScopeDisplayRows(rows: ScopeDisplayRow[]): GroupedScopeDisplay[] {
   return [...grouped.values()];
 }
 
+function fmtDate(value: string | null | undefined) {
+  if (!value) return '—';
+  try {
+    const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, y, m, d] = match;
+      const dt = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+      return dt.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    return d.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return String(value);
+  }
+}
+
 export default function InternalExamsPage() {
   const toast = useToast();
   const user = getStoredUser();
@@ -1661,12 +1687,12 @@ export default function InternalExamsPage() {
                             className="!px-2.5 !py-1.5 text-xs font-medium"
                             disabled={savingAction}
                             onClick={() => downloadTimetableNotificationPdf({ exam, regulations })}
-                            title="Download Internal Examination Notification PDF"
+                            title="Download examination timetable notification PDF"
                           >
                             <svg className="mr-1 h-3.5 w-3.5 text-slate-600 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            PDF
+                            Timetable PDF
                           </Button>
                           {canWrite && (exam.status === 'draft' || exam.status === 'rejected') ? (
                             <Button
@@ -1733,7 +1759,7 @@ export default function InternalExamsPage() {
         open={viewExam !== null}
         onClose={() => setViewExam(null)}
         title={viewExam?.name ?? 'Internal examination'}
-        description="Internal examination notification details."
+        description="Internal examination notification & timetable details."
         size="lg"
         footer={
           <div className="flex w-full items-center justify-between gap-2">
@@ -1745,7 +1771,7 @@ export default function InternalExamsPage() {
               <svg className="mr-1.5 h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Download Notification PDF
+              Download Timetable PDF
             </Button>
             <Button variant="secondary" onClick={() => setViewExam(null)}>
               Close
@@ -1755,7 +1781,7 @@ export default function InternalExamsPage() {
       >
         {viewExam ? (
           <div className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Status</p>
                 <p className="mt-1 capitalize text-sm font-medium text-slate-900">
@@ -1770,14 +1796,12 @@ export default function InternalExamsPage() {
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Examination dates</p>
-                <p className="mt-1 text-sm text-slate-900">
-                  {viewExam.examinationStartDate
-                    ? String(viewExam.examinationStartDate).slice(0, 10)
-                    : 'Not set'}
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Examination Window</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {fmtDate(viewExam.examinationStartDate)}
                   {viewExam.examinationEndDate &&
                   viewExam.examinationEndDate !== viewExam.examinationStartDate
-                    ? ` – ${String(viewExam.examinationEndDate).slice(0, 10)}`
+                    ? ` → ${fmtDate(viewExam.examinationEndDate)}`
                     : ''}
                 </p>
               </div>
@@ -1786,7 +1810,7 @@ export default function InternalExamsPage() {
               <Alert tone="danger">{viewExam.rejectionRemarks}</Alert>
             ) : null}
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Academic scope</h3>
+              <h3 className="mb-2 text-sm font-semibold text-slate-900">Academic Scope</h3>
               <div className="space-y-2">
                 {groupScopeDisplayRows(
                   viewExam.scopes?.length
@@ -1816,28 +1840,57 @@ export default function InternalExamsPage() {
               </div>
             </section>
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Subjects and dates</h3>
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--border)]">
-                {(viewExam.examSubjects ?? []).map((subject) => (
-                  <div
-                    key={subject.id}
-                    className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2 last:border-b-0"
-                  >
-                    <span className="text-sm text-slate-800">
-                      {subject.subject?.code ? `${subject.subject.code} · ` : ''}
-                      {subject.subject?.name ?? `Subject #${subject.subjectId}`}
-                      {subject.branch ? ` · ${subject.branch}` : ''}
-                    </span>
-                    <span className="text-sm text-[var(--muted)]">
-                      {subject.examDate
-                        ? String(subject.examDate).slice(0, 10)
-                        : 'Date not set'}
-                    </span>
-                  </div>
-                ))}
-                {viewExam.examSubjects?.length === 0 ? (
-                  <p className="px-3 py-4 text-sm text-[var(--muted)]">No subjects are attached.</p>
-                ) : null}
+              <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                Subject Timetable ({viewExam.examSubjects?.length ?? 0} papers)
+              </h3>
+              <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+                <table className="w-full min-w-[560px] text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] bg-slate-50/80 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">
+                      <th className="px-3.5 py-2.5">Code</th>
+                      <th className="px-3.5 py-2.5">Subject</th>
+                      <th className="px-3.5 py-2.5">Branch</th>
+                      <th className="px-3.5 py-2.5">Exam Date</th>
+                      <th className="px-3.5 py-2.5">Session</th>
+                      <th className="px-3.5 py-2.5">Timing</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border)]">
+                    {(viewExam.examSubjects ?? []).map((subject) => (
+                      <tr key={subject.id} className="hover:bg-slate-50/60 transition">
+                        <td className="px-3.5 py-2.5 font-bold text-slate-900">
+                          {subject.subject?.code ?? subject.subjectId}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-slate-700">
+                          {subject.subject?.name ?? '—'}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-slate-600">
+                          {subject.branch || 'Common'}
+                        </td>
+                        <td className="px-3.5 py-2.5 font-medium text-slate-900">
+                          {fmtDate(subject.examDate)}
+                        </td>
+                        <td className="px-3.5 py-2.5">
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                            {subject.session || 'FN'}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-slate-600">
+                          {subject.startTime && subject.endTime
+                            ? `${subject.startTime} – ${subject.endTime}`
+                            : '10:00 AM – 12:00 PM'}
+                        </td>
+                      </tr>
+                    ))}
+                    {viewExam.examSubjects?.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3.5 py-4 text-center text-xs text-[var(--muted)]">
+                          No subjects are attached.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
               </div>
             </section>
           </div>

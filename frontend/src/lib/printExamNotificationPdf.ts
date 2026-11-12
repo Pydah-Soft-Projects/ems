@@ -85,50 +85,38 @@ function matchesBranch(subjectBranch: string | null | undefined, targetBranch: s
   const s = (subjectBranch || '').trim();
   const t = targetBranch.trim();
 
-  // If subject has no branch specified, inspect subject code prefix
-  if (!s) {
-    if (subjectCode) {
-      const codeNorm = normalizeAlpha(subjectCode);
-      const isCSEAI = codeNorm.includes('CSEAI') || codeNorm.includes('AIML');
-      const isECE = codeNorm.includes('ECE');
-      const isMEC = codeNorm.includes('MEC') || codeNorm.includes('ME');
-      const isCSE = codeNorm.includes('CSE') && !isCSEAI;
-
-      const tNorm = normalizeAlpha(t);
-      if (isCSEAI && (tNorm.includes('AI') || tNorm.includes('ML') || tNorm.includes('CSM'))) return true;
-      if (isECE && (tNorm.includes('ECE') || tNorm.includes('ELECTRONIC'))) return true;
-      if (isMEC && (tNorm.includes('ME') || tNorm.includes('MEC') || tNorm.includes('MECHANIC'))) return true;
-      if (isCSE && (tNorm === 'CSE' || tNorm.includes('COMPUTERSCIENCE') || tNorm.includes('05CSE'))) return true;
-    }
-    return false;
+  // If subject has no branch specified or marked COMMON/ALL, it belongs to all branches in this exam
+  if (!s || s.toUpperCase() === 'ALL' || s.toUpperCase() === 'COMMON') {
+    return true;
   }
 
   // Exact match
   if (s.toLowerCase() === t.toLowerCase()) return true;
 
-  const sNorm = normalizeAlpha(s);
-  const tNorm = normalizeAlpha(t);
+  const sNorm = normalizeAlpha(s.replace(/&/g, 'AND'));
+  const tNorm = normalizeAlpha(t.replace(/&/g, 'AND'));
   if (sNorm === tNorm) return true;
 
   // Branch Category Helpers
   const isCSECore = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return (
       n === 'CSE' ||
       n === 'COMPUTERSCIENCE' ||
       n === 'COMPUTERSCIENCEANDENGINEERING' ||
+      n === 'COMPUTERSCIENCEENGINEERING' ||
       n === '05CSE' ||
       n === 'CSE05'
     );
   };
 
   const isCSEAI = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return n === 'CSEAI' || n === 'AI' || n === 'ARTIFICIALINTELLIGENCE' || n === '43CSD';
   };
 
   const isCSEML = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return (
       n === 'CSEAIML' ||
       n === 'CSEAIANDML' ||
@@ -140,17 +128,20 @@ function matchesBranch(subjectBranch: string | null | undefined, targetBranch: s
   };
 
   const isECE = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return (
       n === 'ECE' ||
+      n === 'ELECTRONICS' ||
       n === 'ELECTRONICSANDCOMMUNICATION' ||
+      n === 'ELECTRONICSCOMMUNICATION' ||
       n === 'ELECTRONICSANDCOMMUNICATIONENGINEERING' ||
+      n === 'ELECTRONICSCOMMUNICATIONENGINEERING' ||
       n === '04ECE'
     );
   };
 
   const isME = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return (
       n === 'ME' ||
       n === 'MEC' ||
@@ -161,22 +152,23 @@ function matchesBranch(subjectBranch: string | null | undefined, targetBranch: s
   };
 
   const isCE = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return n === 'CE' || n === 'CIVIL' || n === 'CIVILENGINEERING' || n === '01CE';
   };
 
   const isEEE = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return (
       n === 'EEE' ||
       n === 'ELECTRICAL' ||
       n === 'ELECTRICALANDELECTRONICSENGINEERING' ||
+      n === 'ELECTRICALELECTRONICSENGINEERING' ||
       n === '02EEE'
     );
   };
 
   const isIT = (v: string) => {
-    const n = normalizeAlpha(v);
+    const n = normalizeAlpha(v.replace(/&/g, 'AND'));
     return n === 'IT' || n === 'INFORMATIONTECHNOLOGY' || n === '12IT';
   };
 
@@ -323,13 +315,43 @@ export function downloadTimetableNotificationPdf(options: TimetableNotificationP
     }
   }
 
-  const yearRoman = toRoman(exam.yearOfStudy || 1);
-  const semRoman = toRoman(exam.semester || 1);
-  const courseUpper = (exam.course || 'B.TECH').toUpperCase();
+  const courses = exam.scopes?.length
+    ? [...new Set(exam.scopes.map((s) => s.course).filter(Boolean))]
+    : [exam.course].filter(Boolean);
+  const courseStr = (courses.length > 0 ? courses.join(', ') : 'B.TECH').toUpperCase();
+
+  const years = exam.scopes?.length
+    ? [...new Set(exam.scopes.map((s) => s.yearOfStudy).filter(Boolean))].sort((a, b) => a - b)
+    : [exam.yearOfStudy].filter(Boolean);
+  const yearStr = years.length > 0 ? years.map(toRoman).join(', ') : toRoman(1);
+
+  const sems = exam.scopes?.length
+    ? [...new Set(exam.scopes.map((s) => s.semester).filter(Boolean))].sort((a, b) => a - b)
+    : [exam.semester].filter(Boolean);
+  const semStr = sems.length > 0 ? sems.map(toRoman).join(', ') : toRoman(1);
 
   // Header strings
-  const topScopeTag = `${yearRoman} ${courseUpper} ${semRoman} SEMESTER (${regCode})`;
-  const examTitleUpper = `${yearRoman} ${courseUpper} ${semRoman} SEMESTER (${regCode} REGULATION) ${exam.name.toUpperCase()}`;
+  const topScopeTag = `${yearStr} ${courseStr} ${semStr} SEMESTER (${regCode})`;
+
+  const rawExamName = exam.name.toUpperCase().trim();
+  const hasAcademicPrefix =
+    rawExamName.includes('SEMESTER') ||
+    rawExamName.includes('B.TECH') ||
+    rawExamName.includes('M.TECH') ||
+    rawExamName.includes('MCA') ||
+    rawExamName.includes('MBA');
+
+  let examTitleUpper = '';
+  if (hasAcademicPrefix) {
+    if (!rawExamName.includes(regCode)) {
+      examTitleUpper = `${rawExamName} (${regCode} REGULATION)`;
+    } else {
+      examTitleUpper = rawExamName;
+    }
+  } else {
+    examTitleUpper = `${yearStr} ${courseStr} ${semStr} SEMESTER (${regCode} REGULATION) - ${rawExamName}`;
+  }
+
   const tableTitle = isRevised ? 'R E V I S E D   T I M E   T A B L E' : 'T I M E   T A B L E';
 
   // Draw Document Header
@@ -391,14 +413,22 @@ export function downloadTimetableNotificationPdf(options: TimetableNotificationP
 
   drawDocumentHeader();
 
-  // Helper: Find subjects scheduled for branch B on date D
+  // Helper: Find subjects scheduled for branch B on date D (deduplicating identical subjects in same cell)
   const getSubjectsForCell = (branchName: string, dateStr: string): ExamSubject[] => {
-    return (exam.examSubjects || []).filter((s) => {
+    const matched = (exam.examSubjects || []).filter((s) => {
       if (!s.examDate) return false;
       const sDate = String(s.examDate).slice(0, 10);
       if (sDate !== dateStr) return false;
 
       return matchesBranch(s.branch, branchName, s.subject?.code);
+    });
+
+    const seenKeys = new Set<string>();
+    return matched.filter((s) => {
+      const key = `${s.subject?.code || s.subjectId}|${s.subject?.name || ''}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
     });
   };
 
@@ -651,38 +681,38 @@ export function downloadTimetableNotificationPdf(options: TimetableNotificationP
   }
 
   // Footer Notes & Signatures
-  if (y + 60 > pageHeight - 20) {
+  if (y + 75 > pageHeight - 20) {
     doc.addPage();
     y = margin;
   }
 
-  y += 12;
+  y += 14;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
   doc.setTextColor(0, 0, 0);
   doc.text('NOTE:', xStart, y);
-  y += 9;
+  y += 11;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
+  doc.setFontSize(7.5);
   doc.text(
     'i)   ANY OMISSIONS OR CLASHES IN THIS TIME TABLE MAY PLEASE BE INFORMED TO THE CONTROLLER OF EXAMINATIONS IMMEDIATELY.',
     xStart + 10,
     y,
   );
-  y += 8;
+  y += 11;
   doc.text(
     'ii)  EVEN IF GOVERNMENT DECLARES HOLIDAY ON ANY OF THE ABOVE DATES, THE EXAMINATIONS SHALL BE CONDUCTED AS SCHEDULED.',
     xStart + 10,
     y,
   );
-  y += 8;
+  y += 11;
   doc.text(
     'iii) THE PRINCIPALS / HODs ARE REQUESTED TO INFORM THE STUDENTS THAT ANY MOBILE PHONES AND PROGRAMMABLE CALCULATORS ARE NOT PERMITTED.',
     xStart + 10,
     y,
   );
-  y += 20;
+  y += 24;
 
   // Signatures on right
   const dateFormatted = new Date().toLocaleDateString('en-IN', {
