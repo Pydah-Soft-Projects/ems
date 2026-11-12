@@ -139,6 +139,13 @@ export const navigation: NavGroup[] = [
         privilege: ['marks:read', 'marks:upload'],
       },
       {
+        href: '/dashboard/total-marks',
+        label: 'Student Total Marks',
+        description: 'Semester-wise student marks ledger, total marks summary, and PDF parsing marksheet upload',
+        icon: 'student-results',
+        privilege: ['marks:read', 'marks:upload', 'exams:read', 'exams:results', 'results:read'],
+      },
+      {
         href: '/dashboard/results',
         label: 'Student Results',
         description: 'Comprehensive student-wise result statement with internals, externals, semester & revaluations',

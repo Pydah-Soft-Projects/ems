@@ -67,6 +67,8 @@ class MarksService {
     examSubjectRepo = null,
     emsAuditLogRepo = null,
     regInternalSettings = null,
+    subjectMappingRepo = null,
+    regulationRepo = null,
   ) {
     this.markRepo = studentMarkRepo;
     this.examRepo = examRepo;
@@ -80,6 +82,8 @@ class MarksService {
     this.examSubjectRepo = examSubjectRepo;
     this.auditRepo = emsAuditLogRepo;
     this.regInternalSettings = regInternalSettings;
+    this.subjectMappingRepo = subjectMappingRepo;
+    this.regulationRepo = regulationRepo;
   }
 
   /**
@@ -1803,6 +1807,802 @@ class MarksService {
       allClearCount: finalStudents.filter((s) => s.status === 'PASSED').length,
       backlogCount: finalStudents.filter((s) => s.status === 'BACKLOGS').length,
       students: finalStudents,
+    };
+  }
+
+  /**
+   * Dedicated Semester-wise Total Marks Ledger:
+   * Retrieves all mapped semester subjects and enrolled students based on
+   * Academic Year (Batch), College, Course, Branch, Year of Study, Semester & Regulation,
+   * calculates individual subject marks (Int, Ext, Tot, Grade, GP, Credits)
+   * as well as aggregate Grand Total Marks, Percentage, Credits, SGPA and Pass/Fail status.
+   */
+  async getSemesterTotalMarksLedger(params = {}) {
+    const {
+      examId,
+      regulationId,
+      regulationCode,
+      college,
+      collegeName,
+      course,
+      courseName,
+      branch,
+      branchName,
+      batch,
+      academicYear,
+      yearOfStudy,
+      semester,
+      search,
+      status,
+    } = params;
+
+    const targetCollege = (college || collegeName || '').trim();
+    const targetCourse = (course || courseName || '').trim();
+    const targetBranch = (branch || branchName || '').trim();
+    const targetBatch = (batch || academicYear || '').trim();
+    const targetYear = yearOfStudy ? Number(yearOfStudy) : null;
+    const targetSem = semester ? Number(semester) : null;
+    let regId = regulationId ? Number(regulationId) : null;
+
+    // Resolve regulationId from code if needed
+    if (!regId && regulationCode && this.regulationRepo) {
+      try {
+        const foundReg = await this.regulationRepo.findOne({
+          where: { code: String(regulationCode).trim() },
+        });
+        if (foundReg) regId = foundReg.id;
+      } catch (err) {}
+    }
+
+    // Resolve matching exam notification if possible
+    let exam = null;
+    if (examId) {
+      exam = await this.examRepo.findOne({
+        where: { id: examId },
+        relations: ['examSubjects', 'examSubjects.subject', 'regulation', 'scopes'],
+      });
+    } else {
+      const qb = this.examRepo.createQueryBuilder('e')
+        .leftJoinAndSelect('e.examSubjects', 'examSubjects')
+        .leftJoinAndSelect('examSubjects.subject', 'subject')
+        .leftJoinAndSelect('e.regulation', 'regulation')
+        .leftJoinAndSelect('e.scopes', 'scopes')
+        .orderBy('e.createdAt', 'DESC');
+
+      if (regId) qb.andWhere('e.regulationId = :regId', { regId });
+      if (targetSem) qb.andWhere('e.semester = :targetSem', { targetSem });
+      if (targetYear) qb.andWhere('e.yearOfStudy = :targetYear', { targetYear });
+      if (targetCourse && targetCourse !== 'ALL') {
+        qb.andWhere('LOWER(e.course) = LOWER(:course)', { course: targetCourse });
+      }
+      if (targetBranch && targetBranch !== 'ALL') {
+        qb.andWhere('(LOWER(e.branch) LIKE LOWER(:brLike) OR LOWER(e.branch) = :br)', {
+          brLike: `%${targetBranch}%`,
+          br: 'ALL',
+        });
+      }
+      if (targetBatch && targetBatch !== 'ALL') {
+        qb.andWhere('(e.batch = :batch OR e.batch IS NULL)', { batch: targetBatch });
+      }
+
+      exam = await qb.getOne().catch(() => null);
+
+      if (!exam) {
+        // Fallback to most recent exam
+        exam = await this.examRepo.findOne({
+          relations: ['examSubjects', 'examSubjects.subject', 'regulation', 'scopes'],
+          order: { createdAt: 'DESC' },
+        }).catch(() => null);
+      }
+    }
+
+    // 1. Resolve Regulation & Scope Metadata
+    let regCode = exam?.regulation?.code || regulationCode || 'N/A';
+    if (!regId && exam?.regulationId) regId = exam.regulationId;
+
+    const resolvedScope = {
+      regulationId: regId || exam?.regulationId || null,
+      regulationCode: regCode,
+      college: targetCollege || exam?.college || 'PYDAH COLLEGE OF ENGINEERING',
+      course: targetCourse || exam?.course || 'B.Tech',
+      branch: targetBranch || exam?.branch || 'CSE',
+      batch: targetBatch || exam?.batch || '2023-2027',
+      yearOfStudy: targetYear || exam?.yearOfStudy || 1,
+      semester: targetSem || exam?.semester || 1,
+    };
+
+    // 2. Build Semester Subjects list from SubjectMappingEntry & ExamSubjects
+    const subjectsMap = new Map();
+
+    // A. Query mapped subjects from subject_mapping_entries
+    if (this.subjectMappingRepo) {
+      try {
+        const sqb = this.subjectMappingRepo.createQueryBuilder('m')
+          .leftJoinAndSelect('m.subject', 'subject');
+
+        if (regId) {
+          sqb.andWhere('m.regulationId = :regId', { regId });
+        }
+        if (resolvedScope.semester) {
+          sqb.andWhere('m.semester = :sem', { sem: Number(resolvedScope.semester) });
+        }
+        if (resolvedScope.yearOfStudy) {
+          sqb.andWhere('m.yearOfStudy = :yr', { yr: Number(resolvedScope.yearOfStudy) });
+        }
+        if (resolvedScope.branch && resolvedScope.branch !== 'ALL') {
+          sqb.andWhere('LOWER(m.branchName) = LOWER(:bName)', { bName: resolvedScope.branch });
+        }
+        if (resolvedScope.course && resolvedScope.course !== 'ALL') {
+          sqb.andWhere('LOWER(m.courseName) = LOWER(:cName)', { cName: resolvedScope.course });
+        }
+
+        const mappings = await sqb.getMany();
+        for (const m of mappings) {
+          const s = m.subject;
+          if (!s) continue;
+          const code = String(s.code || '').toUpperCase().trim();
+          if (!code || subjectsMap.has(code)) continue;
+
+          const rawType = String(s.type || '').toUpperCase();
+          const isLab =
+            rawType.includes('LAB') ||
+            rawType.includes('PRACTICAL') ||
+            rawType === 'P' ||
+            code.endsWith('L') ||
+            code.endsWith('P');
+
+          const maxInt = Number(s.internalMarks ?? 30);
+          const maxExt = Number(s.externalMarks ?? 70);
+          const maxTot = Number(s.totalMarks ?? (maxInt + maxExt));
+          const credits = Number(s.credits ?? 3);
+
+          subjectsMap.set(code, {
+            id: s.id,
+            code,
+            name: s.name || code,
+            type: isLab ? 'LAB' : (rawType || 'THEORY'),
+            maxInternalMarks: maxInt,
+            maxExternalMarks: maxExt,
+            maxTotalMarks: maxTot,
+            credits: credits > 0 ? credits : 3,
+          });
+        }
+      } catch (mErr) {
+        console.warn('Could not query subject mappings:', mErr.message);
+      }
+    }
+
+    // B. Also include any subjects configured directly on the Exam
+    if (exam && exam.examSubjects) {
+      for (const es of exam.examSubjects) {
+        const code = String(es.subject?.code || '').toUpperCase().trim();
+        if (!code || subjectsMap.has(code)) continue;
+
+        const rawType = String(es.subject?.type || '').toUpperCase();
+        const isLab =
+          rawType.includes('LAB') ||
+          rawType.includes('PRACTICAL') ||
+          rawType === 'P' ||
+          code.endsWith('L') ||
+          code.endsWith('P');
+
+        const maxInt = Number(es.subject?.internalMarks ?? 30);
+        const maxExt = Number(es.subject?.externalMarks ?? 70);
+        const maxTot = Number(es.subject?.totalMarks ?? (maxInt + maxExt));
+        const credits = Number(es.subject?.credits ?? 3);
+
+        subjectsMap.set(code, {
+          id: es.subjectId,
+          code,
+          name: es.subject?.name || code,
+          type: isLab ? 'LAB' : (rawType || 'THEORY'),
+          maxInternalMarks: maxInt,
+          maxExternalMarks: maxExt,
+          maxTotalMarks: maxTot,
+          credits: credits > 0 ? credits : 3,
+        });
+      }
+    }
+
+    const semesterSubjects = Array.from(subjectsMap.values());
+    const semesterTotalMaxMarks = semesterSubjects.reduce((sum, s) => sum + (s.maxTotalMarks || 100), 0);
+    const semesterTotalCredits = semesterSubjects.reduce((sum, s) => sum + (s.credits || 0), 0);
+
+    // 3. Find Enrolled / Scope Students
+    const studentMap = new Map();
+
+    // A. From SDMS
+    if (this.sdms && this.sdms.studentRepo) {
+      try {
+        const sqb = this.sdms.studentRepo.createQueryBuilder('s')
+          .select([
+            's.id',
+            's.pinNo',
+            's.admissionNumber',
+            's.studentName',
+            's.college',
+            's.course',
+            's.branch',
+            's.batch',
+            's.section',
+            's.currentYear',
+            's.currentSemester',
+            's.studentStatus',
+          ]);
+
+        if (resolvedScope.course && resolvedScope.course !== 'ALL') {
+          sqb.andWhere('LOWER(s.course) = LOWER(:course)', { course: resolvedScope.course });
+        }
+        if (resolvedScope.branch && resolvedScope.branch !== 'ALL') {
+          sqb.andWhere('LOWER(s.branch) = LOWER(:branch)', { branch: resolvedScope.branch });
+        }
+        if (resolvedScope.batch && resolvedScope.batch !== 'ALL') {
+          sqb.andWhere('s.batch = :batch', { batch: resolvedScope.batch });
+        }
+        if (resolvedScope.college && resolvedScope.college !== 'ALL') {
+          sqb.andWhere('LOWER(s.college) LIKE LOWER(:college)', { college: `%${resolvedScope.college}%` });
+        }
+
+        const sdmsStudents = await sqb.getMany();
+        for (const st of sdmsStudents) {
+          const r = String(st.pinNo || st.admissionNumber || '').toUpperCase().trim();
+          if (!r) continue;
+          studentMap.set(r, {
+            rollNumber: r,
+            studentName: st.studentName || '',
+            branch: st.branch || resolvedScope.branch || 'GENERAL',
+            section: st.section || null,
+          });
+        }
+      } catch (sdErr) {
+        console.warn('Could not query SDMS students for ledger:', sdErr.message);
+      }
+    }
+
+    // B. From Exam Applications
+    if (exam) {
+      try {
+        const apps = await this.applicationRepo.find({ where: { examId: exam.id } });
+        for (const a of apps) {
+          const r = String(a.studentRollNumber || '').toUpperCase().trim();
+          if (!r) continue;
+          if (!studentMap.has(r)) {
+            studentMap.set(r, {
+              rollNumber: r,
+              studentName: a.studentName || '',
+              branch: a.studentBranch || resolvedScope.branch || 'GENERAL',
+              section: a.studentSection || null,
+            });
+          }
+        }
+      } catch (aErr) {}
+    }
+
+    // 4. Query all marks for this scope / exam
+    const subjectCodes = Array.from(subjectsMap.keys());
+    let existingMarks = [];
+
+    if (exam) {
+      existingMarks = await this.markRepo.find({
+        where: { examId: exam.id },
+        order: { studentRollNumber: 'ASC', subjectCode: 'ASC' },
+      });
+    } else if (subjectCodes.length > 0) {
+      existingMarks = await this.markRepo.createQueryBuilder('m')
+        .where('m.subjectCode IN (:...codes)', { codes: subjectCodes })
+        .orderBy('m.studentRollNumber', 'ASC')
+        .addOrderBy('m.subjectCode', 'ASC')
+        .getMany();
+    }
+
+    // Map marks by `${roll}|${subjectCode}`
+    const marksByStudentSub = new Map();
+    for (const m of existingMarks) {
+      const r = String(m.studentRollNumber || '').toUpperCase().trim();
+      const sc = String(m.subjectCode || '').toUpperCase().trim();
+      const key = `${r}|${sc}`;
+
+      let current = marksByStudentSub.get(key) || {
+        studentRollNumber: r,
+        studentName: m.studentName || '',
+        subjectCode: sc,
+        subjectName: m.subjectName || '',
+        internalMarks: null,
+        maxInternalMarks: m.maxInternalMarks != null ? Number(m.maxInternalMarks) : null,
+        externalMarks: null,
+        maxExternalMarks: m.maxExternalMarks != null ? Number(m.maxExternalMarks) : null,
+        totalMarks: null,
+        maxTotalMarks: m.maxTotalMarks != null ? Number(m.maxTotalMarks) : null,
+        grade: null,
+        gradePoints: null,
+        credits: m.credits != null ? Number(m.credits) : null,
+        passed: null,
+        isAbsent: false,
+        revaluation: null,
+      };
+
+      if (m.studentName && !current.studentName) current.studentName = m.studentName;
+      if (m.internalMarks != null) current.internalMarks = Number(m.internalMarks);
+      if (m.maxInternalMarks != null) current.maxInternalMarks = Number(m.maxInternalMarks);
+      if (m.externalMarks != null) current.externalMarks = Number(m.externalMarks);
+      if (m.maxExternalMarks != null) current.maxExternalMarks = Number(m.maxExternalMarks);
+      if (m.totalMarks != null) current.totalMarks = Number(m.totalMarks);
+      if (m.maxTotalMarks != null) current.maxTotalMarks = Number(m.maxTotalMarks);
+      if (m.grade) current.grade = m.grade;
+      if (m.gradePoints != null) current.gradePoints = Number(m.gradePoints);
+      if (m.credits != null && Number(m.credits) > 0) current.credits = Number(m.credits);
+      if (m.passed != null) current.passed = !!m.passed;
+      if (m.isAbsent) current.isAbsent = true;
+
+      if (m.category === 'REVALUATION' && m.updatedGrade) {
+        current.grade = m.updatedGrade;
+        if (m.updatedMarks != null) current.totalMarks = Number(m.updatedMarks);
+      }
+
+      marksByStudentSub.set(key, current);
+
+      // Ensure student is added to studentMap
+      if (!studentMap.has(r)) {
+        studentMap.set(r, {
+          rollNumber: r,
+          studentName: m.studentName || '',
+          branch: resolvedScope.branch || 'GENERAL',
+          section: null,
+        });
+      }
+    }
+
+    const computeGradePoints = (grade) => {
+      const g = String(grade || '').toUpperCase().trim();
+      if (['O', 'S'].includes(g)) return 10.0;
+      if (['A+'].includes(g)) return 9.0;
+      if (['A'].includes(g)) return 8.0;
+      if (['B+'].includes(g)) return 7.0;
+      if (['B'].includes(g)) return 6.0;
+      if (['C'].includes(g)) return 6.0;
+      if (['D', 'E', 'P'].includes(g)) return 5.0;
+      return 0.0;
+    };
+
+    const inferGradeFromMarks = (total, max = 100) => {
+      const pct = (Number(total) / Number(max)) * 100;
+      if (pct >= 90) return 'O';
+      if (pct >= 80) return 'A+';
+      if (pct >= 70) return 'A';
+      if (pct >= 60) return 'B+';
+      if (pct >= 50) return 'B';
+      if (pct >= 40) return 'C';
+      return 'F';
+    };
+
+    const studentRows = [];
+
+    for (const [roll, studentInfo] of studentMap.entries()) {
+      const subjectMarks = [];
+      let totalMarksSecured = 0;
+      let evaluatedMaxMarks = 0;
+      let totalGradePointsCredits = 0;
+      let totalCreditsEarned = 0;
+      let evaluatedCredits = 0;
+      let passedCount = 0;
+      let backlogs = 0;
+      let hasAnyMarks = false;
+
+      for (const sub of semesterSubjects) {
+        const key = `${roll}|${sub.code}`;
+        const record = marksByStudentSub.get(key);
+
+        let intMarks = record?.internalMarks ?? null;
+        let extMarks = record?.externalMarks ?? null;
+        let totMarks = record?.totalMarks ?? null;
+        let isAbsent = !!record?.isAbsent;
+        let grade = record?.grade ?? null;
+        let gradePoints = record?.gradePoints ?? null;
+        let credits = (record?.credits && record.credits > 0) ? record.credits : sub.credits;
+
+        if (totMarks == null && intMarks != null && extMarks != null && !isAbsent) {
+          totMarks = Number(intMarks) + Number(extMarks);
+        }
+
+        if (totMarks != null || intMarks != null || extMarks != null || isAbsent || grade != null) {
+          hasAnyMarks = true;
+        }
+
+        if (isAbsent) {
+          grade = 'AB';
+          gradePoints = 0;
+        } else if (!grade && totMarks != null) {
+          grade = inferGradeFromMarks(totMarks, sub.maxTotalMarks);
+        }
+
+        if (gradePoints == null && grade != null) {
+          gradePoints = computeGradePoints(grade);
+        }
+
+        let isPass = null;
+        if (record?.passed != null) {
+          isPass = record.passed;
+        } else if (grade) {
+          isPass = !FAIL_GRADES.has(String(grade).toUpperCase());
+        } else if (totMarks != null) {
+          isPass = Number(totMarks) >= (sub.maxTotalMarks * 0.4);
+        }
+
+        if (isPass !== null) {
+          if (isPass) {
+            passedCount++;
+            totalCreditsEarned += credits;
+          } else {
+            backlogs++;
+          }
+        }
+
+        if (totMarks != null && !isAbsent) {
+          totalMarksSecured += Number(totMarks);
+          evaluatedMaxMarks += sub.maxTotalMarks;
+        } else if (isAbsent) {
+          evaluatedMaxMarks += sub.maxTotalMarks;
+        }
+
+        if (gradePoints != null && credits > 0) {
+          totalGradePointsCredits += gradePoints * credits;
+          evaluatedCredits += credits;
+        }
+
+        subjectMarks.push({
+          subjectCode: sub.code,
+          subjectName: sub.name,
+          type: sub.type,
+          internalMarks: intMarks,
+          maxInternalMarks: sub.maxInternalMarks,
+          externalMarks: extMarks,
+          maxExternalMarks: sub.maxExternalMarks,
+          totalMarks: totMarks,
+          maxTotalMarks: sub.maxTotalMarks,
+          grade,
+          gradePoints,
+          credits,
+          passed: isPass,
+          isAbsent,
+        });
+      }
+
+      const totalPossibleMax = semesterTotalMaxMarks > 0 ? semesterTotalMaxMarks : evaluatedMaxMarks;
+      const percentage = evaluatedMaxMarks > 0
+        ? Number(((totalMarksSecured / evaluatedMaxMarks) * 100).toFixed(2))
+        : 0;
+
+      const sgpa = evaluatedCredits > 0
+        ? Number((totalGradePointsCredits / evaluatedCredits).toFixed(2))
+        : 0;
+
+      let studentStatus = 'PENDING';
+      if (hasAnyMarks) {
+        studentStatus = backlogs === 0 && passedCount > 0 ? 'PASSED' : 'BACKLOGS';
+      }
+
+      studentRows.push({
+        rollNumber: roll,
+        studentName: studentInfo.studentName,
+        branch: studentInfo.branch,
+        section: studentInfo.section,
+        subjectMarks,
+        totalMarksSecured,
+        totalMaxMarks: totalPossibleMax,
+        percentage,
+        sgpa,
+        totalCreditsEarned,
+        totalCreditsPossible: semesterTotalCredits,
+        passedCount,
+        backlogs,
+        status: studentStatus,
+        hasMarks: hasAnyMarks,
+      });
+    }
+
+    // 5. Apply filters (search, branch, status)
+    let filteredStudents = studentRows;
+    if (branch && branch !== 'ALL') {
+      const bUpper = String(branch).toUpperCase();
+      filteredStudents = filteredStudents.filter(
+        (s) => String(s.branch || '').toUpperCase() === bUpper
+      );
+    }
+
+    if (status && status !== 'ALL') {
+      filteredStudents = filteredStudents.filter((s) => s.status === status);
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filteredStudents = filteredStudents.filter(
+        (s) =>
+          s.rollNumber.toLowerCase().includes(q) ||
+          (s.studentName && s.studentName.toLowerCase().includes(q))
+      );
+    }
+
+    filteredStudents.sort((a, b) => a.rollNumber.localeCompare(b.rollNumber, undefined, { numeric: true }));
+
+    // 6. Calculate Stats
+    const totalCount = studentRows.length;
+    const evaluated = studentRows.filter((s) => s.hasMarks);
+    const passed = studentRows.filter((s) => s.status === 'PASSED');
+    const withBacklogs = studentRows.filter((s) => s.status === 'BACKLOGS');
+    const pending = studentRows.filter((s) => s.status === 'PENDING');
+
+    const passPct = evaluated.length > 0
+      ? Number(((passed.length / evaluated.length) * 100).toFixed(1))
+      : 0;
+
+    const highestMarks = evaluated.length > 0
+      ? Math.max(...evaluated.map((s) => s.totalMarksSecured))
+      : 0;
+
+    const avgMarks = evaluated.length > 0
+      ? Number((evaluated.reduce((acc, s) => acc + s.totalMarksSecured, 0) / evaluated.length).toFixed(1))
+      : 0;
+
+    const avgSgpa = evaluated.length > 0
+      ? Number((evaluated.reduce((acc, s) => acc + s.sgpa, 0) / evaluated.length).toFixed(2))
+      : 0;
+
+    return {
+      notification: exam ? {
+        id: exam.id,
+        title: exam.name,
+        name: exam.name,
+        type: exam.type,
+        regulationCode: exam.regulation?.code || exam.regulationId || 'N/A',
+        course: exam.course || resolvedScope.course,
+        branch: exam.branch || resolvedScope.branch,
+        semester: exam.semester || resolvedScope.semester,
+        yearOfStudy: exam.yearOfStudy || resolvedScope.yearOfStudy,
+        batch: exam.batch || resolvedScope.batch,
+        academicYear: exam.academicYear || null,
+        status: exam.status,
+      } : null,
+      semesterScope: resolvedScope,
+      branches: Array.from(new Set(studentRows.map((s) => s.branch).filter(Boolean))),
+      semesterSubjects,
+      semesterTotalMaxMarks,
+      semesterTotalCredits,
+      students: filteredStudents,
+      stats: {
+        totalStudents: totalCount,
+        evaluatedStudents: evaluated.length,
+        passedStudents: passed.length,
+        backlogStudents: withBacklogs.length,
+        pendingStudents: pending.length,
+        passPercentage: passPct,
+        highestTotalMarks: highestMarks,
+        averageTotalMarks: avgMarks,
+        averageSgpa: avgSgpa,
+      },
+    };
+  }
+
+  /**
+   * Save or update semester marks (Internal, External, Total, Grade, Result)
+   * originating from PDF parsing sheet or table entry.
+   */
+  async saveSemesterMarks(examId, { rows, academicScope }, actor = {}) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw AppError.badRequest('No marks records provided for update');
+    }
+
+    let exam = null;
+    if (examId) {
+      exam = await this.examRepo.findOne({
+        where: { id: examId },
+        relations: ['examSubjects', 'examSubjects.subject', 'regulation'],
+      });
+    } else if (academicScope) {
+      const { course, branch, batch, semester, yearOfStudy, regulationId } = academicScope;
+      const qb = this.examRepo.createQueryBuilder('e')
+        .leftJoinAndSelect('e.examSubjects', 'examSubjects')
+        .leftJoinAndSelect('examSubjects.subject', 'subject')
+        .leftJoinAndSelect('e.regulation', 'regulation')
+        .orderBy('e.createdAt', 'DESC');
+
+      if (regulationId) qb.andWhere('e.regulationId = :regulationId', { regulationId });
+      if (semester) qb.andWhere('e.semester = :sem', { sem: Number(semester) });
+      if (yearOfStudy) qb.andWhere('e.yearOfStudy = :yr', { yr: Number(yearOfStudy) });
+      if (course && course !== 'ALL') qb.andWhere('LOWER(e.course) = LOWER(:course)', { course });
+      if (branch && branch !== 'ALL') qb.andWhere('LOWER(e.branch) LIKE LOWER(:branch)', { branch: `%${branch}%` });
+      if (batch && batch !== 'ALL') qb.andWhere('(e.batch = :batch OR e.batch IS NULL)', { batch });
+
+      exam = await qb.getOne().catch(() => null);
+      if (exam) examId = exam.id;
+    }
+
+    const uploadedBy = actor?.fullName?.trim() || actor?.username?.trim() || 'Staff Desk';
+
+    const subjectMap = new Map();
+    if (exam && exam.examSubjects) {
+      for (const es of exam.examSubjects) {
+        const code = es.subject?.code?.trim();
+        if (code) {
+          subjectMap.set(code.toUpperCase(), {
+            code,
+            name: es.subject?.name || '',
+            internalMarks: es.subject?.internalMarks ?? 30,
+            externalMarks: es.subject?.externalMarks ?? 70,
+            totalMarks: es.subject?.totalMarks ?? 100,
+            credits: es.subject?.credits ?? 3,
+          });
+        }
+      }
+    }
+
+    if (this.subjectMappingRepo) {
+      try {
+        const mappings = await this.subjectMappingRepo.find({
+          relations: ['subject'],
+        });
+        for (const m of mappings) {
+          const code = m.subject?.code?.trim();
+          if (code && !subjectMap.has(code.toUpperCase())) {
+            subjectMap.set(code.toUpperCase(), {
+              code,
+              name: m.subject?.name || '',
+              internalMarks: m.subject?.internalMarks ?? 30,
+              externalMarks: m.subject?.externalMarks ?? 70,
+              totalMarks: m.subject?.totalMarks ?? 100,
+              credits: m.subject?.credits ?? 3,
+            });
+          }
+        }
+      } catch (err) {}
+    }
+
+    const computeGradePoints = (grade) => {
+      const g = String(grade || '').toUpperCase().trim();
+      if (['O', 'S'].includes(g)) return 10.0;
+      if (['A+'].includes(g)) return 9.0;
+      if (['A'].includes(g)) return 8.0;
+      if (['B+'].includes(g)) return 7.0;
+      if (['B'].includes(g)) return 6.0;
+      if (['C'].includes(g)) return 6.0;
+      if (['D', 'E', 'P'].includes(g)) return 5.0;
+      return 0.0;
+    };
+
+    const inferGradeFromMarks = (total, max = 100) => {
+      const pct = (Number(total) / Number(max)) * 100;
+      if (pct >= 90) return 'O';
+      if (pct >= 80) return 'A+';
+      if (pct >= 70) return 'A';
+      if (pct >= 60) return 'B+';
+      if (pct >= 50) return 'B';
+      if (pct >= 40) return 'C';
+      return 'F';
+    };
+
+    const existingRecords = examId
+      ? await this.markRepo.find({ where: { examId } })
+      : await this.markRepo.find();
+    const existingMap = new Map();
+    for (const er of existingRecords) {
+      const key = `${er.category}|${er.studentRollNumber.toUpperCase()}|${er.subjectCode.toUpperCase()}`;
+      existingMap.set(key, er);
+    }
+
+    const toSave = [];
+    let savedCount = 0;
+
+    for (const r of rows) {
+      const roll = String(r.rollNumber || r.roll || r.pinNo || '').toUpperCase().trim();
+      const code = String(r.subjectCode || r.code || '').toUpperCase().trim();
+      if (!roll || !code) continue;
+
+      const subInfo = subjectMap.get(code) || {
+        code,
+        name: r.subjectName || code,
+        internalMarks: 30,
+        externalMarks: 70,
+        totalMarks: 100,
+        credits: 3,
+      };
+
+      const isAb = r.isAbsent || String(r.grade).toUpperCase() === 'AB' || String(r.result).toUpperCase() === 'AB';
+      let intMarks = r.internalMarks !== undefined && r.internalMarks !== '' && r.internalMarks !== null
+        ? parseFloat(r.internalMarks)
+        : null;
+      let extMarks = r.externalMarks !== undefined && r.externalMarks !== '' && r.externalMarks !== null
+        ? parseFloat(r.externalMarks)
+        : null;
+      let totMarks = r.totalMarks !== undefined && r.totalMarks !== '' && r.totalMarks !== null
+        ? parseFloat(r.totalMarks)
+        : null;
+
+      if (totMarks === null && intMarks !== null && extMarks !== null && !isAb) {
+        totMarks = intMarks + extMarks;
+      }
+
+      let grade = r.grade ? String(r.grade).toUpperCase().trim() : null;
+      if (isAb) {
+        grade = 'AB';
+      } else if (!grade && totMarks !== null) {
+        grade = inferGradeFromMarks(totMarks, subInfo.totalMarks);
+      }
+
+      const gp = r.gradePoints !== undefined && r.gradePoints !== '' && r.gradePoints !== null
+        ? parseFloat(r.gradePoints)
+        : (grade ? computeGradePoints(grade) : null);
+
+      const credits = r.credits !== undefined && r.credits !== '' && r.credits !== null
+        ? parseFloat(r.credits)
+        : subInfo.credits;
+
+      const passed = normalizeResultFlag(r.result || r.passed, grade);
+
+      // Save as RESULT record
+      const key = `RESULT|${roll}|${code}`;
+      const prior = existingMap.get(key);
+
+      const recordData = {
+        category: 'RESULT',
+        examId,
+        studentRollNumber: roll,
+        studentName: r.studentName ? String(r.studentName).trim() : (prior?.studentName || null),
+        subjectCode: code,
+        subjectName: r.subjectName ? String(r.subjectName).trim() : (subInfo.name || prior?.subjectName || null),
+        internalMarks: intMarks,
+        maxInternalMarks: subInfo.internalMarks,
+        externalMarks: extMarks,
+        maxExternalMarks: subInfo.externalMarks,
+        totalMarks: totMarks,
+        maxTotalMarks: subInfo.totalMarks,
+        grade,
+        gradePoints: gp,
+        credits,
+        passed,
+        isAbsent: isAb,
+        status: isAb ? 'ABSENT' : (passed ? 'PASSED' : 'FAILED'),
+        remarks: r.remarks || 'Updated via PDF Parsing Total Marks Sheet',
+        uploadedBy,
+      };
+
+      if (prior) {
+        toSave.push(this.markRepo.merge(prior, recordData));
+      } else {
+        toSave.push(this.markRepo.create(recordData));
+      }
+      savedCount++;
+    }
+
+    if (toSave.length > 0) {
+      await this.markRepo.save(toSave, { chunk: 200 });
+    }
+
+    // Sync with SubjectResult for student portal visibility
+    try {
+      await this.syncToSubjectResults(
+        examId,
+        {
+          rows: rows.map((r) => {
+            const grade = r.grade ? String(r.grade).toUpperCase().trim() : (r.isAbsent ? 'AB' : 'P');
+            return {
+              rollNumber: r.rollNumber || r.roll,
+              subjectCode: r.subjectCode || r.code,
+              grade,
+              gradePoints: r.gradePoints,
+              credits: r.credits,
+              result: r.result,
+            };
+          }),
+        },
+        uploadedBy
+      );
+    } catch (syncErr) {
+      console.warn('Could not sync to SubjectResults:', syncErr.message);
+    }
+
+    return {
+      success: true,
+      count: savedCount,
+      message: `Successfully saved marks for ${savedCount} student-subject records.`,
     };
   }
 

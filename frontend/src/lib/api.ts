@@ -117,6 +117,7 @@ import type {
   UploadMarksResult,
   MarksHistoryResponse,
   ConsolidatedResultsResponse,
+  SemesterTotalMarksResponse,
 } from '@/types/marks-upload';
 import type {
   InternalMarksOverviewResponse,
@@ -1715,6 +1716,54 @@ export const api = {
     const qs = q.toString();
     return request<ConsolidatedResultsResponse>(
       `/marks/consolidated-results${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  getSemesterTotalMarks(params?: {
+    examId?: number;
+    regulationId?: number;
+    regulationCode?: string;
+    college?: string;
+    course?: string;
+    branch?: string;
+    batch?: string;
+    academicYear?: string;
+    yearOfStudy?: number;
+    semester?: number;
+    search?: string;
+    status?: string;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.examId) q.set('examId', String(params.examId));
+    if (params?.regulationId) q.set('regulationId', String(params.regulationId));
+    if (params?.regulationCode) q.set('regulationCode', params.regulationCode);
+    if (params?.college) q.set('college', params.college);
+    if (params?.course) q.set('course', params.course);
+    if (params?.branch) q.set('branch', params.branch);
+    if (params?.batch) q.set('batch', params.batch);
+    if (params?.academicYear) q.set('academicYear', params.academicYear);
+    if (params?.yearOfStudy) q.set('yearOfStudy', String(params.yearOfStudy));
+    if (params?.semester) q.set('semester', String(params.semester));
+    if (params?.search) q.set('search', params.search);
+    if (params?.status) q.set('status', params.status);
+    const qs = q.toString();
+    return request<SemesterTotalMarksResponse>(
+      `/marks/semester-total-marks${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  saveSemesterMarks(
+    examId: number | null | undefined,
+    rows: any[],
+    academicScope?: any
+  ) {
+    const idParam = examId ? String(examId) : 'scope';
+    return request<{ success: boolean; count: number; message: string }>(
+      `/marks/semester-total-marks/${idParam}/save`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ rows, academicScope }),
+      }
     );
   },
 

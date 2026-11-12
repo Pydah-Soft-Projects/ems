@@ -62,6 +62,66 @@ function createMarksRoutes(services) {
     }),
   );
 
+  /** Get semester-wise student total marks ledger with subjects and calculations */
+  router.get(
+    '/semester-total-marks',
+    requirePrivilege(
+      'exams:read',
+      'exams:results',
+      'marks:read',
+      'marks:upload',
+      'results:read',
+    ),
+    asyncHandler(async (req, res) => {
+      const {
+        examId,
+        regulationId,
+        regulationCode,
+        college,
+        collegeName,
+        course,
+        courseName,
+        branch,
+        branchName,
+        batch,
+        academicYear,
+        yearOfStudy,
+        semester,
+        search,
+        status,
+      } = req.query;
+
+      res.json(
+        await services.marks.getSemesterTotalMarksLedger({
+          examId: examId ? parseId(examId) : undefined,
+          regulationId: regulationId ? parseId(regulationId) : undefined,
+          regulationCode: regulationCode ? String(regulationCode).trim() : undefined,
+          college: college ? String(college).trim() : (collegeName ? String(collegeName).trim() : undefined),
+          course: course ? String(course).trim() : (courseName ? String(courseName).trim() : undefined),
+          branch: branch ? String(branch).trim() : (branchName ? String(branchName).trim() : undefined),
+          batch: batch ? String(batch).trim() : (academicYear ? String(academicYear).trim() : undefined),
+          yearOfStudy: yearOfStudy ? parseId(yearOfStudy) : undefined,
+          semester: semester ? parseId(semester) : undefined,
+          search: search ? String(search).trim() : undefined,
+          status: status ? String(status).trim() : undefined,
+        }),
+      );
+    }),
+  );
+
+  /** Save/update semester marks directly from PDF parsing sheet or ledger table */
+  router.post(
+    '/semester-total-marks/:examId/save',
+    requirePrivilege('exams:results', 'exams:write', 'marks:upload'),
+    asyncHandler(async (req, res) => {
+      const examId = req.params.examId && req.params.examId !== 'undefined' && req.params.examId !== 'null' ? parseId(req.params.examId) : null;
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : (Array.isArray(req.body) ? req.body : []);
+      const academicScope = req.body?.academicScope || null;
+      const result = await services.marks.saveSemesterMarks(examId, { rows, academicScope }, req.user);
+      res.json(result);
+    }),
+  );
+
   /** Parse uploaded Excel or PDF file into structured JSON rows */
   router.post(
     '/parse',

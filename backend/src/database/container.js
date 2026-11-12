@@ -219,6 +219,8 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(ExamSubject),
     dataSource.getRepository(EmsAuditLog),
     regulationInternalSettings,
+    dataSource.getRepository(SubjectMappingEntry),
+    dataSource.getRepository(Regulation),
   );
 
   const auth = new AuthService(sdms, users);

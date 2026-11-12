@@ -209,3 +209,89 @@ export interface ConsolidatedResultsResponse {
   backlogCount: number;
   students: ConsolidatedStudentItem[];
 }
+
+export interface SemesterSubjectDetail {
+  id?: number;
+  code: string;
+  name: string;
+  type: string;
+  maxInternalMarks: number;
+  maxExternalMarks: number;
+  maxTotalMarks: number;
+  credits: number;
+}
+
+export interface StudentSemesterSubjectMark {
+  subjectCode: string;
+  subjectName: string;
+  type: string;
+  internalMarks: number | null;
+  maxInternalMarks: number;
+  externalMarks: number | null;
+  maxExternalMarks: number;
+  totalMarks: number | null;
+  maxTotalMarks: number;
+  grade: string | null;
+  gradePoints: number | null;
+  credits: number;
+  passed: boolean | null;
+  isAbsent: boolean;
+}
+
+export interface StudentSemesterTotalRecord {
+  rollNumber: string;
+  studentName: string;
+  branch?: string | null;
+  section?: string | null;
+  subjectMarks: StudentSemesterSubjectMark[];
+  totalMarksSecured: number;
+  totalMaxMarks: number;
+  percentage: number;
+  sgpa: number;
+  totalCreditsEarned: number;
+  totalCreditsPossible: number;
+  passedCount: number;
+  backlogs: number;
+  status: 'PASSED' | 'BACKLOGS' | 'PENDING';
+  hasMarks: boolean;
+}
+
+export interface SemesterTotalMarksResponse {
+  notification: {
+    id: number;
+    name: string;
+    type: string;
+    regulationCode: string;
+    course: string;
+    branch: string;
+    semester: number | string;
+    yearOfStudy: number | string;
+    batch?: string | null;
+    academicYear?: string | null;
+    status: string;
+  } | null;
+  semesterScope: {
+    semester: number | string;
+    yearOfStudy: number | string;
+    regulationCode: string;
+    course: string;
+    branch: string;
+    batch?: string | null;
+  } | null;
+  branches: string[];
+  semesterSubjects: SemesterSubjectDetail[];
+  semesterTotalMaxMarks: number;
+  semesterTotalCredits: number;
+  students: StudentSemesterTotalRecord[];
+  stats: {
+    totalStudents: number;
+    evaluatedStudents: number;
+    passedStudents: number;
+    backlogStudents: number;
+    pendingStudents: number;
+    passPercentage: number;
+    highestTotalMarks: number;
+    averageTotalMarks: number;
+    averageSgpa: number;
+  };
+}
