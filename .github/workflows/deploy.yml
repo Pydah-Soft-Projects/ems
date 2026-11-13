@@ -110,12 +110,14 @@ jobs:
           echo "==> Pulling latest code from ${TARGET_BRANCH}..."
           git fetch origin "${TARGET_BRANCH}"
           git checkout "${TARGET_BRANCH}"
-          # Discard any local changes to log files or hashes before pulling
+          # Discard any local modifications (logs, hashes, auto-generated lockfiles) before pulling
           git checkout -- backend/logs/ 2>/dev/null || true
           git checkout -- frontend/logs/ 2>/dev/null || true
           git checkout -- backend/.npm-ci-lockhash 2>/dev/null || true
           git checkout -- frontend/.npm-ci-lockhash 2>/dev/null || true
-          git pull origin "${TARGET_BRANCH}"
+          git checkout -- backend/package-lock.json 2>/dev/null || true
+          git checkout -- frontend/package-lock.json 2>/dev/null || true
+          git reset --hard "origin/${TARGET_BRANCH}"
 
           #################################################
           # BACKEND PART
