@@ -70,7 +70,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-[var(--background)]">
       <div
         className={`hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex transition-[width] duration-200 ${
-          collapsed ? 'lg:w-[84px]' : 'lg:w-[260px]'
+          collapsed ? 'lg:w-20' : 'lg:w-64'
         }`}
       >
         <Sidebar
@@ -89,7 +89,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             onClick={() => setMobileOpen(false)}
             aria-label="Close menu"
           />
-          <div className="absolute inset-y-0 left-0 w-[260px] shadow-[var(--shadow-lg)]">
+          <div className="absolute inset-y-0 left-0 w-64 shadow-[var(--shadow-lg)]">
             <Sidebar
               user={user}
               onNavigate={() => setMobileOpen(false)}
@@ -104,7 +104,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       <div
         className={`flex min-h-screen flex-1 flex-col transition-[padding] duration-200 ${
-          collapsed ? 'lg:pl-[84px]' : 'lg:pl-[260px]'
+          collapsed ? 'lg:pl-20' : 'lg:pl-64'
         }`}
       >
         <main className="flex-1 px-4 py-5 sm:px-5 lg:px-6 lg:py-6">
