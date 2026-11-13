@@ -55,7 +55,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-9 w-9 animate-spin rounded-full border-2 border-[var(--primary)] border-t-transparent" />
-          <p className="text-sm text-[var(--muted)]">Loading portal...</p>
+          <p className="text-sm text-[var(--text-secondary)]">Loading portal...</p>
         </div>
       </div>
     );
@@ -111,7 +111,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--sidebar-text)] shadow-[var(--shadow-sm)] lg:hidden"
+            className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] shadow-[var(--shadow-sm)] hover:bg-[var(--primary-light)] hover:text-[var(--primary)] lg:hidden"
             aria-label="Open menu"
           >
             <svg

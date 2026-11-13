@@ -3,15 +3,16 @@ export function Badge({
   variant = 'default',
 }: {
   children: React.ReactNode;
-  variant?: 'default' | 'success' | 'primary' | 'warning' | 'danger' | 'accent';
+  variant?: 'default' | 'success' | 'primary' | 'secondary' | 'warning' | 'danger' | 'accent';
 }) {
   const styles = {
-    default: 'bg-[var(--surface-muted)] text-[var(--sidebar-text)]',
-    success: 'bg-[var(--success-soft)] text-[var(--success)]',
-    primary: 'bg-[var(--primary-soft)] text-[var(--primary)]',
-    warning: 'bg-[var(--warning-soft)] text-amber-800',
-    danger: 'bg-[var(--danger-soft)] text-rose-700',
-    accent: 'bg-[var(--accent-soft)] text-[var(--accent-hover)]',
+    default: 'bg-[var(--border)] text-[var(--text-secondary)]',
+    success: 'bg-[var(--success-light)] text-[var(--success)]',
+    primary: 'bg-[var(--primary-light)] text-[var(--primary)]',
+    secondary: 'bg-[var(--primary-light)] text-[var(--secondary)]',
+    warning: 'bg-[var(--warning-light)] text-[var(--warning)]',
+    danger: 'bg-[var(--danger-light)] text-[var(--danger)]',
+    accent: 'bg-[var(--primary-light)] text-[var(--accent)]',
   };
   return (
     <span

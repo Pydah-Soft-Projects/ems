@@ -30,11 +30,11 @@ export function CardHeader({
   return (
     <div className={`flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-[var(--border)] ${className}`}>
       <div className="py-0.5">
-        <h3 className="text-sm font-semibold tracking-tight text-slate-900">
+        <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
           {title}
         </h3>
         {description ? (
-          <p className="mt-0.5 text-xs leading-relaxed text-[var(--muted)]">
+          <p className="mt-0.5 text-xs leading-relaxed text-[var(--text-secondary)]">
             {description}
           </p>
         ) : null}

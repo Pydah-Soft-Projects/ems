@@ -112,18 +112,18 @@ export default function DashboardPage() {
       {/* =================================================================== */}
       {/* Light-Themed Compact Welcome Banner                                 */}
       {/* =================================================================== */}
-      <div className="rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-5 shadow-xs">
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 shadow-xs">
         <div className="flex items-center justify-between gap-3 mb-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary-light)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--primary)] border border-[var(--border)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--primary)] animate-pulse" />
             Live Examination Workspace
           </span>
-          <span className="text-[11px] text-[var(--muted)] font-medium">
+          <span className="text-[11px] text-[var(--text-secondary)] font-medium">
             {currentDateStr}
           </span>
         </div>
 
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--text-primary)]">
           Welcome back, {user?.fullName ? user.fullName.split(' ')[0] : 'Administrator'}
         </h1>
       </div>
@@ -365,7 +365,7 @@ export default function DashboardPage() {
             action={
               <Link
                 href="/dashboard/exams"
-                className="group inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:border-[#0d1b3d] hover:bg-[#0d1b3d] hover:text-white"
+                className="group inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-xs font-semibold text-[var(--text-secondary)] shadow-2xs transition hover:border-[var(--primary)] hover:bg-[var(--primary)] hover:text-white"
               >
                 <span>View all</span>
                 <span className="transition-transform group-hover:translate-x-0.5">→</span>
@@ -375,14 +375,14 @@ export default function DashboardPage() {
             {loading ? (
               <LoadingBlock />
             ) : pendingExams.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-5 text-center">
-                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-2 border border-emerald-100 shadow-2xs">
+              <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--background)] p-5 text-center">
+                <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-[var(--success-light)] text-[var(--success)] mb-2 border border-[var(--border)] shadow-2xs">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 </div>
-                <p className="text-xs font-bold text-slate-900">All submissions approved</p>
-                <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                <p className="text-xs font-bold text-[var(--text-primary)]">All submissions approved</p>
+                <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">
                   Every submitted examination has been reviewed.
                 </p>
               </div>
@@ -392,14 +392,14 @@ export default function DashboardPage() {
                   <Link
                     key={exam.id}
                     href={`/dashboard/exams/${exam.id}`}
-                    className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs transition-all duration-200 hover:border-slate-300 hover:shadow-xs"
+                    className="group flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 shadow-2xs transition-all duration-200 hover:border-[var(--border-strong)] hover:shadow-xs"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition group-hover:bg-[#0d1b3d] group-hover:text-white shadow-2xs">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--background)] text-[var(--text-primary)] transition group-hover:bg-[var(--primary)] group-hover:text-white shadow-2xs">
                         <NavIcon name="exams" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-xs text-slate-900 truncate group-hover:text-[#0d1b3d] transition-colors">
+                        <p className="font-bold text-xs text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
                           {exam.name}
                         </p>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--muted)]">
@@ -581,18 +581,18 @@ export default function DashboardPage() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="group flex items-start gap-2.5 rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs transition-all duration-200 hover:border-[#0d1b3d] hover:shadow-xs"
+                  className="group flex items-start gap-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2.5 shadow-2xs transition-all duration-200 hover:border-[var(--primary)] hover:shadow-xs"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition group-hover:bg-[#0d1b3d] group-hover:text-white shadow-2xs">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--background)] text-[var(--text-primary)] transition group-hover:bg-[var(--primary)] group-hover:text-white shadow-2xs">
                     <NavIcon name={item.icon} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <p className="font-bold text-xs text-slate-900 truncate group-hover:text-[#0d1b3d] transition-colors">
+                      <p className="font-bold text-xs text-[var(--text-primary)] truncate group-hover:text-[var(--primary)] transition-colors">
                         {item.label}
                       </p>
                       <svg
-                        className="h-3 w-3 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-[#0d1b3d]"
+                        className="h-3 w-3 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--primary)]"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -601,7 +601,7 @@ export default function DashboardPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>
                     </div>
-                    <p className="mt-0.5 text-[10px] text-[var(--muted)] line-clamp-1 leading-snug">
+                    <p className="mt-0.5 text-[10px] text-[var(--text-secondary)] line-clamp-1 leading-snug">
                       {item.description}
                     </p>
                   </div>
@@ -637,15 +637,15 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   const toneClasses = {
-    primary: 'bg-[#0d1b3d]/10 text-[#0d1b3d]',
-    accent: 'bg-emerald-50 text-emerald-700',
-    danger: 'bg-rose-50 text-rose-700',
-    success: 'bg-emerald-50 text-emerald-700',
-    warning: 'bg-amber-50 text-amber-700',
+    primary: 'bg-[var(--primary-light)] text-[var(--primary)]',
+    accent: 'bg-[var(--primary-light)] text-[var(--secondary)]',
+    danger: 'bg-[var(--danger-light)] text-[var(--danger)]',
+    success: 'bg-[var(--success-light)] text-[var(--success)]',
+    warning: 'bg-[var(--warning-light)] text-[var(--warning)]',
   }[iconTone];
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs transition hover:shadow-sm flex flex-col justify-between">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xs transition hover:shadow-sm flex flex-col justify-between">
       <div>
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-start gap-2.5">
@@ -656,16 +656,16 @@ function SectionCard({
             ) : null}
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="text-sm font-bold tracking-tight text-slate-900">
+                <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                   {title}
                 </h3>
                 {badge ? (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.2 text-[9px] font-bold text-slate-700 border border-slate-200">
+                  <span className="rounded-full bg-[var(--background)] px-2 py-0.2 text-[9px] font-bold text-[var(--text-secondary)] border border-[var(--border)]">
                     {badge}
                   </span>
                 ) : null}
               </div>
-              <p className="text-[11px] text-[var(--muted)] leading-tight mt-0.5">
+              <p className="text-[11px] text-[var(--text-secondary)] leading-tight mt-0.5">
                 {description}
               </p>
             </div>
@@ -701,30 +701,30 @@ function CompactStatCard({
 }) {
   const accents = {
     primary: {
-      topBorder: 'border-t-[3px] border-t-[#0d1b3d]',
-      badge: 'bg-[#0d1b3d]/10 text-[#0d1b3d]',
+      topBorder: 'border-t-[3px] border-t-[var(--primary)]',
+      badge: 'bg-[var(--primary-light)] text-[var(--primary)]',
     },
     accent: {
-      topBorder: 'border-t-[3px] border-t-indigo-600',
-      badge: 'bg-indigo-50 text-indigo-700',
+      topBorder: 'border-t-[3px] border-t-[var(--secondary)]',
+      badge: 'bg-[var(--primary-light)] text-[var(--secondary)]',
     },
     danger: {
-      topBorder: 'border-t-[3px] border-t-rose-500',
-      badge: 'bg-rose-50 text-rose-600',
+      topBorder: 'border-t-[3px] border-t-[var(--danger)]',
+      badge: 'bg-[var(--danger-light)] text-[var(--danger)]',
     },
     success: {
-      topBorder: 'border-t-[3px] border-t-emerald-500',
-      badge: 'bg-emerald-50 text-emerald-700',
+      topBorder: 'border-t-[3px] border-t-[var(--success)]',
+      badge: 'bg-[var(--success-light)] text-[var(--success)]',
     },
     warning: {
-      topBorder: 'border-t-[3px] border-t-amber-500',
-      badge: 'bg-amber-50 text-amber-700',
+      topBorder: 'border-t-[3px] border-t-[var(--warning)]',
+      badge: 'bg-[var(--warning-light)] text-[var(--warning)]',
     },
   }[accent];
 
   return (
     <div
-      className={`group rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs flex flex-col justify-between ${accents.topBorder}`}
+      className={`group rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs flex flex-col justify-between ${accents.topBorder}`}
     >
       <div>
         <div className="flex items-start justify-between">
@@ -732,22 +732,22 @@ function CompactStatCard({
             <NavIcon name={icon} />
           </div>
           {statusBadge ? (
-            <span className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200/80 px-2 py-0.2 text-[9px] font-bold uppercase tracking-wider text-[var(--muted)]">
+            <span className="inline-flex items-center rounded-full bg-[var(--background)] border border-[var(--border)] px-2 py-0.2 text-[9px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
               {statusBadge}
             </span>
           ) : null}
         </div>
-        <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--muted)]">
+        <p className="mt-2.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
           {label}
         </p>
-        <p className="mt-0.5 text-2xl font-black tracking-tight text-slate-900">
+        <p className="mt-0.5 text-2xl font-black tracking-tight text-[var(--text-primary)]">
           {loading ? (
-            <span className="inline-block h-7 w-14 animate-pulse rounded-md bg-slate-200" />
+            <span className="inline-block h-7 w-14 animate-pulse rounded-md bg-[var(--border)]" />
           ) : (
             value
           )}
         </p>
-        <p className="text-[11px] text-[var(--muted)] font-medium truncate">{hint}</p>
+        <p className="text-[11px] text-[var(--text-secondary)] font-medium truncate">{hint}</p>
       </div>
     </div>
   );
@@ -772,8 +772,8 @@ function WorkloadBarChart({
       label: 'Approvals',
       sublabel: 'Review',
       value: approvals,
-      gradient: 'from-[#0d1b3d] to-[#1e3a8a]',
-      badgeColor: 'text-slate-800 bg-slate-100',
+      gradient: 'from-[var(--primary)] to-[var(--secondary)]',
+      badgeColor: 'text-[var(--text-primary)] bg-[var(--border)]',
     },
     {
       label: 'Unpaid Fees',
@@ -862,10 +862,10 @@ function WorkloadTrendChart({
   }
 
   const data = [
-    { label: 'Approvals', val: approvals, color: '#0d1b3d' },
-    { label: 'Fees Due', val: fees, color: '#e11d48' },
-    { label: 'Hall Tickets', val: hallTickets, color: '#f59e0b' },
-    { label: 'Published', val: published, color: '#2e7d32' },
+    { label: 'Approvals', val: approvals, color: 'var(--primary)' },
+    { label: 'Fees Due', val: fees, color: 'var(--danger)' },
+    { label: 'Hall Tickets', val: hallTickets, color: 'var(--warning)' },
+    { label: 'Published', val: published, color: 'var(--secondary)' },
   ];
   const max = Math.max(approvals, fees, hallTickets, published, 10);
 
@@ -937,20 +937,20 @@ function DonutChart({
     {
       label: 'Tickets Released',
       count: released,
-      color: '#2e7d32',
-      dotClass: 'bg-emerald-600',
+      color: 'var(--secondary)',
+      dotClass: 'bg-[var(--secondary)]',
     },
     {
       label: 'Tickets Pending',
       count: hallTicketPending,
-      color: '#f59e0b',
-      dotClass: 'bg-amber-500',
+      color: 'var(--warning)',
+      dotClass: 'bg-[var(--warning)]',
     },
     {
       label: 'Pending Approvals',
       count: pendingApprovals,
-      color: '#0d1b3d',
-      dotClass: 'bg-[#0d1b3d]',
+      color: 'var(--primary)',
+      dotClass: 'bg-[var(--primary)]',
     },
   ];
 

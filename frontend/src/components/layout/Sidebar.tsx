@@ -54,12 +54,12 @@ export function Sidebar({
 
   return (
     <aside
-      className={`flex h-full shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] text-[var(--sidebar-text)] transition-[width] duration-200 ${
+      className={`flex h-full shrink-0 flex-col border-r border-[var(--border)] bg-[var(--sidebar)] text-[var(--sidebar-text)] transition-[width] duration-200 ${
         collapsed ? 'w-[84px]' : 'w-[260px]'
       }`}
     >
       <div
-        className={`flex items-center border-b border-[var(--sidebar-border)] ${
+        className={`flex items-center border-b border-[var(--border)] ${
           collapsed
             ? 'flex-col gap-2 px-2 py-3.5 justify-center'
             : 'justify-between px-3.5 py-3.5'
@@ -77,7 +77,7 @@ export function Sidebar({
             onClick={onToggleCollapse}
             title={collapsed ? 'Open sidebar' : 'Close sidebar'}
             aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
-            className="cursor-pointer inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-2xs transition hover:bg-slate-50 hover:text-slate-800 active:scale-95"
+            className="cursor-pointer inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface)] text-[var(--sidebar-text)] shadow-2xs transition hover:bg-[var(--primary-light)] hover:text-[var(--primary)] active:scale-95"
           >
             <svg
               className={`h-4 w-4 transition-transform duration-200 ${
@@ -102,11 +102,11 @@ export function Sidebar({
         {visibleGroups.map((group) => (
           <div key={group.title} className="mb-4 last:mb-0">
             {!collapsed ? (
-              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-[var(--text-subtle)]">
+              <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-[var(--sidebar-muted)]">
                 {group.title}
               </p>
             ) : (
-              <div className="mb-2 h-px bg-[var(--sidebar-border)]" />
+              <div className="mb-2 h-px bg-[var(--border)]" />
             )}
             <ul className="space-y-1">
               {group.items.map((item) => {
@@ -121,11 +121,11 @@ export function Sidebar({
                         collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'
                       } ${
                         active
-                          ? 'bg-[var(--sidebar-active-soft)] text-[var(--sidebar-active)] shadow-[var(--shadow-sm)]'
-                          : 'hover:bg-[var(--sidebar-hover)] hover:text-[var(--primary)]'
+                          ? 'bg-[var(--primary)] text-white shadow-[var(--shadow-sm)]'
+                          : 'text-[var(--sidebar-text)] hover:bg-[var(--primary-light)] hover:text-[var(--primary)]'
                       }`}
                     >
-                      <span className={active ? 'text-[var(--primary)]' : 'text-[var(--text-subtle)] group-hover:text-[var(--primary)]'}>
+                      <span className={active ? 'text-white' : 'text-[var(--sidebar-muted)] group-hover:text-[var(--primary)]'}>
                         <NavIcon name={item.icon} />
                       </span>
                       {!collapsed ? <span className="truncate">{item.label}</span> : null}
@@ -138,25 +138,25 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className={`border-t border-[var(--sidebar-border)] ${collapsed ? 'p-3' : 'p-4'}`}>
+      <div className={`border-t border-[var(--border)] ${collapsed ? 'p-3' : 'p-4'}`}>
         <div
-          className={`flex items-center rounded-[var(--radius)] bg-[var(--surface-subtle)] ${
+          className={`flex items-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] ${
             collapsed ? 'justify-center p-2' : 'gap-2.5 p-2.5'
           }`}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-sm font-bold text-white shadow-xs">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-sm font-bold text-white shadow-xs">
             {getInitials(user.fullName)}
           </div>
           {!collapsed ? (
             <>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-900 leading-tight">
+                <p className="truncate text-sm font-semibold text-[var(--text-primary)] leading-tight">
                   {user.fullName}
                 </p>
-                <p className="truncate text-xs text-[var(--muted)] mt-0.5">
+                <p className="truncate text-xs text-[var(--secondary)] font-medium mt-0.5">
                   {user.emsRoleName || (user.isSuperAdmin ? 'Super Admin' : user.role)}
                 </p>
-                <p className="truncate text-[10px] text-[var(--muted)]">{user.username}</p>
+                <p className="truncate text-[10px] text-[var(--text-muted)]">{user.username}</p>
               </div>
               <button
                 type="button"

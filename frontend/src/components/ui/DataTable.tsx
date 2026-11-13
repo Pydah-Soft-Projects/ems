@@ -42,9 +42,9 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-sm">
       <table className="min-w-full text-left text-sm">
-        <thead className={`${monochrome ? 'bg-white text-black' : 'bg-[var(--surface-subtle)] text-[var(--muted)]'} text-xs font-semibold uppercase tracking-wide`}>
+        <thead className={`${monochrome ? 'bg-[var(--surface)] text-[var(--text-primary)]' : 'bg-[var(--background)] text-[var(--text-secondary)]'} text-xs font-semibold uppercase tracking-wide`}>
           <tr>
             {columns.map((col) => (
               <th key={col.key} className={`px-4 py-3 ${col.className || ''}`}>
@@ -55,9 +55,9 @@ export function DataTable<T>({
         </thead>
         <tbody className="divide-y divide-[var(--border)]">
           {rows.map((row) => (
-            <tr key={rowKey(row)} className={monochrome ? '' : 'hover:bg-slate-50/80'}>
+            <tr key={rowKey(row)} className={monochrome ? '' : 'hover:bg-[var(--primary-light)]/40'}>
               {columns.map((col) => (
-                <td key={col.key} className={`px-4 py-3 ${monochrome ? 'text-black' : 'text-slate-700'} ${col.className || ''}`}>
+                <td key={col.key} className={`px-4 py-3 ${monochrome ? 'text-[var(--text-primary)]' : 'text-[var(--text-primary)]'} ${col.className || ''}`}>
                   {col.render(row)}
                 </td>
               ))}

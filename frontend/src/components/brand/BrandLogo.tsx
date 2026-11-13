@@ -52,11 +52,11 @@ export function BrandLockup({
       <BrandLogo size={size} />
       {!collapsed ? (
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-xs font-semibold text-slate-900">
+          <p className="truncate text-xs font-semibold text-[var(--sidebar-text)]">
             {title}
           </p>
           {subtitle ? (
-            <p className="truncate text-xs text-[var(--muted)]">{subtitle}</p>
+            <p className="truncate text-xs text-[var(--sidebar-muted)]">{subtitle}</p>
           ) : null}
         </div>
       ) : null}

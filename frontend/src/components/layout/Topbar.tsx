@@ -45,12 +45,12 @@ export function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-white/85 px-4 backdrop-blur-xl sm:px-5 lg:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--navbar)]/90 px-4 backdrop-blur-xl sm:px-5 lg:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <button
           type="button"
           onClick={onMenuClick}
-          className="rounded-full p-2 text-[var(--sidebar-text)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)] lg:hidden"
+          className="rounded-full p-2 text-[var(--text-primary)] hover:bg-[var(--primary-light)] hover:text-[var(--primary)] lg:hidden"
           aria-label="Open menu"
         >
           <MenuIcon />
@@ -58,17 +58,17 @@ export function Topbar({
         <button
           type="button"
           onClick={onCollapseClick}
-          className="hidden rounded-full p-2 text-[var(--sidebar-text)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)] lg:inline-flex"
+          className="hidden rounded-full p-2 text-[var(--text-primary)] hover:bg-[var(--primary-light)] hover:text-[var(--primary)] lg:inline-flex"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <MenuIcon />
         </button>
 
         <div className="hidden min-w-0 md:block">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--secondary)]">
             Staff portal
           </p>
-          <h2 className="truncate text-sm font-semibold text-slate-900">
+          <h2 className="truncate text-sm font-semibold text-[var(--text-primary)]">
             {current?.label ?? 'Dashboard'}
           </h2>
         </div>
@@ -83,16 +83,16 @@ export function Topbar({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-white py-1 pl-1 pr-3 shadow-[var(--shadow-sm)] sm:flex">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-[0.6875rem] font-bold text-white">
+        <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-3 shadow-[var(--shadow-sm)] sm:flex">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-[0.6875rem] font-bold text-white">
             {getInitials(user.fullName)}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-slate-900">
+            <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
               {user.fullName.split(' ')[0]}
             </p>
-            <p className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
+            <p className="flex items-center gap-1 text-[11px] text-[var(--text-secondary)]">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--secondary)]" />
               Super Admin
             </p>
           </div>

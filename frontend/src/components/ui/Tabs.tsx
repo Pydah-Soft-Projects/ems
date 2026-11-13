@@ -22,14 +22,14 @@ export function Tabs({
   return (
     <div
       role="tablist"
-      className="inline-flex flex-wrap gap-1 rounded-full border border-[var(--border)] bg-white p-1 shadow-[var(--shadow-sm)]"
+      className="inline-flex flex-wrap gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1 shadow-[var(--shadow-sm)]"
     >
       {items.map((item) => {
         const active = item.id === activeId;
         const className = `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
           active
             ? 'bg-[var(--primary)] text-white shadow-[var(--shadow-sm)]'
-            : 'text-[var(--muted)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]'
+            : 'text-[var(--text-secondary)] hover:bg-[var(--primary-light)] hover:text-[var(--primary)]'
         }`;
         const content = (
           <>
@@ -37,7 +37,7 @@ export function Tabs({
             {typeof item.count === 'number' ? (
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                  active ? 'bg-white/20 text-white' : 'bg-[var(--surface-muted)] text-slate-600'
+                  active ? 'bg-white/20 text-white' : 'bg-[var(--border)] text-[var(--text-secondary)]'
                 }`}
               >
                 {item.count}

@@ -7,12 +7,12 @@ const variants: Record<Variant, string> = {
   primary:
     'bg-[var(--primary)] text-white shadow-[var(--shadow-sm)] hover:bg-[var(--primary-hover)] hover:shadow-[var(--shadow-md)]',
   secondary:
-    'border border-[var(--border)] bg-white text-slate-700 shadow-[var(--shadow-sm)] hover:bg-[var(--surface-subtle)]',
-  ghost: 'text-[var(--sidebar-text)] hover:bg-[var(--primary-soft)] hover:text-[var(--primary)]',
-  danger: 'bg-[var(--danger)] text-white hover:bg-rose-700',
-  success: 'bg-[var(--success)] text-white hover:bg-[var(--accent-hover)]',
-  warning: 'bg-[var(--warning)] text-white hover:bg-amber-600',
-  accent: 'bg-[var(--accent)] text-white shadow-[var(--shadow-sm)] hover:bg-[var(--accent-hover)]',
+    'border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--secondary)] shadow-[var(--shadow-sm)] hover:bg-[var(--primary-light)] hover:border-[var(--secondary)]',
+  ghost: 'text-[var(--text-primary)] hover:bg-[var(--primary-light)] hover:text-[var(--primary)]',
+  danger: 'bg-[var(--danger)] text-white hover:opacity-90',
+  success: 'bg-[var(--success)] text-white hover:opacity-90',
+  warning: 'bg-[var(--warning)] text-white hover:opacity-90',
+  accent: 'bg-[var(--accent)] text-white shadow-[var(--shadow-sm)] hover:opacity-90',
 };
 
 const sizes: Record<Size, string> = {

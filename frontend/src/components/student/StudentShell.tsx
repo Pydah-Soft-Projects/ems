@@ -44,13 +44,13 @@ export function StudentShell({
 
   return (
     <div className="min-h-screen bg-[var(--background)] pb-24 lg:pb-0">
-      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-white/85 backdrop-blur-xl print:hidden">
+      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur-xl print:hidden">
         <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link href="/student" className="flex items-center gap-3">
             <BrandLogo size="md" />
             <div className="min-w-0 leading-tight">
-              <p className="text-xs font-bold text-slate-900">Student Portal</p>
-              <p className="truncate text-xs text-[var(--muted)]">
+              <p className="text-xs font-bold text-[var(--text-primary)]">Student Portal</p>
+              <p className="truncate text-xs text-[var(--secondary)] font-medium">
                 {user.fullName}
               </p>
             </div>
@@ -66,7 +66,7 @@ export function StudentShell({
                   className={`relative inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition ${
                     active
                       ? 'text-[var(--primary)]'
-                      : 'text-[var(--muted)] hover:text-slate-800'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--primary)]'
                   }`}
                 >
                   <StudentNavIcon name={item.icon} className="h-4 w-4" />
@@ -80,11 +80,11 @@ export function StudentShell({
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-white py-1 pl-1 pr-3 shadow-[var(--shadow-sm)] sm:flex">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-[10px] font-bold text-white">
+            <div className="hidden items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-3 shadow-[var(--shadow-sm)] sm:flex">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-[10px] font-bold text-white">
                 {getInitials(user.fullName)}
               </div>
-              <span className="text-xs font-medium text-[var(--muted)]">
+              <span className="text-xs font-medium text-[var(--text-secondary)]">
                 PIN {user.pinNo || user.username}
               </span>
             </div>
@@ -98,7 +98,7 @@ export function StudentShell({
       <main className="w-full px-4 py-5 sm:px-6 sm:py-6">{children}</main>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-white/95 px-2 py-2 backdrop-blur-xl lg:hidden print:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border)] bg-[var(--surface)]/95 px-2 py-2 backdrop-blur-xl lg:hidden print:hidden"
         aria-label="Student mobile"
       >
         <ul className="mx-auto grid w-full max-w-none grid-cols-6 gap-1 px-2">
@@ -110,8 +110,8 @@ export function StudentShell({
                   href={item.href}
                   className={`flex flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-[10px] font-semibold transition ${
                     active
-                      ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
-                      : 'text-slate-500'
+                      ? 'bg-[var(--primary-light)] text-[var(--primary)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--primary)]'
                   }`}
                 >
                   <StudentNavIcon name={item.icon} />

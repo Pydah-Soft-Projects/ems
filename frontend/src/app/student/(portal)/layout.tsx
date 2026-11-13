@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AuthUser, clearAuth, getStoredUser } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { StudentShell } from '@/components/student/StudentShell';
+import { ThemeLoader } from '@/components/layout/ThemeLoader';
 import { LoadingBlock } from '@/components/ui/Spinner';
 import { LogoutConfirmModal } from '@/components/auth/LogoutConfirmModal';
 import { PortalSwitcher } from '@/components/portal-switcher/PortalSwitcher';
@@ -51,6 +52,7 @@ export default function StudentPortalLayout({
 
   return (
     <>
+      <ThemeLoader />
       <StudentShell user={user} onLogout={() => setIsLogoutModalOpen(true)}>
         {children}
       </StudentShell>
