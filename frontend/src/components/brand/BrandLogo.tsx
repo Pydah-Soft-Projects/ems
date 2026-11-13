@@ -9,16 +9,21 @@ const sizeMap = {
 type BrandLogoProps = {
   size?: keyof typeof sizeMap;
   className?: string;
+  src?: string;
 };
 
-export function BrandLogo({ size = 'md', className = '' }: BrandLogoProps) {
+export function BrandLogo({
+  size = 'md',
+  className = '',
+  src = '/campo-logos/icon-512.png',
+}: BrandLogoProps) {
   const { box, px } = sizeMap[size];
   return (
     <span
       className={`relative inline-flex ${box} shrink-0 items-center justify-center ${className}`}
     >
       <Image
-        src="/logo.png"
+        src={src}
         alt="EMS"
         width={px}
         height={px}
@@ -45,18 +50,33 @@ export function BrandLockup({
   className = '',
   collapsed = false,
 }: BrandLockupProps) {
+  if (collapsed) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <BrandLogo size={size} src="/campo-logos/icon-512.png" />
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${className}`}
-    >
-      <BrandLogo size={size} />
-      {!collapsed ? (
-        <div className="min-w-0 leading-tight">
+    <div className={`flex items-center gap-2.5 min-w-0 ${className}`}>
+      <div className="relative shrink-0 flex items-center">
+        <Image
+          src="/campo-logos/campo_logo_transparent_hq.png"
+          alt="Campo"
+          width={112}
+          height={32}
+          className="h-7 w-auto max-w-[115px] object-contain object-left"
+          priority
+        />
+      </div>
+      {title ? (
+        <div className="min-w-0 leading-tight border-l border-[var(--border)] pl-2">
           <p className="truncate text-xs font-semibold text-[var(--sidebar-text)]">
             {title}
           </p>
           {subtitle ? (
-            <p className="truncate text-xs text-[var(--sidebar-muted)]">{subtitle}</p>
+            <p className="truncate text-[10px] text-[var(--sidebar-muted)]">{subtitle}</p>
           ) : null}
         </div>
       ) : null}

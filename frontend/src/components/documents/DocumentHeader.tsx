@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 
 export function DocumentBrandMark({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  return <BrandLogo size={size} />;
+  return <BrandLogo size={size} src="/logo.png" />;
 }
 
 export function DocumentHeader({
