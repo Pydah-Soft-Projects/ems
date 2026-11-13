@@ -274,21 +274,21 @@ export function Sidebar({
         {collapsed ? (
           <div className="flex flex-col items-center gap-2">
             <div
-              className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold shadow-xs"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold shadow-xs"
               style={{
-                backgroundColor: 'var(--primary-light)',
-                color: 'var(--primary)',
+                backgroundColor: 'var(--surface, #FFFFFF)',
+                color: 'var(--text-primary, #0D1B3D)',
               }}
               title={user.fullName}
             >
-              {getInitials(user.fullName)}
+              {user.fullName?.trim().charAt(0).toUpperCase() || 'U'}
             </div>
             <button
               type="button"
               onClick={handleSignOutClick}
               title="Sign out"
               aria-label="Sign out"
-              className="flex h-9 w-9 items-center justify-center rounded-lg cursor-pointer transition hover:bg-white/10"
+              className="flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer transition hover:bg-white/10"
               style={{ color: 'var(--sidebar-muted)' }}
             >
               <LogOut className="h-4 w-4" />
@@ -296,22 +296,22 @@ export function Sidebar({
           </div>
         ) : (
           <div
-            className="flex items-center gap-2 rounded-xl border px-2.5 py-2 shadow-sm"
+            className="flex items-center gap-2.5 rounded-[14px] border px-3 py-2.5 shadow-sm"
             style={{
               backgroundColor:
-                'color-mix(in srgb, var(--primary-light) 10%, var(--sidebar))',
+                'color-mix(in srgb, var(--primary-light) 8%, var(--sidebar))',
               borderColor:
-                'color-mix(in srgb, var(--border) 25%, transparent)',
+                'color-mix(in srgb, var(--border) 35%, transparent)',
             }}
           >
             <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-xs"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold shadow-xs"
               style={{
-                backgroundColor: 'var(--primary-light)',
-                color: 'var(--primary)',
+                backgroundColor: 'var(--surface, #FFFFFF)',
+                color: 'var(--text-primary, #0D1B3D)',
               }}
             >
-              {getInitials(user.fullName)}
+              {user.fullName?.trim().charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="min-w-0 flex-1">
               <p
@@ -324,7 +324,7 @@ export function Sidebar({
                 className="truncate text-[11px] font-medium mt-0.5"
                 style={{ color: 'var(--sidebar-muted)' }}
               >
-                {user.emsRoleName || (user.isSuperAdmin ? 'Superadmin' : user.role)}
+                {user.emsRoleName || (user.isSuperAdmin ? 'Super Admin' : user.role)}
               </p>
             </div>
             <button
