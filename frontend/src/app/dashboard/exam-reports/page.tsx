@@ -10,7 +10,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
 
-import { printExamApplicationReportPdf } from '@/lib/printExamApplicationReport';
+import { printExamApplicationReport, downloadExamApplicationReportPdf } from '@/lib/printExamApplicationReport';
 
 function formatMoney(amount: number) {
   return `₹${Number(amount || 0).toLocaleString('en-IN', {
@@ -232,8 +232,10 @@ export default function ExamReportsPage() {
       totalLateFeeCollected: number;
     }>();
 
+    const getSafeExamName = (name?: string) => (!name || name === 'Exam #null' ? 'Multiple/Unknown' : name);
+
     for (const b of rawReportData.breakdown) {
-      const bExamName = b.examName || 'Multiple/Unknown';
+      const bExamName = getSafeExamName(b.examName);
       breakdownMap.set(`${bExamName}||${b.batch}||${b.branch}||${b.course}`, {
         examName: bExamName,
         batch: b.batch,
@@ -250,7 +252,7 @@ export default function ExamReportsPage() {
     }
 
     for (const item of items) {
-      const bExamName = item.examName || 'Multiple/Unknown';
+      const bExamName = getSafeExamName(item.examName);
       const key = `${bExamName}||${item.batch}||${item.branch}||${item.course}`;
       if (!breakdownMap.has(key)) {
         breakdownMap.set(key, {
@@ -373,10 +375,34 @@ export default function ExamReportsPage() {
     };
   }, [rawReportData, selectedCourse, selectedBatch, selectedBranch, selectedStatus, search]);
 
-  const handlePrintPdf = () => {
+  const handlePrintReport = () => {
     if (!reportData) return;
     const selectedExamObj = exams.find((e) => String(e.id) === selectedExamId);
-    printExamApplicationReportPdf({
+    printExamApplicationReport({
+      collegeName: 'PYDAH COLLEGE OF ENGINEERING',
+      reportTitle: 'EXAM APPLICATION & PAYMENT STATUS REPORT',
+      examName: selectedExamObj
+        ? `${selectedExamObj.name} (${(selectedExamObj as unknown as { code?: string }).code || selectedExamObj.status})`
+        : 'All Examinations',
+      courseFilter: selectedCourse || 'All Courses',
+      batchFilter: selectedBatch || 'All Batches',
+      branchFilter: selectedBranch || 'All Branches',
+      statusFilter:
+        selectedStatus === 'not_paid'
+          ? 'Unpaid / Pending Students Only'
+          : selectedStatus === 'paid'
+            ? 'Paid Students Only'
+            : selectedStatus === 'paid_with_late_fee'
+              ? 'Paid with Late Fee Only'
+              : 'All Statuses',
+      reportData,
+    });
+  };
+
+  const handleDownloadPdf = () => {
+    if (!reportData) return;
+    const selectedExamObj = exams.find((e) => String(e.id) === selectedExamId);
+    downloadExamApplicationReportPdf({
       collegeName: 'PYDAH COLLEGE OF ENGINEERING',
       reportTitle: 'EXAM APPLICATION & PAYMENT STATUS REPORT',
       examName: selectedExamObj
@@ -413,9 +439,14 @@ export default function ExamReportsPage() {
         title="Exam Application Reports"
         description="Summary of student applications, payment status (Paid, Not Paid, Paid with Late Fee), and batch/branch breakdown."
         action={
-          <Button variant="secondary" onClick={handlePrintPdf} disabled={!reportData}>
-            Print PDF Report
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={handlePrintReport} disabled={!reportData}>
+              Print Report
+            </Button>
+            <Button variant="secondary" onClick={handleDownloadPdf} disabled={!reportData}>
+              Download PDF
+            </Button>
+          </div>
         }
       />
 

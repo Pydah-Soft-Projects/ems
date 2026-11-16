@@ -4130,6 +4130,7 @@ class ExamService {
                 .leftJoinAndSelect('fr.exam', 'exam')
                 .leftJoinAndSelect('fr.application', 'app')
                 .leftJoinAndSelect('fr.payments', 'p')
+                .where('fr.examId IS NOT NULL')
                 .orderBy('fr.createdAt', 'DESC');
 
             if (examId) {
@@ -4216,7 +4217,7 @@ class ExamService {
             return {
                 id: r.id,
                 examId: r.examId,
-                examName: r.exam?.name || `Exam #${r.examId}`,
+                examName: r.exam?.name || (r.examId ? `Exam #${r.examId}` : (r.feeLabel || 'N/A')),
                 examCode: r.exam?.code || null,
                 studentRollNumber: r.studentRollNumber,
                 studentName: r.studentName,

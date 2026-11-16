@@ -21,7 +21,6 @@ export function downloadExamApplicationReportPdf(input: ExamApplicationReportPdf
   const xStart = margin;
   const xEnd = pageWidth - margin;
   const contentWidth = xEnd - xStart;
-  const lineHeight = 12;
   let y = margin;
 
   const collegeName = input.collegeName || 'PYDAH COLLEGE OF ENGINEERING';
@@ -365,40 +364,429 @@ export function downloadExamApplicationReportPdf(input: ExamApplicationReportPdf
     author: collegeName,
   });
 
-  doc.autoPrint();
-  const blob = doc.output('blob');
-  const blobUrl = URL.createObjectURL(blob);
+  doc.save(`exam_application_report_${Date.now()}.pdf`);
+}
 
-  // Open in a new tab with autoPrint triggered so the browser print dialog opens
-  const printWindow = typeof window !== 'undefined' ? window.open(blobUrl, '_blank') : null;
-  if (printWindow) {
-    printWindow.focus();
-  } else if (typeof document !== 'undefined') {
-    // Fallback to hidden iframe if popups are restricted
-    const iframeId = 'ems-exam-report-print-frame';
-    let iframe = document.getElementById(iframeId) as HTMLIFrameElement | null;
-    if (iframe) iframe.remove();
-    iframe = document.createElement('iframe');
-    iframe.id = iframeId;
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.src = blobUrl;
-    document.body.appendChild(iframe);
-    iframe.onload = () => {
-      setTimeout(() => {
-        try {
-          iframe?.contentWindow?.focus();
-          iframe?.contentWindow?.print();
-        } catch {
-          // ignore
-        }
-      }, 300);
-    };
+function esc(value: string | number | null | undefined): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatMoneyPlain(amount: number | string | null | undefined) {
+  return `₹${Number(amount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+}
+
+function formatDatePlain(d: string | null | undefined) {
+  if (!d) return '—';
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return String(d);
   }
 }
 
-export const printExamApplicationReportPdf = downloadExamApplicationReportPdf;
+export function buildExamApplicationReportHtml(input: ExamApplicationReportPdfInput): string {
+  const collegeName = input.collegeName || 'PYDAH COLLEGE OF ENGINEERING';
+  const reportTitle = input.reportTitle || 'EXAM APPLICATION & FEE STATUS REPORT';
+  const examName = input.examName || 'All Examinations';
+  const generatedAt = new Date().toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  const { summary, breakdown, items } = input.reportData;
+
+  const breakdownRows = (breakdown || []).map((row) => `
+    <tr>
+      ${!input.examName || input.examName === 'All Examinations' ? `<td>${esc(row.examName || 'N/A')}</td>` : ''}
+      <td>${esc(row.course)}</td>
+      <td><strong>${esc(row.batch)}</strong></td>
+      <td>${esc(row.branch)}</td>
+      <td class="text-center font-bold">${row.totalEligible}</td>
+      <td class="text-center font-bold" style="color: #4338ca;">${row.totalApplied}</td>
+      <td class="text-center font-bold" style="color: #0284c7;">${Math.max(0, row.totalEligible - row.totalApplied)}</td>
+      <td class="text-center font-bold" style="color: #15803d;">${row.paidCount}</td>
+      <td class="text-center font-bold" style="color: #b91c1c;">${row.notPaidCount}</td>
+      <td class="text-center font-bold" style="color: #b45309;">${row.paidWithLateFeeCount}</td>
+      <td class="text-right font-bold">${formatMoneyPlain(row.totalAmountCollected)}</td>
+    </tr>
+  `).join('');
+
+  const studentRows = (items || []).map((item, idx) => {
+    let statusBadge = '';
+    if (item.status === 'not_applied') {
+      statusBadge = '<span class="badge badge-notapplied">NOT APPLIED</span>';
+    } else if (item.isPaid) {
+      if (item.isPaidLateFee) {
+        statusBadge = '<span class="badge badge-late">PAID (LATE)</span>';
+      } else {
+        statusBadge = '<span class="badge badge-paid">PAID</span>';
+      }
+    } else {
+      statusBadge = '<span class="badge badge-unpaid">UNPAID</span>';
+    }
+
+    return `
+      <tr>
+        <td class="text-center">${idx + 1}</td>
+        <td class="font-mono font-bold">${esc(item.studentRollNumber)}</td>
+        <td><strong>${esc(item.studentName)}</strong></td>
+        <td>${esc(item.course)}</td>
+        <td>${esc(item.batch)}</td>
+        <td>${esc(item.branch)}</td>
+        <td class="text-right">${formatMoneyPlain(item.baseFee)}</td>
+        <td class="text-right font-medium" style="color: #b45309;">${item.lateFee > 0 ? formatMoneyPlain(item.lateFee) : '—'}</td>
+        <td class="text-right font-bold">${formatMoneyPlain(item.totalAmount)}</td>
+        <td class="text-center">${statusBadge}</td>
+        <td class="text-center text-muted">${formatDatePlain(item.paidAt || item.submittedAt)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${esc(reportTitle)} - ${esc(examName)}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 10px;
+      color: #1e293b;
+      line-height: 1.35;
+      background: #fff;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #0284c7;
+      padding-bottom: 6px;
+    }
+    .header h1 {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .header h2 {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #334155;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .header h3 {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0284c7;
+    }
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 9.5px;
+      color: #475569;
+    }
+    .meta-item strong {
+      color: #0f172a;
+    }
+    .section-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      border-left: 3px solid #0284c7;
+      padding-left: 6px;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .metric-card {
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 5px 6px;
+      background: #f8fafc;
+    }
+    .metric-card .label {
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #64748b;
+    }
+    .metric-card .value {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-top: 2px;
+    }
+    .metric-card .sub {
+      font-size: 7.5px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9px;
+      margin-bottom: 12px;
+    }
+    thead {
+      display: table-header-group;
+    }
+    tr {
+      page-break-inside: avoid;
+    }
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 700;
+      padding: 5px 6px;
+      border: 1px solid #cbd5e1;
+      text-align: left;
+    }
+    td {
+      padding: 4px 6px;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+    }
+    tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 7.5px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .badge-paid {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+    .badge-late {
+      background: #fef3c7;
+      color: #b45309;
+      border: 1px solid #fde047;
+    }
+    .badge-unpaid {
+      background: #ffe4e6;
+      color: #be123c;
+      border: 1px solid #fca5a5;
+    }
+    .badge-notapplied {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .font-bold { font-weight: 700; }
+    .font-medium { font-weight: 500; }
+    .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .text-muted { color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>${esc(collegeName.toUpperCase())}</h1>
+    <h2>EXAMINATION CELL</h2>
+    <h3>${esc(reportTitle)}</h3>
+  </div>
+
+  <div class="meta-box">
+    <div class="meta-item"><strong>Examination:</strong> ${esc(examName)}</div>
+    <div class="meta-item"><strong>Course:</strong> ${esc(input.courseFilter || 'All Courses')}</div>
+    <div class="meta-item"><strong>Batch:</strong> ${esc(input.batchFilter || 'All Batches')}</div>
+    <div class="meta-item"><strong>Branch:</strong> ${esc(input.branchFilter || 'All Branches')}</div>
+    <div class="meta-item"><strong>Status:</strong> ${esc(input.statusFilter || 'All Statuses')}</div>
+    <div class="meta-item" style="margin-left: auto;"><strong>Date:</strong> ${esc(generatedAt)}</div>
+  </div>
+
+  <div class="section-title">1. Executive Summary Metrics</div>
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="label">Total Eligible</div>
+      <div class="value" style="color: #0369a1;">${summary.totalEligible}</div>
+      <div class="sub">In Academic Scope</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Total Applied</div>
+      <div class="value" style="color: #4338ca;">${summary.totalApplied}</div>
+      <div class="sub">Applications Received</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Paid Students</div>
+      <div class="value" style="color: #15803d;">${summary.paidCount}</div>
+      <div class="sub">Payment Complete</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Not Paid</div>
+      <div class="value" style="color: #be123c;">${summary.notPaidCount}</div>
+      <div class="sub">Applied & Pending</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Paid w/ Late Fee</div>
+      <div class="value" style="color: #b45309;">${summary.paidWithLateFeeCount}</div>
+      <div class="sub">Late Fee: ${formatMoneyPlain(summary.totalLateFeeCollected)}</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Total Revenue</div>
+      <div class="value" style="color: #0284c7;">${formatMoneyPlain(summary.totalAmountCollected)}</div>
+      <div class="sub">Fee Collected</div>
+    </div>
+  </div>
+
+  <div class="section-title">2. Batch & Branch Breakdown (${(breakdown || []).length})</div>
+  <table>
+    <thead>
+      <tr>
+        ${!input.examName || input.examName === 'All Examinations' ? '<th>Exam Name</th>' : ''}
+        <th>Course</th>
+        <th>Batch</th>
+        <th>Branch</th>
+        <th class="text-center">Eligible</th>
+        <th class="text-center">Applied</th>
+        <th class="text-center">Not Applied</th>
+        <th class="text-center">Paid</th>
+        <th class="text-center">Not Paid</th>
+        <th class="text-center">Late Fee</th>
+        <th class="text-right">Total Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${breakdownRows || '<tr><td colspan="11" class="text-center">No application breakdown records found.</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="section-title">3. Student Application & Payment Details (${(items || []).length})</div>
+  <table>
+    <thead>
+      <tr>
+        <th class="text-center" style="width: 28px;">#</th>
+        <th>Roll Number / PIN</th>
+        <th>Student Name</th>
+        <th>Course</th>
+        <th>Batch</th>
+        <th>Branch</th>
+        <th class="text-right">Base Fee</th>
+        <th class="text-right">Late Fee</th>
+        <th class="text-right">Total Fee</th>
+        <th class="text-center">Status</th>
+        <th class="text-center">Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${studentRows || '<tr><td colspan="11" class="text-center">No individual student application records found.</td></tr>'}
+    </tbody>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Triggers the browser's native print pop-up dialog directly.
+ */
+export function printExamApplicationReport(input: ExamApplicationReportPdfInput) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const html = buildExamApplicationReportHtml(input);
+  const iframeId = 'ems-exam-report-print-frame';
+
+  const existing = document.getElementById(iframeId);
+  if (existing) existing.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = iframeId;
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument || win?.document;
+  if (!win || !doc) {
+    const popup = window.open('', '_blank', 'width=950,height=750');
+    if (popup) {
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      setTimeout(() => {
+        popup.focus();
+        popup.print();
+      }, 300);
+    }
+    return;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => {
+    setTimeout(() => {
+      const el = document.getElementById(iframeId);
+      if (el) el.remove();
+    }, 2000);
+  };
+
+  let printed = false;
+  const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      const popup = window.open('', '_blank', 'width=950,height=750');
+      if (popup) {
+        popup.document.open();
+        popup.document.write(html);
+        popup.document.close();
+        setTimeout(() => {
+          popup.focus();
+          popup.print();
+        }, 300);
+      }
+    } finally {
+      cleanup();
+    }
+  };
+
+  setTimeout(triggerPrint, 250);
+}
+
+export const printExamApplicationReportPdf = printExamApplicationReport;
