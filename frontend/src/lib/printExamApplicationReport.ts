@@ -365,5 +365,40 @@ export function downloadExamApplicationReportPdf(input: ExamApplicationReportPdf
     author: collegeName,
   });
 
-  doc.save(`exam_application_report_${Date.now()}.pdf`);
+  doc.autoPrint();
+  const blob = doc.output('blob');
+  const blobUrl = URL.createObjectURL(blob);
+
+  // Open in a new tab with autoPrint triggered so the browser print dialog opens
+  const printWindow = typeof window !== 'undefined' ? window.open(blobUrl, '_blank') : null;
+  if (printWindow) {
+    printWindow.focus();
+  } else if (typeof document !== 'undefined') {
+    // Fallback to hidden iframe if popups are restricted
+    const iframeId = 'ems-exam-report-print-frame';
+    let iframe = document.getElementById(iframeId) as HTMLIFrameElement | null;
+    if (iframe) iframe.remove();
+    iframe = document.createElement('iframe');
+    iframe.id = iframeId;
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.src = blobUrl;
+    document.body.appendChild(iframe);
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe?.contentWindow?.focus();
+          iframe?.contentWindow?.print();
+        } catch {
+          // ignore
+        }
+      }, 300);
+    };
+  }
 }
+
+export const printExamApplicationReportPdf = downloadExamApplicationReportPdf;

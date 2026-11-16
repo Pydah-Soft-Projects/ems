@@ -4349,7 +4349,7 @@ class ExamService {
                 try {
                     const batchList = String(b.batch).split(',').map((x) => x.trim()).filter(Boolean);
                     const qb = this.sdms.studentRepo.createQueryBuilder('s')
-                        .select(['s.id', 's.pinNo', 's.studentName', 's.admissionNo', 's.admissionNumber'])
+                        .select(['s.id', 's.pinNo', 's.studentName', 's.admissionNumber'])
                         .where('s.branch = :branch', { branch: b.branch })
                         .andWhere('s.course = :course', { course: b.course })
                         .andWhere('s.studentStatus = :status', { status: 'Regular' });
@@ -4369,7 +4369,7 @@ class ExamService {
                         const hasApplied = (pin && appliedPins.has(pin)) || (sName && appliedNames.has(sName));
 
                         if (!hasApplied) {
-                            const rollOrAdmission = s.pinNo || s.admissionNo || s.admissionNumber || `ID-${s.id}`;
+                            const rollOrAdmission = s.pinNo || s.admissionNumber || `ID-${s.id}`;
                             notAppliedItems.push({
                                 id: `not_applied_${rollOrAdmission}_${b.examName}`,
                                 examId: examId ? Number(examId) : 0,
@@ -4396,6 +4396,7 @@ class ExamService {
                     }
                     b.totalEligible = Math.max(countEligible, b.totalApplied);
                 } catch (e) {
+                    console.error('Error fetching eligible students from SDMS:', e);
                     b.totalEligible = b.totalApplied;
                 }
             }

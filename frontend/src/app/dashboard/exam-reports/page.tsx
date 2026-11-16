@@ -10,7 +10,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
 
-import { downloadExamApplicationReportPdf } from '@/lib/printExamApplicationReport';
+import { printExamApplicationReportPdf } from '@/lib/printExamApplicationReport';
 
 function formatMoney(amount: number) {
   return `₹${Number(amount || 0).toLocaleString('en-IN', {
@@ -376,7 +376,7 @@ export default function ExamReportsPage() {
   const handlePrintPdf = () => {
     if (!reportData) return;
     const selectedExamObj = exams.find((e) => String(e.id) === selectedExamId);
-    downloadExamApplicationReportPdf({
+    printExamApplicationReportPdf({
       collegeName: 'PYDAH COLLEGE OF ENGINEERING',
       reportTitle: 'EXAM APPLICATION & PAYMENT STATUS REPORT',
       examName: selectedExamObj
