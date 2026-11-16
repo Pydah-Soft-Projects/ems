@@ -4337,7 +4337,8 @@ class ExamService {
             (a.examName || '').localeCompare(b.examName || '') || a.batch.localeCompare(b.batch) || a.branch.localeCompare(b.branch)
         );
 
-        const appliedPins = new Set(filteredItems.map(i => String(i.studentRollNumber || '').trim().toUpperCase()));
+        const appliedPins = new Set(filteredItems.map(i => String(i.studentRollNumber || '').trim().toUpperCase()).filter(Boolean));
+        const appliedNames = new Set(filteredItems.map(i => String(i.studentName || '').trim().toUpperCase()).filter(Boolean));
         const notAppliedItems = [];
 
         let totalEligibleAll = 0;
@@ -4348,7 +4349,7 @@ class ExamService {
                 try {
                     const batchList = String(b.batch).split(',').map((x) => x.trim()).filter(Boolean);
                     const qb = this.sdms.studentRepo.createQueryBuilder('s')
-                        .select(['s.pinNo', 's.studentName'])
+                        .select(['s.id', 's.pinNo', 's.studentName', 's.admissionNo', 's.admissionNumber'])
                         .where('s.branch = :branch', { branch: b.branch })
                         .andWhere('s.course = :course', { course: b.course })
                         .andWhere('s.studentStatus = :status', { status: 'Regular' });
@@ -4361,35 +4362,36 @@ class ExamService {
 
                     const eligibleStudents = await qb.getMany();
 
-                    let countEligible = 0;
+                    let countEligible = eligibleStudents.length;
                     for (const s of eligibleStudents) {
                         const pin = String(s.pinNo || '').trim().toUpperCase();
-                        if (pin) {
-                            countEligible++;
-                            if (!appliedPins.has(pin)) {
-                                notAppliedItems.push({
-                                    id: `not_applied_${pin}_${b.examName}`,
-                                    examId: examId ? Number(examId) : 0,
-                                    examName: b.examName || (examId ? `Exam #${examId}` : 'Multiple'),
-                                    examCode: null,
-                                    studentRollNumber: s.pinNo,
-                                    studentName: s.studentName,
-                                    batch: b.batch,
-                                    branch: b.branch,
-                                    course: b.course,
-                                    baseFee: 0,
-                                    lateFee: 0,
-                                    totalAmount: 0,
-                                    status: 'not_applied',
-                                    isPaid: false,
-                                    isPaidLateFee: false,
-                                    paidAt: null,
-                                    submittedAt: null,
-                                    paymentMode: null,
-                                    paymentMethod: null,
-                                    receiptNumber: null,
-                                });
-                            }
+                        const sName = String(s.studentName || '').trim().toUpperCase();
+                        const hasApplied = (pin && appliedPins.has(pin)) || (sName && appliedNames.has(sName));
+
+                        if (!hasApplied) {
+                            const rollOrAdmission = s.pinNo || s.admissionNo || s.admissionNumber || `ID-${s.id}`;
+                            notAppliedItems.push({
+                                id: `not_applied_${rollOrAdmission}_${b.examName}`,
+                                examId: examId ? Number(examId) : 0,
+                                examName: b.examName || (examId ? `Exam #${examId}` : 'Multiple'),
+                                examCode: null,
+                                studentRollNumber: rollOrAdmission,
+                                studentName: s.studentName,
+                                batch: b.batch,
+                                branch: b.branch,
+                                course: b.course,
+                                baseFee: 0,
+                                lateFee: 0,
+                                totalAmount: 0,
+                                status: 'not_applied',
+                                isPaid: false,
+                                isPaidLateFee: false,
+                                paidAt: null,
+                                submittedAt: null,
+                                paymentMode: null,
+                                paymentMethod: null,
+                                receiptNumber: null,
+                            });
                         }
                     }
                     b.totalEligible = Math.max(countEligible, b.totalApplied);

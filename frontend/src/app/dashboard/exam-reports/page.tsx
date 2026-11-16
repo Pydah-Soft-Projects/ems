@@ -141,6 +141,45 @@ export default function ExamReportsPage() {
     return Array.from(set).sort();
   }, [rawReportData, selectedCourse]);
 
+  const filteredExams = useMemo(() => {
+    return exams.filter((ex) => {
+      // 1. Check Course filter
+      if (selectedCourse) {
+        const c = selectedCourse.trim().toLowerCase();
+        const exCourses = (ex.course || '').split(',').map((x) => x.trim().toLowerCase());
+        const scopeCourses = (ex.scopes || []).map((sc) => (sc.course || '').trim().toLowerCase());
+        const matchesCourse = exCourses.includes(c) || scopeCourses.includes(c);
+        if (!matchesCourse) return false;
+      }
+
+      // 2. Check Batch filter
+      if (selectedBatch) {
+        const b = selectedBatch.trim().toLowerCase();
+        const exBatches = (ex.batch || '').split(',').map((x) => x.trim().toLowerCase());
+        const scopeBatches = (ex.scopes || []).map((sc) => (sc.batch || '').trim().toLowerCase());
+        const matchesBatch = exBatches.includes(b) || scopeBatches.includes(b);
+        if (!matchesBatch) return false;
+      }
+
+      // 3. Check Branch filter
+      if (selectedBranch) {
+        const br = selectedBranch.trim().toLowerCase();
+        const exBranches = (ex.branch || '').split(',').map((x) => x.trim().toLowerCase());
+        const scopeBranches = (ex.scopes || []).map((sc) => (sc.branch || '').trim().toLowerCase());
+        const matchesBranch = exBranches.includes(br) || scopeBranches.includes(br);
+        if (!matchesBranch) return false;
+      }
+
+      return true;
+    });
+  }, [exams, selectedCourse, selectedBatch, selectedBranch]);
+
+  useEffect(() => {
+    if (selectedExamId && filteredExams.length > 0 && !filteredExams.some((e) => String(e.id) === selectedExamId)) {
+      setSelectedExamId('');
+    }
+  }, [selectedExamId, filteredExams]);
+
   useEffect(() => {
     if (selectedBatch && availableBatches.length > 0 && !availableBatches.includes(selectedBatch)) {
       setSelectedBatch('');
@@ -392,7 +431,7 @@ export default function ExamReportsPage() {
                 className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-[var(--primary)] focus:outline-none"
               >
                 <option value="">All Examinations</option>
-                {exams.map((ex) => (
+                {filteredExams.map((ex) => (
                   <option key={ex.id} value={ex.id}>
                     {ex.name} ({(ex as unknown as { code?: string }).code || ex.status})
                   </option>
