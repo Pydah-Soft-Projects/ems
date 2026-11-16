@@ -4152,19 +4152,18 @@ class ExamService {
             }
         }
 
-        const missingPins = [...new Set(
+        const allPins = [...new Set(
             records
-                .filter((r) => !r.application?.studentBranch || !r.exam?.batch)
                 .map((r) => r.studentRollNumber)
                 .filter(Boolean)
         )];
 
         const studentMap = new Map();
-        if (missingPins.length > 0) {
+        if (allPins.length > 0) {
             try {
                 const chunkSize = 200;
-                for (let i = 0; i < missingPins.length; i += chunkSize) {
-                    const chunk = missingPins.slice(i, i + chunkSize);
+                for (let i = 0; i < allPins.length; i += chunkSize) {
+                    const chunk = allPins.slice(i, i + chunkSize);
                     const students = await this.sdms.studentRepo
                         .createQueryBuilder('s')
                         .select(['s.id', 's.pinNo', 's.batch', 's.branch', 's.course'])
@@ -4183,9 +4182,27 @@ class ExamService {
 
         const items = records.map((r) => {
             const sdmsStudent = studentMap.get(String(r.studentRollNumber || '').trim().toUpperCase());
-            const resolvedBatch = sdmsStudent?.batch || r.exam?.batch || 'Unassigned';
             const resolvedBranch = r.application?.studentBranch || sdmsStudent?.branch || r.exam?.branch || 'Unassigned';
             const resolvedCourse = sdmsStudent?.course || r.exam?.course || 'Unassigned';
+
+            let resolvedBatch = sdmsStudent?.batch;
+            if (!resolvedBatch) {
+                const matchingScope = (r.exam?.scopes || []).find((sc) => sc.branch === resolvedBranch);
+                if (matchingScope?.batch) {
+                    resolvedBatch = matchingScope.batch;
+                } else if (r.exam?.batch) {
+                    const batches = String(r.exam.batch).split(',').map((s) => s.trim()).filter(Boolean);
+                    if (batches.length === 1) {
+                        resolvedBatch = batches[0];
+                    } else {
+                        const rollPrefix = String(r.studentRollNumber || '').substring(0, 2);
+                        const matchedBatch = batches.find((b) => b.endsWith(rollPrefix));
+                        resolvedBatch = matchedBatch || batches[0];
+                    }
+                } else {
+                    resolvedBatch = 'Unassigned';
+                }
+            }
             const baseFee = Number(r.baseFee || 0);
             const lateFee = Number(r.lateFee || 0);
             const totalAmount = Number(r.totalAmount || 0);
@@ -4255,26 +4272,28 @@ class ExamService {
                 });
                 if (examObj && examObj.scopes) {
                     for (const scope of examObj.scopes) {
-                        const bBatch = scope.batch || examObj.batch;
+                        const rawBatches = String(scope.batch || examObj.batch || '').split(',').map((s) => s.trim()).filter(Boolean);
                         const bBranch = scope.branch || examObj.branch;
                         const bCourse = scope.course || examObj.course;
                         const bExamName = examObj.name || `Exam #${examId}`;
-                        if (bBatch && bBranch && bCourse) {
-                            const key = `${bExamName}||${bBatch}||${bBranch}||${bCourse}`;
-                            if (!breakdownMap.has(key)) {
-                                breakdownMap.set(key, {
-                                    examName: bExamName,
-                                    batch: bBatch,
-                                    branch: bBranch,
-                                    course: bCourse,
-                                    totalApplied: 0,
-                                    paidCount: 0,
-                                    notPaidCount: 0,
-                                    paidWithLateFeeCount: 0,
-                                    totalAmountCollected: 0,
-                                    totalLateFeeCollected: 0,
-                                    totalEligible: 0
-                                });
+                        for (const bBatch of (rawBatches.length > 0 ? rawBatches : ['Unassigned'])) {
+                            if (bBatch && bBranch && bCourse) {
+                                const key = `${bExamName}||${bBatch}||${bBranch}||${bCourse}`;
+                                if (!breakdownMap.has(key)) {
+                                    breakdownMap.set(key, {
+                                        examName: bExamName,
+                                        batch: bBatch,
+                                        branch: bBranch,
+                                        course: bCourse,
+                                        totalApplied: 0,
+                                        paidCount: 0,
+                                        notPaidCount: 0,
+                                        paidWithLateFeeCount: 0,
+                                        totalAmountCollected: 0,
+                                        totalLateFeeCollected: 0,
+                                        totalEligible: 0
+                                    });
+                                }
                             }
                         }
                     }
@@ -4327,15 +4346,20 @@ class ExamService {
                 b.totalEligible = b.totalApplied;
             } else {
                 try {
-                    const eligibleStudents = await this.sdms.studentRepo.find({
-                        where: {
-                            batch: b.batch,
-                            branch: b.branch,
-                            course: b.course,
-                            studentStatus: 'Regular'
-                        },
-                        select: ['pinNo', 'studentName']
-                    });
+                    const batchList = String(b.batch).split(',').map((x) => x.trim()).filter(Boolean);
+                    const qb = this.sdms.studentRepo.createQueryBuilder('s')
+                        .select(['s.pinNo', 's.studentName'])
+                        .where('s.branch = :branch', { branch: b.branch })
+                        .andWhere('s.course = :course', { course: b.course })
+                        .andWhere('s.studentStatus = :status', { status: 'Regular' });
+
+                    if (batchList.length === 1) {
+                        qb.andWhere('s.batch = :batch', { batch: batchList[0] });
+                    } else if (batchList.length > 1) {
+                        qb.andWhere('s.batch IN (:...batches)', { batches: batchList });
+                    }
+
+                    const eligibleStudents = await qb.getMany();
 
                     let countEligible = 0;
                     for (const s of eligibleStudents) {

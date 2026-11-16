@@ -5,6 +5,7 @@ export type ExamApplicationReportPdfInput = {
   collegeName?: string;
   reportTitle?: string;
   examName?: string;
+  courseFilter?: string;
   batchFilter?: string;
   branchFilter?: string;
   statusFilter?: string;
@@ -102,6 +103,7 @@ export function downloadExamApplicationReportPdf(input: ExamApplicationReportPdf
 
   const filtersText = [
     `Examination: ${examName}`,
+    `Course: ${input.courseFilter || 'All Courses'}`,
     `Batch: ${input.batchFilter || 'All Batches'}`,
     `Branch: ${input.branchFilter || 'All Branches'}`,
     `Status Filter: ${input.statusFilter || 'All Statuses'}`,
@@ -249,11 +251,12 @@ export function downloadExamApplicationReportPdf(input: ExamApplicationReportPdf
     y += 20;
   } else {
     const stCols = [
-      { key: 'sno', label: 'S.No', w: 30, align: 'center' },
-      { key: 'pin', label: 'Roll Number / PIN', w: 85, align: 'left' },
-      { key: 'name', label: 'Student Name', w: 125, align: 'left' },
+      { key: 'sno', label: 'S.No', w: 25, align: 'center' },
+      { key: 'pin', label: 'Roll Number / PIN', w: 80, align: 'left' },
+      { key: 'name', label: 'Student Name', w: 115, align: 'left' },
+      { key: 'course', label: 'Course', w: 45, align: 'left' },
       { key: 'batch', label: 'Batch', w: 45, align: 'left' },
-      { key: 'branch', label: 'Branch', w: 60, align: 'left' },
+      { key: 'branch', label: 'Branch', w: 55, align: 'left' },
       { key: 'amount', label: 'Total (₹)', w: 55, align: 'right' },
       { key: 'status', label: 'Status', w: 65, align: 'center' },
       { key: 'date', label: 'Date', w: 55, align: 'center' },
@@ -323,6 +326,7 @@ export function downloadExamApplicationReportPdf(input: ExamApplicationReportPdf
         sno: String(idx + 1),
         pin: item.studentRollNumber,
         name: item.studentName.length > 24 ? item.studentName.substring(0, 22) + '…' : item.studentName,
+        course: item.course,
         batch: item.batch,
         branch: item.branch,
         amount: Number(item.totalAmount || 0).toLocaleString('en-IN'),

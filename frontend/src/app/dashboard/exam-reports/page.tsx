@@ -37,6 +37,7 @@ export default function ExamReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>('');
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [selectedBatch, setSelectedBatch] = useState<string>('');
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -77,33 +78,105 @@ export default function ExamReportsPage() {
     void loadData(!initialLoadDone.current);
   }, [selectedExamId, loadData]);
 
+  const availableCourses = useMemo(() => {
+    const set = new Set<string>();
+    if (rawReportData) {
+      rawReportData.items.forEach((item) => item.course && set.add(item.course));
+      rawReportData.breakdown.forEach((b) => b.course && set.add(b.course));
+    }
+    exams.forEach((ex) => {
+      if (ex.course) set.add(ex.course);
+      ex.scopes?.forEach((sc) => {
+        if (sc.course) set.add(sc.course);
+      });
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [rawReportData, exams]);
+
   const availableBatches = useMemo(() => {
     if (!rawReportData) return [];
     const set = new Set<string>();
-    rawReportData.items.forEach((item) => item.batch && set.add(item.batch));
+    const addBatch = (val?: string | null) => {
+      if (!val) return;
+      val.split(',').forEach((p) => {
+        const trimmed = p.trim();
+        if (trimmed && trimmed.toLowerCase() !== 'unassigned') {
+          set.add(trimmed);
+        }
+      });
+    };
+
+    rawReportData.items.forEach((item) => {
+      if (selectedCourse && (item.course || '').toLowerCase() !== selectedCourse.trim().toLowerCase()) return;
+      addBatch(item.batch);
+    });
+    rawReportData.breakdown.forEach((b) => {
+      if (selectedCourse && (b.course || '').toLowerCase() !== selectedCourse.trim().toLowerCase()) return;
+      addBatch(b.batch);
+    });
     return Array.from(set).sort();
-  }, [rawReportData]);
+  }, [rawReportData, selectedCourse]);
 
   const availableBranches = useMemo(() => {
     if (!rawReportData) return [];
     const set = new Set<string>();
-    rawReportData.items.forEach((item) => item.branch && set.add(item.branch));
+    const addBranch = (val?: string | null) => {
+      if (!val) return;
+      val.split(',').forEach((p) => {
+        const trimmed = p.trim();
+        if (trimmed && trimmed.toLowerCase() !== 'unassigned') {
+          set.add(trimmed);
+        }
+      });
+    };
+
+    rawReportData.items.forEach((item) => {
+      if (selectedCourse && (item.course || '').toLowerCase() !== selectedCourse.trim().toLowerCase()) return;
+      addBranch(item.branch);
+    });
+    rawReportData.breakdown.forEach((b) => {
+      if (selectedCourse && (b.course || '').toLowerCase() !== selectedCourse.trim().toLowerCase()) return;
+      addBranch(b.branch);
+    });
     return Array.from(set).sort();
-  }, [rawReportData]);
+  }, [rawReportData, selectedCourse]);
+
+  useEffect(() => {
+    if (selectedBatch && availableBatches.length > 0 && !availableBatches.includes(selectedBatch)) {
+      setSelectedBatch('');
+    }
+  }, [selectedBatch, availableBatches]);
+
+  useEffect(() => {
+    if (selectedBranch && availableBranches.length > 0 && !availableBranches.includes(selectedBranch)) {
+      setSelectedBranch('');
+    }
+  }, [selectedBranch, availableBranches]);
 
   const reportData = useMemo(() => {
     if (!rawReportData) return null;
 
     let items = rawReportData.items;
 
+    if (selectedCourse) {
+      const c = selectedCourse.trim().toLowerCase();
+      items = items.filter((i) => (i.course || '').toLowerCase() === c);
+    }
+
     if (selectedBatch) {
       const b = selectedBatch.trim().toLowerCase();
-      items = items.filter((i) => (i.batch || '').toLowerCase() === b);
+      items = items.filter((i) => {
+        const parts = (i.batch || '').split(',').map((x) => x.trim().toLowerCase());
+        return parts.includes(b);
+      });
     }
 
     if (selectedBranch) {
       const br = selectedBranch.trim().toLowerCase();
-      items = items.filter((i) => (i.branch || '').toLowerCase() === br);
+      items = items.filter((i) => {
+        const parts = (i.branch || '').split(',').map((x) => x.trim().toLowerCase());
+        return parts.includes(br);
+      });
     }
 
     const breakdownMap = new Map<string, {
@@ -174,12 +247,20 @@ export default function ExamReportsPage() {
     let totalEligibleAll = 0;
     const breakdown = Array.from(breakdownMap.values())
       .filter((b) => {
-        if (selectedBatch && b.batch.toLowerCase() !== selectedBatch.trim().toLowerCase()) return false;
-        if (selectedBranch && b.branch.toLowerCase() !== selectedBranch.trim().toLowerCase()) return false;
+        if (selectedCourse && (b.course || '').toLowerCase() !== selectedCourse.trim().toLowerCase()) return false;
+        if (selectedBatch) {
+          const parts = (b.batch || '').split(',').map((x) => x.trim().toLowerCase());
+          if (!parts.includes(selectedBatch.trim().toLowerCase())) return false;
+        }
+        if (selectedBranch) {
+          const parts = (b.branch || '').split(',').map((x) => x.trim().toLowerCase());
+          if (!parts.includes(selectedBranch.trim().toLowerCase())) return false;
+        }
         return true;
       })
       .sort((a, b) => 
         (a.examName || '').localeCompare(b.examName || '') || 
+        (a.course || '').localeCompare(b.course || '') ||
         a.batch.localeCompare(b.batch) || 
         a.branch.localeCompare(b.branch)
       );
@@ -251,7 +332,7 @@ export default function ExamReportsPage() {
       breakdown,
       items: listItems,
     };
-  }, [rawReportData, selectedBatch, selectedBranch, selectedStatus, search]);
+  }, [rawReportData, selectedCourse, selectedBatch, selectedBranch, selectedStatus, search]);
 
   const handlePrintPdf = () => {
     if (!reportData) return;
@@ -262,6 +343,7 @@ export default function ExamReportsPage() {
       examName: selectedExamObj
         ? `${selectedExamObj.name} (${(selectedExamObj as unknown as { code?: string }).code || selectedExamObj.status})`
         : 'All Examinations',
+      courseFilter: selectedCourse || 'All Courses',
       batchFilter: selectedBatch || 'All Batches',
       branchFilter: selectedBranch || 'All Branches',
       statusFilter:
@@ -301,7 +383,7 @@ export default function ExamReportsPage() {
       {/* Filters Bar */}
       <Card className="border-[var(--border)] bg-white shadow-xs">
         <CardBody className="p-4">
-          <div className={`grid gap-3 sm:grid-cols-2 ${activeTab === 'students' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+          <div className={`grid gap-3 sm:grid-cols-2 md:grid-cols-3 ${activeTab === 'students' || activeTab === 'not_applied' ? 'xl:grid-cols-6' : 'xl:grid-cols-5'}`}>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-700">Filter Exam</label>
               <select
@@ -313,6 +395,22 @@ export default function ExamReportsPage() {
                 {exams.map((ex) => (
                   <option key={ex.id} value={ex.id}>
                     {ex.name} ({(ex as unknown as { code?: string }).code || ex.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Course</label>
+              <select
+                value={selectedCourse}
+                onChange={(e) => setSelectedCourse(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 shadow-2xs focus:border-[var(--primary)] focus:outline-none"
+              >
+                <option value="">All Courses</option>
+                {availableCourses.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
                   </option>
                 ))}
               </select>
@@ -550,6 +648,7 @@ export default function ExamReportsPage() {
                     <thead className="bg-slate-100/80 text-[11px] font-semibold uppercase tracking-wider text-slate-600">
                       <tr>
                         {!selectedExamId && <th className="px-3 py-2.5 w-48">Exam Name</th>}
+                        <th className="px-3 py-2.5">Course</th>
                         <th className="px-3 py-2.5">Batch</th>
                         <th className="px-3 py-2.5">Branch</th>
                         <th className="px-3 py-2.5 text-center">Total Eligible</th>
@@ -570,6 +669,7 @@ export default function ExamReportsPage() {
                               {row.examName || 'N/A'}
                             </td>
                           )}
+                          <td className="px-3 py-2.5 font-medium text-slate-700">{row.course}</td>
                           <td className="px-3 py-2.5 font-semibold text-slate-900">{row.batch}</td>
                           <td className="px-3 py-2.5 font-medium text-slate-800">{row.branch}</td>
                           <td className="px-3 py-2.5 text-center font-bold text-slate-900">{row.totalEligible}</td>
@@ -610,6 +710,7 @@ export default function ExamReportsPage() {
                           <th className="px-3 py-2.5">Roll No / PIN</th>
                           <th className="px-3 py-2.5">Student Name</th>
                           <th className="px-3 py-2.5">Exam Name</th>
+                          <th className="px-3 py-2.5">Course</th>
                           <th className="px-3 py-2.5">Batch</th>
                           <th className="px-3 py-2.5">Branch</th>
                           <th className="px-3 py-2.5 text-right">Base Fee</th>
@@ -625,6 +726,7 @@ export default function ExamReportsPage() {
                             <td className="px-3 py-2.5 font-mono font-bold text-slate-900">{item.studentRollNumber}</td>
                             <td className="px-3 py-2.5 font-medium text-slate-900">{item.studentName}</td>
                             <td className="px-3 py-2.5 text-slate-700">{item.examName}</td>
+                            <td className="px-3 py-2.5 text-slate-600 font-medium">{item.course}</td>
                             <td className="px-3 py-2.5 text-slate-600">{item.batch}</td>
                             <td className="px-3 py-2.5 text-slate-600">{item.branch}</td>
                             <td className="px-3 py-2.5 text-right text-slate-700">{formatMoney(item.baseFee)}</td>
