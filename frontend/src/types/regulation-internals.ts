@@ -46,11 +46,47 @@ export const UGC_GRADING_SCALE: GradePointRule[] = [
   { minPercentage: 0, maxPercentage: 0, grade: 'Ab', gradeDescription: 'Absent', gradePoints: 0, isPass: false },
 ];
 
+export interface RegulationYearSetting {
+  yearOfStudy: number;
+  isCustomized: boolean;
+  inheritedFrom: string;
+  setting: RegulationInternalSetting;
+}
+
+export interface AssessmentComponent {
+  id: string;
+  name: string;
+  code: string;
+  count: number;
+  maxMarksPerInstance: number;
+  aggregationRule: 'AVERAGE_ALL' | 'BEST_N' | 'WEIGHTED' | 'SUM_ALL';
+  bestCount?: number;
+  bestWeightage?: number;
+  otherWeightage?: number;
+  scaledMaxMarks: number;
+  mandatory?: boolean;
+}
+
+export interface RegulationCourseSetting {
+  courseId: number;
+  courseName: string;
+  totalYears: number;
+  batches?: string[];
+  isCustomized: boolean;
+  courseSetting: RegulationInternalSetting;
+  years: RegulationYearSetting[];
+}
+
 export interface RegulationInternalSetting {
   id: number | null;
   regulationId: number | null;
   regulationCode: string;
   regulationName?: string | null;
+  courseId?: number | null;
+  courseName?: string | null;
+  yearOfStudy?: number | null;
+  numInternals?: number;
+  minPassPercentage?: number;
 
   // Internal CIE Setup
   calculationMethod: CalculationMethod;
@@ -62,6 +98,8 @@ export interface RegulationInternalSetting {
   roundingRule: RoundingRule;
   includeAssignments: boolean;
   assignmentMarks: number;
+  evaluationComponents?: AssessmentComponent[] | null;
+  customFormula?: string | null;
 
   // External SEE Setup
   maxExternalMarks: number;
@@ -82,11 +120,15 @@ export interface RegulationInternalSetting {
   remarks?: string | null;
   isCustomized?: boolean;
   isInherited?: boolean;
+  inheritedFrom?: 'YEAR' | 'COURSE' | 'REGULATION' | 'GLOBAL' | string;
   internalDescription?: string;
   externalDescription?: string;
   comboDescription?: string;
   formulaDescription?: string;
   updatedAt?: string | null;
+
+  // Populated regulation-based courses
+  courses?: RegulationCourseSetting[];
 }
 
 export type RegulationMarksSetting = RegulationInternalSetting;
@@ -97,7 +139,10 @@ export interface RegulationInternalSettingsOverview {
 }
 
 export interface RegulationMarksSimulationDto {
-  midEntries: Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>;
+  midEntries?: Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>;
+  componentEntries?: Record<string, Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>>;
+  evaluationComponents?: AssessmentComponent[] | null;
+  customFormula?: string | null;
   calculationMethod?: string;
   bestMidWeightage?: number;
   otherMidWeightage?: number;
@@ -157,12 +202,23 @@ export interface CalculationSimulationResult {
   formulaDescription?: string;
   formulaStep?: string;
   rawScores?: number[];
+  componentBreakdown?: Array<{
+    componentId: string;
+    name: string;
+    code: string;
+    score: number;
+    scaledMax: number;
+    rawAverage?: number;
+    rule: string;
+    formulaStep: string;
+  }>;
 
   // Detailed Structured Assessment Sections
   internal?: {
     marks: number | null;
     targetMax: number;
     minPass: number;
+    minPassPercentage?: number;
     isPass: boolean | null;
     status: string;
     formulaStep?: string;

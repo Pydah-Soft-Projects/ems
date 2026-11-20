@@ -1807,9 +1807,17 @@ export const api = {
     return request<RegulationInternalSettingsOverview>('/settings/regulation-internals');
   },
 
-  getRegulationInternalSetting(regulationIdOrCode: string | number) {
+  getRegulationInternalSetting(
+    regulationIdOrCode: string | number,
+    params?: { courseId?: number; courseName?: string; yearOfStudy?: number }
+  ) {
+    const q = new URLSearchParams();
+    if (params?.courseId) q.set('courseId', String(params.courseId));
+    if (params?.courseName) q.set('courseName', params.courseName);
+    if (params?.yearOfStudy) q.set('yearOfStudy', String(params.yearOfStudy));
+    const queryStr = q.toString() ? `?${q.toString()}` : '';
     return request<RegulationInternalSetting>(
-      `/settings/regulation-internals/${encodeURIComponent(String(regulationIdOrCode))}`
+      `/settings/regulation-internals/${encodeURIComponent(String(regulationIdOrCode))}${queryStr}`
     );
   },
 
@@ -1843,8 +1851,11 @@ export const api = {
   getRegulationMarksSettings() {
     return this.getRegulationInternalSettings();
   },
-  getRegulationMarksSetting(regulationIdOrCode: string | number) {
-    return this.getRegulationInternalSetting(regulationIdOrCode);
+  getRegulationMarksSetting(
+    regulationIdOrCode: string | number,
+    params?: { courseId?: number; courseName?: string; yearOfStudy?: number }
+  ) {
+    return this.getRegulationInternalSetting(regulationIdOrCode, params);
   },
   saveRegulationMarksSetting(data: Partial<RegulationInternalSetting>) {
     return this.saveRegulationInternalSetting(data);

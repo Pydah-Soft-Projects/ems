@@ -155,6 +155,8 @@ function createServices(dataSource, studentDataSource) {
     dataSource.getRepository(RegulationInternalSetting),
     dataSource.getRepository(Regulation),
     dataSource.getRepository(RegulationMarksAuditLog),
+    dataSource.getRepository(RegulationScope),
+    sdms,
   );
 
   const feeHeads = new FeeHeadsService(

@@ -34,12 +34,20 @@ const RegulationInternalSetting = new EntitySchema({
       name: 'IDX_reg_internal_settings_code',
       columns: ['regulationCode'],
     },
+    {
+      name: 'IDX_reg_internal_settings_course_year',
+      columns: ['regulationId', 'courseId', 'yearOfStudy'],
+    },
   ],
   columns: {
     id: { type: 'int', primary: true, generated: true },
     regulationId: { type: 'int', nullable: true }, // null indicates global default formula
     regulationCode: { type: 'varchar', length: 50, nullable: true },
     regulationName: { type: 'varchar', length: 200, nullable: true },
+    courseId: { type: 'int', nullable: true }, // null indicates all courses under regulation
+    courseName: { type: 'varchar', length: 255, nullable: true },
+    yearOfStudy: { type: 'int', nullable: true }, // null indicates all years for this course
+    numInternals: { type: 'int', default: 2 }, // How many internal mid exams conducted/evaluated
     calculationMethod: {
       type: 'varchar',
       length: 50,
@@ -83,6 +91,16 @@ const RegulationInternalSetting = new EntitySchema({
       transformer: {
         to: (v) => v,
         from: (v) => (v != null ? Number(v) : 16.0),
+      },
+    },
+    minPassPercentage: {
+      type: 'decimal',
+      precision: 5,
+      scale: 2,
+      default: 40.0,
+      transformer: {
+        to: (v) => v,
+        from: (v) => (v != null ? Number(v) : 40.0),
       },
     },
     minMidsRequired: { type: 'int', default: 2 },
@@ -164,6 +182,8 @@ const RegulationInternalSetting = new EntitySchema({
         from: (v) => (v != null ? Number(v) : 40.0),
       },
     },
+    evaluationComponents: { type: 'simple-json', nullable: true }, // Custom components: mids, assignments, quizzes, etc.
+    customFormula: { type: 'text', nullable: true }, // Optional formula expression
     requireInternalPass: { type: 'boolean', default: false },
     requireExternalPass: { type: 'boolean', default: true },
     requireTotalPass: { type: 'boolean', default: true },

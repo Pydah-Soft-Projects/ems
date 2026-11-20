@@ -193,9 +193,12 @@ function createSettingsRoutes(services) {
     ),
     asyncHandler(async (req, res) => {
       const { regulationIdOrCode } = req.params;
+      const { courseId, courseName, yearOfStudy } = req.query;
       res.json(
         await services.regulationInternalSettings.getSettingForRegulation(
           regulationIdOrCode,
+          courseId || courseName || null,
+          yearOfStudy || null,
         ),
       );
     }),

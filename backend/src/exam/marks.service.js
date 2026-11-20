@@ -1171,6 +1171,8 @@ class MarksService {
       try {
         regSetting = await this.regInternalSettings.getSettingForRegulation(
           exam.regulationId || exam.regulation?.code || null,
+          exam.course || null,
+          exam.yearOfStudy || null,
         );
       } catch (regErr) {
         console.warn('Could not load regulation settings for upload validation:', regErr.message);
@@ -2729,6 +2731,8 @@ class MarksService {
       try {
         formula = await this.regInternalSettings.getSettingForRegulation(
           exam.regulationId || exam.regulation?.code || null,
+          exam.course || null,
+          exam.yearOfStudy || null,
         );
       } catch (err) {
         console.warn('Could not load regulation formula for internal marks overview:', err.message);
@@ -3361,10 +3365,10 @@ class MarksService {
    * Calculate internal marks specifically for an academic regulation.
    * Dynamically resolves the regulation's configured formula profile from the database.
    */
-  async calculateInternalMarksForRegulation(midEntries, regulationIdOrCode) {
+  async calculateInternalMarksForRegulation(midEntries, regulationIdOrCode, course = null, yearOfStudy = null) {
     let config = null;
     if (this.regInternalSettings && typeof this.regInternalSettings.getSettingForRegulation === 'function') {
-      config = await this.regInternalSettings.getSettingForRegulation(regulationIdOrCode);
+      config = await this.regInternalSettings.getSettingForRegulation(regulationIdOrCode, course, yearOfStudy);
     }
     return this.calculateWeightedInternalMarks(midEntries, config);
   }

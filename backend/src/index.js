@@ -168,6 +168,10 @@ async function bootstrap() {
       ensureSubjectTypesTable,
     } = require('./subjects/ensure-subject-types');
     await ensureSubjectTypesTable(examPortalDataSource, logger);
+    const {
+      ensureRegulationSettingsColumns,
+    } = require('./settings/ensure-regulation-settings-columns');
+    await ensureRegulationSettingsColumns(examPortalDataSource, logger);
   }
 
   studentDataSource = createStudentDataSource();

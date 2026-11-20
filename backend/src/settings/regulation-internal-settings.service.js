@@ -13,6 +13,11 @@ const DEFAULT_GLOBAL_CONFIG = {
   regulationId: null,
   regulationCode: 'GLOBAL_DEFAULT',
   regulationName: 'Global Default (All Regulations)',
+  courseId: null,
+  courseName: null,
+  yearOfStudy: null,
+  numInternals: 2,
+  minPassPercentage: 40.0,
   // Internal CIE Scheme
   calculationMethod: CalculationMethod.WEIGHTED_TWO_MIDS,
   bestMidWeightage: 80.0,
@@ -60,11 +65,26 @@ function sanitizeGradingScale(scale) {
   });
 }
 
+/**
+ * Fallback heuristic to estimate total years of study for an academic course
+ */
+function estimateCourseTotalYears(courseName) {
+  if (!courseName) return 4;
+  const name = String(courseName).toLowerCase();
+  if (name.includes('pharm.d') || name.includes('pharm d')) return 6;
+  if (name.includes('b.tech') || name.includes('btech') || name.includes('b.e') || name.includes('pharmacy') || name.includes('b.pharm')) return 4;
+  if (name.includes('m.tech') || name.includes('mtech') || name.includes('mba') || name.includes('mca') || name.includes('m.pharm') || name.includes('m.sc')) return 2;
+  if (name.includes('diploma') || name.includes('polytechnic') || name.includes('b.sc') || name.includes('b.com') || name.includes('bba') || name.includes('bca')) return 3;
+  return 4;
+}
+
 class RegulationInternalSettingsService {
-  constructor(regInternalSettingRepo, regulationRepo = null, auditRepo = null) {
+  constructor(regInternalSettingRepo, regulationRepo = null, auditRepo = null, regulationScopeRepo = null, sdms = null) {
     this.repo = regInternalSettingRepo;
     this.regulationRepo = regulationRepo;
     this.auditRepo = auditRepo;
+    this.scopeRepo = regulationScopeRepo;
+    this.sdms = sdms;
   }
 
   /**
@@ -73,16 +93,18 @@ class RegulationInternalSettingsService {
   formatInternalDescription(cfg) {
     const max = Number(cfg.maxInternalMarks ?? 30);
     const min = Number(cfg.minPassMarks ?? 16);
+    const numInts = Number(cfg.numInternals ?? 2);
+    const pct = Number(cfg.minPassPercentage ?? (max > 0 ? (min / max) * 100 : 40));
     switch (cfg.calculationMethod) {
       case CalculationMethod.AVERAGE_ALL_MIDS:
-        return `Average of both Mid exams (Target: ${max}, Min Pass: ${min})`;
+        return `Average of ${numInts} Internal Mids (Target: ${max}, Min Pass: ${min} [${pct.toFixed(0)}%])`;
       case CalculationMethod.BEST_SINGLE_MID:
-        return `Best single Mid exam (100%) (Target: ${max}, Min Pass: ${min})`;
+        return `Best Single Mid (100% of ${numInts} Mids) (Target: ${max}, Min Pass: ${min} [${pct.toFixed(0)}%])`;
       case CalculationMethod.WEIGHTED_TWO_MIDS:
       default: {
         const w1 = Number(cfg.bestMidWeightage ?? 80);
         const w2 = Number(cfg.otherMidWeightage ?? 20);
-        return `${w1}% Best Mid + ${w2}% Second Mid (Target: ${max}, Min Pass: ${min})`;
+        return `${w1}% Best Mid + ${w2}% Second Mid (${numInts} Mids) (Target: ${max}, Min Pass: ${min} [${pct.toFixed(0)}%])`;
       }
     }
   }
@@ -114,30 +136,49 @@ class RegulationInternalSettingsService {
   /**
    * Normalize an entity row into an API-ready object
    */
-  normalizeRecord(row, isCustomized = true, isInherited = false) {
+  normalizeRecord(row, isCustomized = true, isInherited = false, inheritedFrom = 'REGULATION') {
     const maxInt = Number(row.maxInternalMarks ?? 30);
     const maxExt = Number(row.maxExternalMarks ?? 70);
     const maxTot = Number(row.maxTotalMarks ?? (maxInt + maxExt));
+    const minPassMarks = Number(row.minPassMarks ?? 16);
+    const minPassPercentage = Number(
+      row.minPassPercentage ?? (maxInt > 0 ? Number(((minPassMarks / maxInt) * 100).toFixed(2)) : 40.0)
+    );
+
     return {
       id: row.id || null,
       regulationId: row.regulationId || null,
       regulationCode: row.regulationCode || 'GLOBAL_DEFAULT',
       regulationName: row.regulationName || null,
+      courseId: row.courseId ? Number(row.courseId) : null,
+      courseName: row.courseName || null,
+      yearOfStudy: row.yearOfStudy ? Number(row.yearOfStudy) : null,
+      numInternals: Number(row.numInternals ?? (row.minMidsRequired ?? 2)),
+      minPassPercentage,
+
       // Internal Setup
       calculationMethod: row.calculationMethod || CalculationMethod.WEIGHTED_TWO_MIDS,
       bestMidWeightage: Number(row.bestMidWeightage ?? 80),
       otherMidWeightage: Number(row.otherMidWeightage ?? 20),
       maxInternalMarks: maxInt,
-      minPassMarks: Number(row.minPassMarks ?? 16),
+      minPassMarks,
       minMidsRequired: row.minMidsRequired ?? (row.calculationMethod === CalculationMethod.BEST_SINGLE_MID ? 1 : 2),
       roundingRule: row.roundingRule || RoundingRule.ROUND_2_DECIMALS,
       includeAssignments: Boolean(row.includeAssignments),
       assignmentMarks: Number(row.assignmentMarks ?? 0),
+      evaluationComponents: Array.isArray(row.evaluationComponents)
+        ? row.evaluationComponents
+        : (typeof row.evaluationComponents === 'string'
+            ? (() => { try { return JSON.parse(row.evaluationComponents); } catch { return null; } })()
+            : null),
+      customFormula: row.customFormula || null,
+
       // External Setup
       maxExternalMarks: maxExt,
       minExternalPassMarks: Number(row.minExternalPassMarks ?? 25),
       minExternalPassPercentage: Number(row.minExternalPassPercentage ?? 35),
       requireExternalPass: row.requireExternalPass !== false,
+
       // Combo Setup
       maxTotalMarks: maxTot,
       minTotalPassMarks: Number(row.minTotalPassMarks ?? 40),
@@ -150,10 +191,11 @@ class RegulationInternalSettingsService {
       remarks: row.remarks || null,
       isCustomized,
       isInherited,
-      internalDescription: this.formatInternalDescription(row),
+      inheritedFrom,
+      internalDescription: this.formatInternalDescription({ ...row, maxInternalMarks: maxInt, minPassMarks, minPassPercentage }),
       externalDescription: this.formatExternalDescription(row),
       comboDescription: this.formatComboDescription(row),
-      formulaDescription: this.formatFormulaDescription(row),
+      formulaDescription: this.formatFormulaDescription({ ...row, maxInternalMarks: maxInt, minPassMarks, minPassPercentage }),
       updatedAt: row.updatedAt || null,
     };
   }
@@ -171,15 +213,16 @@ class RegulationInternalSettingsService {
         globalRow = this.repo.create({ ...DEFAULT_GLOBAL_CONFIG });
         globalRow = await this.repo.save(globalRow);
       } catch {
-        return this.normalizeRecord(DEFAULT_GLOBAL_CONFIG, false, true);
+        return this.normalizeRecord(DEFAULT_GLOBAL_CONFIG, false, true, 'GLOBAL');
       }
     }
 
-    return this.normalizeRecord(globalRow, false, false);
+    return this.normalizeRecord(globalRow, false, false, 'GLOBAL');
   }
 
   /**
-   * List all regulations along with their dynamic marks calculation schemes.
+   * List all regulations along with their dynamic marks calculation schemes,
+   * fully populated with regulation-based courses and year-wise breakdown.
    */
   async getAllSettings() {
     const globalDefault = await this.getGlobalDefault();
@@ -191,49 +234,280 @@ class RegulationInternalSettingsService {
       });
     }
 
-    const customSettings = await this.repo.find({
-      order: { regulationCode: 'ASC', id: 'ASC' },
+    // Load all custom settings from DB
+    const allCustomSettings = await this.repo.find({
+      order: { regulationCode: 'ASC', courseId: 'ASC', yearOfStudy: 'ASC', id: 'ASC' },
     });
 
-    const settingsByRegId = new Map();
-    const settingsByRegCode = new Map();
+    // Load all regulation scopes to discover courses under each regulation
+    let allScopes = [];
+    if (this.scopeRepo) {
+      try {
+        allScopes = await this.scopeRepo.find({
+          order: { courseName: 'ASC', batch: 'DESC' },
+        });
+      } catch (err) {
+        console.warn('Could not load regulation scopes for course discovery:', err.message);
+      }
+    }
 
-    for (const s of customSettings) {
+    // Try to load SDMS courses map for totalYears if available
+    let sdmsCourseMap = new Map();
+    if (this.sdms && typeof this.sdms.listCourses === 'function') {
+      try {
+        const sdmsCourses = await this.sdms.listCourses(undefined, false);
+        for (const c of sdmsCourses || []) {
+          sdmsCourseMap.set(c.id, c);
+        }
+      } catch {
+        // SDMS courses optional fallback
+      }
+    }
+
+    // Group scopes by regulationId -> Map<courseId, { courseId, courseName, batches: Set }
+    const scopesByRegId = new Map();
+    for (const sc of allScopes) {
+      if (!scopesByRegId.has(sc.regulationId)) {
+        scopesByRegId.set(sc.regulationId, new Map());
+      }
+      const courseMap = scopesByRegId.get(sc.regulationId);
+      if (!courseMap.has(sc.courseId)) {
+        courseMap.set(sc.courseId, {
+          courseId: sc.courseId,
+          courseName: sc.courseName,
+          batches: new Set(),
+        });
+      }
+      if (sc.batch) courseMap.get(sc.courseId).batches.add(sc.batch);
+    }
+
+    // Group custom settings by regulationId (support both numeric ID and string code)
+    const customSettingsByRegId = new Map();
+    for (const s of allCustomSettings) {
+      const keys = [];
       if (s.regulationId != null) {
-        settingsByRegId.set(s.regulationId, s);
+        keys.push(String(s.regulationId));
+        keys.push(Number(s.regulationId));
       }
       if (s.regulationCode) {
-        settingsByRegCode.set(s.regulationCode.toUpperCase().trim(), s);
+        keys.push(String(s.regulationCode).toUpperCase().trim());
+      }
+      for (const k of keys) {
+        if (!customSettingsByRegId.has(k)) {
+          customSettingsByRegId.set(k, []);
+        }
+        if (!customSettingsByRegId.get(k).includes(s)) {
+          customSettingsByRegId.get(k).push(s);
+        }
       }
     }
 
     const regulationList = allRegulations.map((reg) => {
-      const custom =
-        settingsByRegId.get(reg.id) ||
-        settingsByRegCode.get(reg.code.toUpperCase().trim()) ||
-        null;
+      const customList =
+        customSettingsByRegId.get(reg.id) ||
+        customSettingsByRegId.get(String(reg.id)) ||
+        customSettingsByRegId.get(reg.code.toUpperCase().trim()) ||
+        [];
 
-      if (custom && custom.regulationCode !== 'GLOBAL_DEFAULT') {
-        return this.normalizeRecord(
-          { ...custom, regulationId: reg.id, regulationCode: reg.code, regulationName: reg.name },
-          true,
-          false,
-        );
+      // Find regulation-level override (courseId is null, yearOfStudy is null)
+      const regLevelCustom = customList.find(
+        (s) => (s.courseId == null || s.courseId === 0) && (s.yearOfStudy == null || s.yearOfStudy === 0)
+      );
+
+      const regBaseSetting = regLevelCustom
+        ? this.normalizeRecord(
+            { ...regLevelCustom, regulationId: reg.id, regulationCode: reg.code, regulationName: reg.name },
+            true,
+            false,
+            'REGULATION',
+          )
+        : this.normalizeRecord(
+            {
+              ...globalDefault,
+              id: null,
+              regulationId: reg.id,
+              regulationCode: reg.code,
+              regulationName: reg.name,
+              remarks: 'Inherited from Global Default',
+              updatedAt: null,
+            },
+            false,
+            true,
+            'GLOBAL',
+          );
+
+      // Build regulation-based courses and year-wise breakdown
+      const courseMap = scopesByRegId.get(reg.id) || new Map();
+
+      // Discover any courses present in customList that might not be in scopesByRegId
+      for (const s of customList) {
+        if (s.courseId || s.courseName) {
+          const sCourseId = s.courseId != null ? Number(s.courseId) : null;
+          const sCourseName = s.courseName ? String(s.courseName).trim() : null;
+          let foundKey = null;
+          for (const [cId, cInfo] of courseMap.entries()) {
+            if (
+              (sCourseId != null && Number(cId) === sCourseId) ||
+              (sCourseName && cInfo.courseName && cInfo.courseName.trim().toLowerCase() === sCourseName.toLowerCase())
+            ) {
+              foundKey = cId;
+              break;
+            }
+          }
+          if (foundKey == null) {
+            const newKey = sCourseId != null ? sCourseId : `c_${sCourseName}`;
+            courseMap.set(newKey, {
+              courseId: sCourseId,
+              courseName: sCourseName || `Course #${sCourseId}`,
+              batches: new Set(),
+            });
+          }
+        }
       }
 
-      return this.normalizeRecord(
-        {
-          ...globalDefault,
-          id: null,
-          regulationId: reg.id,
-          regulationCode: reg.code,
-          regulationName: reg.name,
-          remarks: 'Inherited from Global Default',
-          updatedAt: null,
-        },
-        false,
-        true,
-      );
+      const courses = [];
+
+      for (const [courseId, courseInfo] of courseMap.entries()) {
+        const sdmsInfo = courseId ? sdmsCourseMap.get(courseId) : null;
+        const maxConfiguredYear = Math.max(
+          0,
+          ...customList
+            .filter((s) => {
+              const matchCourse =
+                (s.courseId != null && courseId != null && Number(s.courseId) === Number(courseId)) ||
+                (s.courseName && courseInfo.courseName && s.courseName.trim().toLowerCase() === courseInfo.courseName.trim().toLowerCase());
+              return matchCourse && s.yearOfStudy != null;
+            })
+            .map((s) => Number(s.yearOfStudy))
+        );
+        const estimatedYears = sdmsInfo?.totalYears
+          ? Number(sdmsInfo.totalYears)
+          : estimateCourseTotalYears(courseInfo.courseName);
+        const totalYears = Math.max(estimatedYears, maxConfiguredYear, 1);
+
+        // Find course-level override (course matches, yearOfStudy is null)
+        const courseCustom = customList.find((s) => {
+          const matchCourse =
+            (s.courseId != null && courseId != null && Number(s.courseId) === Number(courseId)) ||
+            (s.courseName && courseInfo.courseName && s.courseName.trim().toLowerCase() === courseInfo.courseName.trim().toLowerCase());
+          return matchCourse && (s.yearOfStudy == null || Number(s.yearOfStudy) === 0);
+        });
+
+        const courseSetting = courseCustom
+          ? this.normalizeRecord(
+              {
+                ...courseCustom,
+                regulationId: reg.id,
+                regulationCode: reg.code,
+                regulationName: reg.name,
+                courseId: courseInfo.courseId || courseId,
+                courseName: courseInfo.courseName,
+              },
+              true,
+              false,
+              'COURSE',
+            )
+          : this.normalizeRecord(
+              {
+                ...regBaseSetting,
+                id: null,
+                courseId: courseInfo.courseId || courseId,
+                courseName: courseInfo.courseName,
+                yearOfStudy: null,
+                remarks: `Inherited from ${reg.code} Regulation Default`,
+              },
+              false,
+              true,
+              regBaseSetting.isCustomized ? 'REGULATION' : 'GLOBAL',
+            );
+
+        // Build year-wise breakdown (Year 1 .. totalYears)
+        // If Year 1 is customized, Year 2..N are returned as inherited remaining years
+        const years = [];
+        for (let y = 1; y <= totalYears; y++) {
+          const yearCustom = customList.find((s) => {
+            const matchCourse =
+              (s.courseId != null && courseId != null && Number(s.courseId) === Number(courseId)) ||
+              (s.courseName && courseInfo.courseName && s.courseName.trim().toLowerCase() === courseInfo.courseName.trim().toLowerCase());
+            return matchCourse && Number(s.yearOfStudy) === y;
+          });
+
+          if (yearCustom) {
+            years.push({
+              yearOfStudy: y,
+              isCustomized: true,
+              inheritedFrom: 'YEAR',
+              setting: this.normalizeRecord(
+                {
+                  ...yearCustom,
+                  regulationId: reg.id,
+                  regulationCode: reg.code,
+                  regulationName: reg.name,
+                  courseId: courseInfo.courseId || courseId,
+                  courseName: courseInfo.courseName,
+                  yearOfStudy: y,
+                },
+                true,
+                false,
+                'YEAR',
+              ),
+            });
+          } else if (courseCustom) {
+            years.push({
+              yearOfStudy: y,
+              isCustomized: false,
+              inheritedFrom: 'COURSE',
+              setting: this.normalizeRecord(
+                {
+                  ...courseSetting,
+                  id: null,
+                  courseId: courseInfo.courseId || courseId,
+                  courseName: courseInfo.courseName,
+                  yearOfStudy: y,
+                  remarks: `Inherited from ${courseInfo.courseName} Course Scheme`,
+                },
+                false,
+                true,
+                'COURSE',
+              ),
+            });
+          } else {
+            years.push({
+              yearOfStudy: y,
+              isCustomized: false,
+              inheritedFrom: regBaseSetting.isCustomized ? 'REGULATION' : 'GLOBAL',
+              setting: this.normalizeRecord(
+                {
+                  ...regBaseSetting,
+                  id: null,
+                  courseId: courseInfo.courseId || courseId,
+                  courseName: courseInfo.courseName,
+                  yearOfStudy: y,
+                  remarks: `Inherited from ${reg.code} Regulation Baseline`,
+                },
+                false,
+                true,
+                regBaseSetting.isCustomized ? 'REGULATION' : 'GLOBAL',
+              ),
+            });
+          }
+        }
+
+        courses.push({
+          courseId,
+          courseName: courseInfo.courseName,
+          totalYears,
+          batches: Array.from(courseInfo.batches),
+          isCustomized: Boolean(courseCustom),
+          courseSetting,
+          years,
+        });
+      }
+
+      return {
+        ...regBaseSetting,
+        courses,
+      };
     });
 
     return {
@@ -243,32 +517,21 @@ class RegulationInternalSettingsService {
   }
 
   /**
-   * Get calculation settings for a specific regulation ID or Code.
+   * Get calculation settings hierarchically:
+   * 1. Exact Year Override: (regulation, course, year)
+   * 2. Course-Level Override: (regulation, course, year = null)
+   * 3. Regulation-Level Override: (regulation, course = null, year = null)
+   * 4. Global Default Fallback
    */
-  async getSettingForRegulation(regulationIdOrCode) {
+  async getSettingForRegulation(regulationIdOrCode, courseIdOrName = null, yearOfStudy = null) {
     const globalDefault = await this.getGlobalDefault();
 
     if (!regulationIdOrCode || regulationIdOrCode === 'GLOBAL_DEFAULT') {
       return globalDefault;
     }
 
-    let custom = null;
-    const numericId = parseInt(regulationIdOrCode, 10);
-
-    if (!isNaN(numericId) && numericId > 0) {
-      custom = await this.repo.findOne({ where: { regulationId: numericId } });
-    }
-
-    if (!custom) {
-      const codeStr = String(regulationIdOrCode).trim().toUpperCase();
-      custom = await this.repo.findOne({ where: { regulationCode: codeStr } });
-    }
-
-    if (custom && custom.regulationCode !== 'GLOBAL_DEFAULT') {
-      return this.normalizeRecord(custom, true, false);
-    }
-
     let regInfo = null;
+    const numericId = parseInt(regulationIdOrCode, 10);
     if (this.regulationRepo) {
       if (!isNaN(numericId) && numericId > 0) {
         regInfo = await this.regulationRepo.findOne({ where: { id: numericId } });
@@ -278,16 +541,93 @@ class RegulationInternalSettingsService {
       }
     }
 
+    const regId = regInfo ? regInfo.id : (!isNaN(numericId) && numericId > 0 ? numericId : null);
+    const regCode = regInfo ? regInfo.code : String(regulationIdOrCode).trim().toUpperCase();
+    const regName = regInfo ? regInfo.name : null;
+
+    const numericYear = yearOfStudy ? parseInt(yearOfStudy, 10) : null;
+    const numericCourseId = courseIdOrName && !isNaN(parseInt(courseIdOrName, 10)) ? parseInt(courseIdOrName, 10) : null;
+    const courseNameStr = courseIdOrName && isNaN(parseInt(courseIdOrName, 10)) ? String(courseIdOrName).trim() : null;
+
+    // 1. Try finding Year-specific override: (regulation, course, year)
+    if (numericYear && (numericCourseId || courseNameStr)) {
+      const qb = this.repo.createQueryBuilder('s')
+        .where('(s.regulationId = :regId OR UPPER(s.regulationCode) = :regCode)', { regId, regCode })
+        .andWhere('s.yearOfStudy = :year', { year: numericYear });
+      if (numericCourseId) {
+        qb.andWhere('(s.courseId = :cId OR LOWER(s.courseName) = LOWER(:cName))', {
+          cId: numericCourseId,
+          cName: courseNameStr || '',
+        });
+      } else {
+        qb.andWhere('LOWER(s.courseName) = LOWER(:cName)', { cName: courseNameStr });
+      }
+      const match = await qb.getOne();
+      if (match) {
+        return this.normalizeRecord(
+          { ...match, regulationId: regId, regulationCode: regCode, regulationName: regName },
+          true,
+          false,
+          'YEAR',
+        );
+      }
+    }
+
+    // 2. Try finding Course-level override: (regulation, course, year IS NULL)
+    if (numericCourseId || courseNameStr) {
+      const qb = this.repo.createQueryBuilder('s')
+        .where('(s.regulationId = :regId OR UPPER(s.regulationCode) = :regCode)', { regId, regCode })
+        .andWhere('(s.yearOfStudy IS NULL OR s.yearOfStudy = 0)');
+      if (numericCourseId) {
+        qb.andWhere('(s.courseId = :cId OR LOWER(s.courseName) = LOWER(:cName))', {
+          cId: numericCourseId,
+          cName: courseNameStr || '',
+        });
+      } else {
+        qb.andWhere('LOWER(s.courseName) = LOWER(:cName)', { cName: courseNameStr });
+      }
+      const match = await qb.getOne();
+      if (match) {
+        return this.normalizeRecord(
+          { ...match, regulationId: regId, regulationCode: regCode, regulationName: regName },
+          true,
+          false,
+          'COURSE',
+        );
+      }
+    }
+
+    // 3. Try finding Regulation-level override: (regulation, courseId IS NULL, year IS NULL)
+    const regMatch = await this.repo.createQueryBuilder('s')
+      .where('(s.regulationId = :regId OR UPPER(s.regulationCode) = :regCode)', { regId, regCode })
+      .andWhere('(s.courseId IS NULL OR s.courseId = 0)')
+      .andWhere('(s.yearOfStudy IS NULL OR s.yearOfStudy = 0)')
+      .getOne();
+
+    if (regMatch && regMatch.regulationCode !== 'GLOBAL_DEFAULT') {
+      return this.normalizeRecord(
+        { ...regMatch, regulationId: regId, regulationCode: regCode, regulationName: regName },
+        true,
+        false,
+        'REGULATION',
+      );
+    }
+
+    // 4. Global baseline fallback
     return this.normalizeRecord(
       {
         ...globalDefault,
         id: null,
-        regulationId: regInfo ? regInfo.id : (numericId || null),
-        regulationCode: regInfo ? regInfo.code : String(regulationIdOrCode),
-        regulationName: regInfo ? regInfo.name : null,
+        regulationId: regId,
+        regulationCode: regCode,
+        regulationName: regName,
+        courseId: numericCourseId,
+        courseName: courseNameStr,
+        yearOfStudy: numericYear,
       },
       false,
       true,
+      'GLOBAL',
     );
   }
 
@@ -297,6 +637,11 @@ class RegulationInternalSettingsService {
   extractStateSnapshot(entity) {
     if (!entity) return null;
     return {
+      courseId: entity.courseId ? Number(entity.courseId) : null,
+      courseName: entity.courseName || null,
+      yearOfStudy: entity.yearOfStudy ? Number(entity.yearOfStudy) : null,
+      numInternals: Number(entity.numInternals ?? 2),
+      minPassPercentage: Number(entity.minPassPercentage ?? 40.0),
       calculationMethod: entity.calculationMethod,
       bestMidWeightage: Number(entity.bestMidWeightage ?? 80),
       otherMidWeightage: Number(entity.otherMidWeightage ?? 20),
@@ -319,10 +664,14 @@ class RegulationInternalSettingsService {
 
   formatFieldLabel(key) {
     const map = {
+      courseName: 'Target Course',
+      yearOfStudy: 'Target Year of Study',
+      numInternals: 'Number of Internal Mids',
+      minPassPercentage: 'Internal Pass Target %',
       maxInternalMarks: 'Max Internal Marks (CIE)',
       maxExternalMarks: 'Max External Marks (SEE)',
       maxTotalMarks: 'Course Maximum Total Marks',
-      minPassMarks: 'Internal Pass Cutoff',
+      minPassMarks: 'Internal Pass Cutoff Marks',
       minExternalPassMarks: 'External Min Pass Marks',
       minExternalPassPercentage: 'External Pass % Cutoff',
       minTotalPassMarks: 'Min Total Pass Marks',
@@ -343,6 +692,10 @@ class RegulationInternalSettingsService {
   computeStateDiff(fromState, toState) {
     if (!toState) return [];
     const trackedKeys = [
+      'courseName',
+      'yearOfStudy',
+      'numInternals',
+      'minPassPercentage',
       'maxInternalMarks',
       'maxExternalMarks',
       'maxTotalMarks',
@@ -399,12 +752,12 @@ class RegulationInternalSettingsService {
   }) {
     if (!this.auditRepo) return null;
     try {
-      const actorEmail = actor?.email || actor?.username || 'system';
-      const actorName = actor?.fullName || actor?.name || actor?.email || 'Administrator';
-      const actorRole = actor?.role?.name || actor?.roleName || (actor?.isSuperAdmin ? 'Super Admin' : 'Admin');
+      const actorEmail = actor ? actor.email || actor.username || null : null;
+      const actorName = actor ? actor.name || actor.displayName || actorEmail : null;
+      const actorRole = actor ? actor.role || actor.roles?.[0] || 'ADMIN' : 'SYSTEM';
 
       const log = this.auditRepo.create({
-        regulationId: regulationId ? Number(regulationId) : null,
+        regulationId: regulationId || null,
         regulationCode: regulationCode || 'GLOBAL_DEFAULT',
         regulationName: regulationName || null,
         action,
@@ -469,7 +822,8 @@ class RegulationInternalSettingsService {
   }
 
   /**
-   * Save or update marks calculation settings.
+   * Save or update marks calculation settings dynamically:
+   * Supports: Regulation-level, Course-level, and Year-level configuration.
    */
   async saveSetting(dto, actor = null) {
     const isGlobal =
@@ -477,6 +831,11 @@ class RegulationInternalSettingsService {
       dto.regulationCode === 'GLOBAL_DEFAULT' ||
       dto.regulationId === 0 ||
       dto.regulationId === '0';
+
+    const courseId = dto.courseId ? Number(dto.courseId) : null;
+    const courseName = dto.courseName ? String(dto.courseName).trim() : null;
+    const yearOfStudy = dto.yearOfStudy ? Number(dto.yearOfStudy) : null;
+    const numInternals = Math.max(1, Number(dto.numInternals ?? 2));
 
     // Internal validations
     const maxInternalMarks = Number(dto.maxInternalMarks ?? 30);
@@ -488,6 +847,10 @@ class RegulationInternalSettingsService {
     if (isNaN(minPassMarks) || minPassMarks < 0 || minPassMarks > maxInternalMarks) {
       throw AppError.badRequest('Minimum internal pass marks must be between 0 and maximum internal marks');
     }
+
+    const minPassPercentage = Number(
+      dto.minPassPercentage ?? ((minPassMarks / maxInternalMarks) * 100)
+    );
 
     const method = dto.calculationMethod || CalculationMethod.WEIGHTED_TWO_MIDS;
     if (!Object.values(CalculationMethod).includes(method)) {
@@ -528,12 +891,13 @@ class RegulationInternalSettingsService {
       throw AppError.badRequest('Minimum external pass marks must be between 0 and maximum external marks');
     }
 
-    const minExternalPassPercentage = Number(dto.minExternalPassPercentage ?? ((minExternalPassMarks / maxExternalMarks) * 100));
+    const minExternalPassPercentage = Number(
+      dto.minExternalPassPercentage ?? ((minExternalPassMarks / maxExternalMarks) * 100)
+    );
 
     // Combo validations & Mathematical Consistency check
     const computedTotal = Number((maxInternalMarks + maxExternalMarks).toFixed(2));
     let maxTotalMarks = Number(dto.maxTotalMarks ?? computedTotal);
-    // Enforce that maxTotalMarks is always the exact mathematical sum of maxInternal + maxExternal
     if (isNaN(maxTotalMarks) || maxTotalMarks <= 0 || Math.abs(maxTotalMarks - computedTotal) > 0.01) {
       maxTotalMarks = computedTotal;
     }
@@ -543,7 +907,9 @@ class RegulationInternalSettingsService {
       throw AppError.badRequest(`Minimum total pass marks must be between 0 and maximum total marks (${maxTotalMarks})`);
     }
 
-    const minTotalPassPercentage = Number(dto.minTotalPassPercentage ?? ((minTotalPassMarks / maxTotalMarks) * 100));
+    const minTotalPassPercentage = Number(
+      dto.minTotalPassPercentage ?? ((minTotalPassMarks / maxTotalMarks) * 100)
+    );
 
     const rounding = dto.roundingRule || RoundingRule.ROUND_2_DECIMALS;
     if (!Object.values(RoundingRule).includes(rounding)) {
@@ -554,38 +920,52 @@ class RegulationInternalSettingsService {
 
     let targetEntity = null;
 
-    if (isGlobal) {
-      targetEntity = await this.repo.findOne({
-        where: [{ regulationId: IsNull() }, { regulationCode: 'GLOBAL_DEFAULT' }],
-      });
-      if (!targetEntity) {
-        targetEntity = this.repo.create({
-          regulationId: null,
-          regulationCode: 'GLOBAL_DEFAULT',
-          regulationName: 'Global Default (All Regulations)',
-        });
-      }
-    } else {
-      const regId = Number(dto.regulationId);
-      let regRecord = null;
-      if (this.regulationRepo && regId) {
-        regRecord = await this.regulationRepo.findOne({ where: { id: regId } });
-      }
+    if (dto.id) {
+      targetEntity = await this.repo.findOne({ where: { id: dto.id } });
+    }
 
-      targetEntity = await this.repo.findOne({
-        where: [{ regulationId: regId }, { regulationCode: dto.regulationCode || (regRecord ? regRecord.code : null) }],
-      });
-
-      if (!targetEntity) {
-        targetEntity = this.repo.create({
-          regulationId: regId,
-          regulationCode: regRecord ? regRecord.code : (dto.regulationCode || null),
-          regulationName: regRecord ? regRecord.name : (dto.regulationName || null),
+    if (!targetEntity) {
+      if (isGlobal) {
+        targetEntity = await this.repo.findOne({
+          where: [{ regulationId: IsNull() }, { regulationCode: 'GLOBAL_DEFAULT' }],
         });
+        if (!targetEntity) {
+          targetEntity = this.repo.create({
+            regulationId: null,
+            regulationCode: 'GLOBAL_DEFAULT',
+            regulationName: 'Global Default (All Regulations)',
+          });
+        }
       } else {
-        if (regRecord) {
-          targetEntity.regulationCode = regRecord.code;
-          targetEntity.regulationName = regRecord.name;
+        const regId = Number(dto.regulationId);
+        let regRecord = null;
+        if (this.regulationRepo && regId) {
+          regRecord = await this.regulationRepo.findOne({ where: { id: regId } });
+        }
+
+        const whereObj = {
+          regulationId: regId,
+          courseId: courseId ? courseId : IsNull(),
+          yearOfStudy: yearOfStudy ? yearOfStudy : IsNull(),
+        };
+
+        targetEntity = await this.repo.findOne({ where: whereObj });
+
+        if (!targetEntity) {
+          targetEntity = this.repo.create({
+            regulationId: regId,
+            regulationCode: regRecord ? regRecord.code : (dto.regulationCode || null),
+            regulationName: regRecord ? regRecord.name : (dto.regulationName || null),
+            courseId,
+            courseName,
+            yearOfStudy,
+          });
+        } else {
+          if (regRecord) {
+            targetEntity.regulationCode = regRecord.code;
+            targetEntity.regulationName = regRecord.name;
+          }
+          if (courseName) targetEntity.courseName = courseName;
         }
       }
     }
@@ -594,16 +974,31 @@ class RegulationInternalSettingsService {
     const isNew = !targetEntity.id;
     const fromState = this.extractStateSnapshot(isNew ? null : targetEntity);
 
+    // Assign scope fields
+    targetEntity.courseId = courseId;
+    targetEntity.courseName = courseName;
+    targetEntity.yearOfStudy = yearOfStudy;
+    targetEntity.numInternals = numInternals;
+    targetEntity.minPassPercentage = minPassPercentage;
+
     // Assign Internal
     targetEntity.calculationMethod = method;
     targetEntity.bestMidWeightage = bestWeight;
     targetEntity.otherMidWeightage = otherWeight;
     targetEntity.maxInternalMarks = maxInternalMarks;
     targetEntity.minPassMarks = minPassMarks;
-    targetEntity.minMidsRequired = Number(dto.minMidsRequired ?? (method === CalculationMethod.BEST_SINGLE_MID ? 1 : 2));
+    targetEntity.minMidsRequired = Number(dto.minMidsRequired ?? (method === CalculationMethod.BEST_SINGLE_MID ? 1 : Math.min(2, numInternals)));
     targetEntity.roundingRule = rounding;
     targetEntity.includeAssignments = Boolean(dto.includeAssignments);
     targetEntity.assignmentMarks = Number(dto.assignmentMarks ?? 0);
+    if (dto.evaluationComponents !== undefined) {
+      targetEntity.evaluationComponents = Array.isArray(dto.evaluationComponents)
+        ? dto.evaluationComponents
+        : (dto.evaluationComponents === null ? null : targetEntity.evaluationComponents);
+    }
+    if (dto.customFormula !== undefined) {
+      targetEntity.customFormula = dto.customFormula || null;
+    }
 
     // Assign External
     targetEntity.maxExternalMarks = maxExternalMarks;
@@ -633,6 +1028,12 @@ class RegulationInternalSettingsService {
     // Record audit history entry
     const toState = this.extractStateSnapshot(saved);
     const changes = this.computeStateDiff(fromState, toState);
+    const scopeLabel = yearOfStudy
+      ? `${saved.regulationCode} / ${courseName || 'Course'} / Year ${yearOfStudy}`
+      : courseId
+      ? `${saved.regulationCode} / ${courseName || 'Course'} (All Years)`
+      : `${saved.regulationCode} (Regulation Baseline)`;
+
     await this.recordAuditLog({
       regulationId: saved.regulationId,
       regulationCode: saved.regulationCode,
@@ -642,21 +1043,21 @@ class RegulationInternalSettingsService {
       fromState,
       toState,
       changes,
-      remarks: saved.remarks,
+      remarks: saved.remarks || `Configured marks scheme for ${scopeLabel}`,
     });
 
-    return this.normalizeRecord(saved, !isGlobal, false);
+    return this.normalizeRecord(saved, !isGlobal, false, yearOfStudy ? 'YEAR' : courseId ? 'COURSE' : 'REGULATION');
   }
 
   /**
-   * Reset a regulation's custom settings back to Global Default
+   * Reset a regulation/course/year custom setting back to inherited default
    */
   async resetSetting(id, actor = null) {
     const existing = await this.repo.findOne({ where: { id } });
     if (!existing) {
       throw AppError.notFound('Setting record not found');
     }
-    if (existing.regulationCode === 'GLOBAL_DEFAULT' || existing.regulationId == null) {
+    if (existing.regulationCode === 'GLOBAL_DEFAULT' && existing.regulationId == null && existing.courseId == null) {
       throw AppError.badRequest('Cannot delete the global default calculation configuration');
     }
 
@@ -667,7 +1068,12 @@ class RegulationInternalSettingsService {
 
     await this.repo.delete(id);
 
-    // Record audit history for reset
+    const scopeLabel = existing.yearOfStudy
+      ? `${existing.regulationCode} / ${existing.courseName || 'Course'} / Year ${existing.yearOfStudy}`
+      : existing.courseId
+      ? `${existing.regulationCode} / ${existing.courseName || 'Course'} (All Years)`
+      : `${existing.regulationCode} (Regulation Baseline)`;
+
     await this.recordAuditLog({
       regulationId: existing.regulationId,
       regulationCode: existing.regulationCode,
@@ -677,14 +1083,14 @@ class RegulationInternalSettingsService {
       fromState,
       toState,
       changes,
-      remarks: 'Reset custom regulation setup to inherit Global Baseline',
+      remarks: `Reset custom setup for ${scopeLabel} to inherit baseline`,
     });
 
-    return { success: true, message: 'Regulation marks setup reset to Global Default' };
+    return { success: true, message: `Marks setup for ${scopeLabel} reset to baseline` };
   }
 
   /**
-   * Core Internal Calculation Engine
+   * Core Internal Calculation Engine (Supports Dynamic Assessment Components & Custom Formulas)
    */
   calculateInternalMarks(midEntries, config = {}) {
     const targetMax = Number(config.maxInternalMarks ?? 30);
@@ -692,8 +1098,18 @@ class RegulationInternalSettingsService {
     const method = config.calculationMethod || CalculationMethod.WEIGHTED_TWO_MIDS;
     const bestWeight = Number(config.bestMidWeightage ?? 80);
     const otherWeight = Number(config.otherMidWeightage ?? 20);
-    const minMidsRequired = Number(config.minMidsRequired ?? (method === CalculationMethod.BEST_SINGLE_MID ? 1 : 2));
+    const numInts = Number(config.numInternals ?? 2);
+    const minMidsRequired = Number(config.minMidsRequired ?? (method === CalculationMethod.BEST_SINGLE_MID ? 1 : Math.min(2, numInts)));
     const rounding = config.roundingRule || RoundingRule.ROUND_2_DECIMALS;
+
+    // Check if dynamic evaluation components are configured
+    const components = Array.isArray(config.evaluationComponents) && config.evaluationComponents.length > 0
+      ? config.evaluationComponents
+      : null;
+
+    if (components) {
+      return this.calculateComponentBasedInternals(midEntries, components, config);
+    }
 
     if (!Array.isArray(midEntries)) {
       return {
@@ -805,9 +1221,149 @@ class RegulationInternalSettingsService {
         calculationMethod: method,
         bestMidWeightage: bestWeight,
         otherMidWeightage: otherWeight,
+        numInternals: numInts,
+        minPassPercentage: config.minPassPercentage,
       }),
       formulaStep,
       rawScores: validScores.map((s) => Number(s.toFixed(2))),
+    };
+  }
+
+  /**
+   * Evaluates Dynamic Assessment Components (e.g. 3 Mids + 2 Assignments + Quizzes)
+   */
+  calculateComponentBasedInternals(inputData, components, config) {
+    const targetMax = Number(config.maxInternalMarks ?? 40);
+    const minPass = Number(config.minPassMarks ?? 16);
+    const rounding = config.roundingRule || RoundingRule.ROUND_2_DECIMALS;
+
+    // inputData can be an object mapping componentId or lowercase code to entries,
+    // or a flat array of mid numbers in legacy requests
+    let componentInputMap = {};
+    if (inputData && typeof inputData === 'object' && !Array.isArray(inputData)) {
+      componentInputMap = inputData;
+    } else if (Array.isArray(inputData)) {
+      if (components.length > 0) {
+        componentInputMap[components[0].id || components[0].code?.toLowerCase()] = inputData;
+      }
+    }
+
+    const componentBreakdown = [];
+    let totalUnroundedMarks = 0;
+    const formulaSteps = [];
+
+    for (const comp of components) {
+      const compId = comp.id || comp.code;
+      const compKey = comp.code ? comp.code.toLowerCase() : compId;
+      const entries =
+        componentInputMap[compId] ||
+        componentInputMap[compKey] ||
+        componentInputMap[comp.name?.toLowerCase()] ||
+        [];
+
+      const maxPerInstance = Number(comp.maxMarksPerInstance ?? comp.scaledMaxMarks ?? 30);
+      const scaledMax = Number(comp.scaledMaxMarks ?? maxPerInstance);
+      const rule = comp.aggregationRule || 'AVERAGE_ALL';
+      const bestCount = Number(comp.bestCount ?? 2);
+      const bestWeight = Number(comp.bestWeightage ?? 80);
+      const otherWeight = Number(comp.otherWeightage ?? 20);
+
+      const validScores = [];
+      for (const item of Array.isArray(entries) ? entries : []) {
+        if (item === null || item === undefined) continue;
+        if (typeof item === 'number' && !isNaN(item) && item >= 0) {
+          validScores.push(Math.min(item, maxPerInstance));
+        } else if (typeof item === 'object') {
+          if (item.isAbsent) {
+            validScores.push(0);
+          } else if (item.marks !== null && item.marks !== undefined && !isNaN(Number(item.marks))) {
+            validScores.push(Math.min(Number(item.marks), maxPerInstance));
+          }
+        }
+      }
+
+      let compScore = 0;
+      let rawAverage = 0;
+      let compStep = '';
+
+      if (validScores.length === 0) {
+        compScore = 0;
+        rawAverage = 0;
+        compStep = `${comp.name}: No scores entered (0.0 / ${scaledMax})`;
+      } else if (rule === 'BEST_N') {
+        const sorted = [...validScores].sort((a, b) => b - a);
+        const topScores = sorted.slice(0, Math.min(bestCount, sorted.length));
+        const sumTop = topScores.reduce((acc, v) => acc + v, 0);
+        rawAverage = topScores.length > 0 ? sumTop / topScores.length : 0;
+        compScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
+        compStep = `${comp.name} [Best ${topScores.length} of ${validScores.length}]: (${topScores.join(' + ')})/${topScores.length} = ${rawAverage.toFixed(1)}/${maxPerInstance} (Scaled: ${compScore.toFixed(1)} / ${scaledMax})`;
+      } else if (rule === 'WEIGHTED') {
+        const sorted = [...validScores].sort((a, b) => b - a);
+        const best = sorted[0] || 0;
+        const second = sorted[1] || 0;
+        const weighted = best * (bestWeight / 100) + second * (otherWeight / 100);
+        rawAverage = weighted;
+        compScore = maxPerInstance > 0 ? (weighted / maxPerInstance) * scaledMax : weighted;
+        compStep = `${comp.name} [Weighted]: (${best.toFixed(1)} × ${bestWeight}%) + (${second.toFixed(1)} × ${otherWeight}%) = ${weighted.toFixed(1)}/${maxPerInstance} (Scaled: ${compScore.toFixed(1)} / ${scaledMax})`;
+      } else if (rule === 'SUM_ALL') {
+        const sum = validScores.reduce((acc, v) => acc + v, 0);
+        rawAverage = sum;
+        compScore = Math.min(sum, scaledMax);
+        compStep = `${comp.name} [Sum]: (${validScores.join(' + ')}) = ${compScore.toFixed(1)} / ${scaledMax}`;
+      } else {
+        // AVERAGE_ALL (default)
+        const sum = validScores.reduce((acc, v) => acc + v, 0);
+        rawAverage = validScores.length > 0 ? sum / validScores.length : 0;
+        compScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
+        compStep = `${comp.name} [Average of ${validScores.length}]: (${validScores.map((v) => v.toFixed(1)).join(' + ')})/${validScores.length} = ${rawAverage.toFixed(1)}/${maxPerInstance} (Scaled: ${compScore.toFixed(1)} / ${scaledMax})`;
+      }
+
+      totalUnroundedMarks += compScore;
+      formulaSteps.push(compStep);
+
+      componentBreakdown.push({
+        componentId: compId,
+        name: comp.name,
+        code: comp.code || compId,
+        score: Number(compScore.toFixed(2)),
+        scaledMax,
+        rawAverage: Number(rawAverage.toFixed(2)),
+        rule,
+        formulaStep: compStep,
+        validScores,
+      });
+    }
+
+    let finalMarks = totalUnroundedMarks;
+    switch (rounding) {
+      case RoundingRule.ROUND_NEAREST_INT:
+        finalMarks = Math.round(totalUnroundedMarks);
+        break;
+      case RoundingRule.CEIL:
+        finalMarks = Math.ceil(totalUnroundedMarks);
+        break;
+      case RoundingRule.FLOOR:
+        finalMarks = Math.floor(totalUnroundedMarks);
+        break;
+      case RoundingRule.ROUND_2_DECIMALS:
+      default:
+        finalMarks = Number(totalUnroundedMarks.toFixed(2));
+        break;
+    }
+
+    const isPass = finalMarks >= minPass;
+
+    return {
+      marks: finalMarks,
+      status: isPass ? 'PASS' : 'FAIL',
+      isPass,
+      targetMax,
+      minPass,
+      componentBreakdown,
+      formulaDescription: `Custom Components: ${components.map((c) => `${c.name} [${c.scaledMaxMarks}]`).join(' + ')} = ${targetMax} Total Internal`,
+      formulaStep:
+        formulaSteps.join(' | ') +
+        ` => Total Internal: ${finalMarks} / ${targetMax} (${isPass ? 'PASSED' : 'FAILED'})`,
     };
   }
 
@@ -843,7 +1399,6 @@ class RegulationInternalSettingsService {
       };
     }
 
-    // Sort descending by minPercentage
     const passingRules = [...activeScale]
       .filter((s) => s.isPass && String(s.grade).toUpperCase() !== 'AB')
       .sort((a, b) => Number(b.minPercentage) - Number(a.minPercentage));
@@ -874,7 +1429,7 @@ class RegulationInternalSettingsService {
    * Comprehensive Assessment Simulation (Internal, External, and Combined Total)
    */
   simulate(dto) {
-    const entries = Array.isArray(dto.midEntries) ? dto.midEntries : [];
+    const entries = dto.componentEntries || (Array.isArray(dto.midEntries) ? dto.midEntries : []);
     const internalRes = this.calculateInternalMarks(entries, dto);
 
     // External Assessment Evaluation
@@ -921,7 +1476,6 @@ class RegulationInternalSettingsService {
       totalMarks = Number((internalRes.marks + externalMarks).toFixed(2));
       isTotalPass = totalMarks >= minTotalPass;
 
-      // Evaluate Strategy
       if (isExtAbsent) {
         overallPass = false;
         overallStatus = 'ABSENT';
@@ -933,54 +1487,58 @@ class RegulationInternalSettingsService {
         } else if (passStrategy === 'EXTERNAL_ONLY') {
           overallPass = isExternalPass;
         } else {
-          // Standard EXTERNAL_AND_TOTAL
           overallPass = isExternalPass && isTotalPass && (!requireInternalPass || internalRes.isPass);
         }
 
         overallStatus = overallPass ? 'PASS' : 'FAIL';
       }
 
-      // Dynamic Grade and Points allocation via regulation's configured grading scale
-      const percentage = (totalMarks / maxTotal) * 100;
+      const percentage = maxTotal > 0 ? (totalMarks / maxTotal) * 100 : 0;
       const scale = sanitizeGradingScale(dto.gradingScale);
       const evaluated = this.evaluateGradeAndPoints(percentage, overallPass, isExtAbsent, scale);
       grade = evaluated.grade;
       gradeDescription = evaluated.gradeDescription;
       gradePoints = evaluated.gradePoints;
 
-      comboStep = `Internal (${internalRes.marks}) + External (${externalMarks}) = ${totalMarks} / ${maxTotal} (${percentage.toFixed(1)}%). Cutoffs: External (≥ ${minExternalPass}: ${isExternalPass ? 'Yes' : 'No'}), Total Aggregate (≥ ${minTotalPass}: ${isTotalPass ? 'Yes' : 'No'}) → Overall: ${overallStatus} | Grade: ${grade} (${gradeDescription}, ${gradePoints} Points)`;
+      comboStep = `Total Marks: ${internalRes.marks} (Internal) + ${externalMarks} (External) = ${totalMarks} / ${maxTotal} (${percentage.toFixed(1)}%). Rule [${passStrategy}]: ${overallStatus} (Awarded: ${grade})`;
+    } else if (internalRes.marks !== null) {
+      comboStep = `Internal Marks calculated: ${internalRes.marks} / ${internalRes.targetMax}. External score pending.`;
     }
 
     return {
-      // Legacy top-level compatibility
-      marks: internalRes.marks,
-      status: overallStatus !== 'PENDING' ? overallStatus : internalRes.status,
-      isPass: overallPass !== null ? overallPass : internalRes.isPass,
-      targetMax: internalRes.targetMax,
-      minPass: internalRes.minPass,
+      marks: totalMarks,
+      status: overallStatus,
+      isPass: overallPass,
+      targetMax: maxTotal,
+      minPass: minTotalPass,
       bestMid: internalRes.bestMid,
       secondMid: internalRes.secondMid,
-      grade,
-      gradeDescription,
-      gradePoints,
+      method: internalRes.method,
       formulaDescription: this.formatFormulaDescription({
         ...dto,
         maxInternalMarks: internalRes.targetMax,
         minPassMarks: internalRes.minPass,
+        maxExternalMarks: maxExternal,
+        minExternalPassMarks: minExternalPass,
+        maxTotalMarks: maxTotal,
+        minTotalPassMarks: minTotalPass,
       }),
-      formulaStep: comboStep || internalRes.formulaStep,
+      formulaStep: comboStep || internalRes.formulaStep || externalStep,
+      rawScores: internalRes.rawScores,
+      componentBreakdown: internalRes.componentBreakdown || null,
 
-      // Rich Separated Breakdown Sections
       internal: {
         marks: internalRes.marks,
         targetMax: internalRes.targetMax,
         minPass: internalRes.minPass,
+        minPassPercentage: Number(dto.minPassPercentage ?? (internalRes.targetMax > 0 ? (internalRes.minPass / internalRes.targetMax) * 100 : 40)),
         isPass: internalRes.isPass,
         status: internalRes.status,
         formulaStep: internalRes.formulaStep,
         bestMid: internalRes.bestMid,
         secondMid: internalRes.secondMid,
       },
+
       external: {
         marks: externalMarks,
         targetMax: maxExternal,
@@ -991,10 +1549,10 @@ class RegulationInternalSettingsService {
         status: externalStatus,
         formulaStep: externalStep,
       },
+
       combo: {
         totalMarks,
         targetMax: maxTotal,
-        percentage: totalMarks !== null ? Number(((totalMarks / maxTotal) * 100).toFixed(2)) : null,
         minPass: minTotalPass,
         minPassPercentage: minTotalPct,
         isTotalPass,
@@ -1004,6 +1562,7 @@ class RegulationInternalSettingsService {
         grade,
         gradeDescription,
         gradePoints,
+        percentage: totalMarks !== null && maxTotal > 0 ? Number(((totalMarks / maxTotal) * 100).toFixed(1)) : null,
         formulaStep: comboStep,
       },
     };
