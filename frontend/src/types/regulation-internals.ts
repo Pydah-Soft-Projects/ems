@@ -67,6 +67,53 @@ export interface AssessmentComponent {
   mandatory?: boolean;
 }
 
+export type EvaluationArchitecture =
+  | 'CYCLE_BASED'
+  | 'FLAT_POOL'
+  | 'BUCKET_BASED'
+  | 'CUSTOM_EXPRESSION';
+
+export interface CycleAssessmentItem {
+  id: string;
+  name: string;
+  code: string;
+  maxMarks: number;
+}
+
+export interface EvaluationCycle {
+  id: string;
+  name: string;
+  code: string;
+  combinationRule: 'AVERAGE' | 'SUM' | 'WEIGHTED';
+  scaledMaxMarks: number;
+  assessments: CycleAssessmentItem[];
+}
+
+export interface CycleAggregationConfig {
+  rule: 'AVERAGE' | 'BEST_1' | 'WEIGHTED_80_20' | 'SUM' | 'CUSTOM';
+  bestWeight?: number;
+  otherWeight?: number;
+  customFormula?: string;
+}
+
+export interface FlatPoolItem {
+  id: string;
+  name: string;
+  code: string;
+  maxMarks: number;
+}
+
+export interface EvaluationStructureConfig {
+  architecture: EvaluationArchitecture;
+  cycles?: EvaluationCycle[];
+  cycleAggregation?: CycleAggregationConfig;
+  flatItems?: FlatPoolItem[];
+  flatRule?: 'AVERAGE_ALL' | 'SUM_ALL' | 'BEST_N' | 'WEIGHTED';
+  flatBestCount?: number;
+  components?: AssessmentComponent[];
+  customExpression?: string;
+}
+
 export interface RegulationCourseSetting {
   courseId: number;
   courseName: string;
@@ -85,6 +132,7 @@ export interface RegulationInternalSetting {
   courseId?: number | null;
   courseName?: string | null;
   yearOfStudy?: number | null;
+  yearsOfStudy?: number[] | null;
   numInternals?: number;
   minPassPercentage?: number;
 
@@ -98,7 +146,7 @@ export interface RegulationInternalSetting {
   roundingRule: RoundingRule;
   includeAssignments: boolean;
   assignmentMarks: number;
-  evaluationComponents?: AssessmentComponent[] | null;
+  evaluationComponents?: AssessmentComponent[] | EvaluationStructureConfig | any | null;
   customFormula?: string | null;
 
   // External SEE Setup
@@ -141,7 +189,7 @@ export interface RegulationInternalSettingsOverview {
 export interface RegulationMarksSimulationDto {
   midEntries?: Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>;
   componentEntries?: Record<string, Array<number | { marks: number; maxMarks?: number; isAbsent?: boolean }>>;
-  evaluationComponents?: AssessmentComponent[] | null;
+  evaluationComponents?: AssessmentComponent[] | EvaluationStructureConfig | any | null;
   customFormula?: string | null;
   calculationMethod?: string;
   bestMidWeightage?: number;

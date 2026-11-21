@@ -170,7 +170,7 @@ class RegulationInternalSettingsService {
         ? row.evaluationComponents
         : (typeof row.evaluationComponents === 'string'
             ? (() => { try { return JSON.parse(row.evaluationComponents); } catch { return null; } })()
-            : null),
+            : (typeof row.evaluationComponents === 'object' ? row.evaluationComponents : null)),
       customFormula: row.customFormula || null,
 
       // External Setup
@@ -826,6 +826,22 @@ class RegulationInternalSettingsService {
    * Supports: Regulation-level, Course-level, and Year-level configuration.
    */
   async saveSetting(dto, actor = null) {
+    // Multi-year batch support: if yearsOfStudy array provided, apply to each year
+    if (Array.isArray(dto.yearsOfStudy) && dto.yearsOfStudy.length > 0) {
+      let firstSaved = null;
+      for (const yr of dto.yearsOfStudy) {
+        const subDto = {
+          ...dto,
+          yearsOfStudy: undefined,
+          yearOfStudy: Number(yr),
+          id: undefined, // Let it match or create per year
+        };
+        const saved = await this.saveSetting(subDto, actor);
+        if (!firstSaved) firstSaved = saved;
+      }
+      return firstSaved;
+    }
+
     const isGlobal =
       dto.regulationId == null ||
       dto.regulationCode === 'GLOBAL_DEFAULT' ||
@@ -992,9 +1008,10 @@ class RegulationInternalSettingsService {
     targetEntity.includeAssignments = Boolean(dto.includeAssignments);
     targetEntity.assignmentMarks = Number(dto.assignmentMarks ?? 0);
     if (dto.evaluationComponents !== undefined) {
-      targetEntity.evaluationComponents = Array.isArray(dto.evaluationComponents)
-        ? dto.evaluationComponents
-        : (dto.evaluationComponents === null ? null : targetEntity.evaluationComponents);
+      targetEntity.evaluationComponents =
+        dto.evaluationComponents === null
+          ? null
+          : (typeof dto.evaluationComponents === 'object' ? dto.evaluationComponents : targetEntity.evaluationComponents);
     }
     if (dto.customFormula !== undefined) {
       targetEntity.customFormula = dto.customFormula || null;
@@ -1102,13 +1119,13 @@ class RegulationInternalSettingsService {
     const minMidsRequired = Number(config.minMidsRequired ?? (method === CalculationMethod.BEST_SINGLE_MID ? 1 : Math.min(2, numInts)));
     const rounding = config.roundingRule || RoundingRule.ROUND_2_DECIMALS;
 
-    // Check if dynamic evaluation components are configured
-    const components = Array.isArray(config.evaluationComponents) && config.evaluationComponents.length > 0
-      ? config.evaluationComponents
-      : null;
+    // Check if dynamic evaluation components or custom architectures are configured
+    const hasComponents =
+      (Array.isArray(config.evaluationComponents) && config.evaluationComponents.length > 0) ||
+      (config.evaluationComponents && typeof config.evaluationComponents === 'object');
 
-    if (components) {
-      return this.calculateComponentBasedInternals(midEntries, components, config);
+    if (hasComponents) {
+      return this.calculateComponentBasedInternals(midEntries, config.evaluationComponents, config);
     }
 
     if (!Array.isArray(midEntries)) {
@@ -1232,10 +1249,206 @@ class RegulationInternalSettingsService {
   /**
    * Evaluates Dynamic Assessment Components (e.g. 3 Mids + 2 Assignments + Quizzes)
    */
-  calculateComponentBasedInternals(inputData, components, config) {
+    calculateComponentBasedInternals(inputData, componentsData, config) {
     const targetMax = Number(config.maxInternalMarks ?? 40);
     const minPass = Number(config.minPassMarks ?? 16);
     const rounding = config.roundingRule || RoundingRule.ROUND_2_DECIMALS;
+
+    // Detect architecture
+    let architecture = 'BUCKET_BASED';
+    let cycles = null;
+    let cycleAggregation = null;
+    let flatItems = null;
+    let flatRule = 'AVERAGE_ALL';
+    let flatBestCount = 3;
+    let components = [];
+
+    if (Array.isArray(componentsData)) {
+      components = componentsData;
+      architecture = 'BUCKET_BASED';
+    } else if (componentsData && typeof componentsData === 'object') {
+      architecture = componentsData.architecture || 'BUCKET_BASED';
+      cycles = Array.isArray(componentsData.cycles) ? componentsData.cycles : null;
+      cycleAggregation = componentsData.cycleAggregation || { rule: 'AVERAGE' };
+      flatItems = Array.isArray(componentsData.flatItems) ? componentsData.flatItems : null;
+      flatRule = componentsData.flatRule || 'AVERAGE_ALL';
+      flatBestCount = Number(componentsData.flatBestCount ?? 3);
+      components = Array.isArray(componentsData.components) ? componentsData.components : [];
+    }
+
+    // -------------------------------------------------------------
+    // ARCHITECTURE 1: PERIODIC CYCLES / ROUNDS
+    // e.g. Cycle 1: (Mid 1 + Assgn 1)/2 | Cycle 2: (Mid 2 + Assgn 2)/2 ➔ Best / Average / 80:20 of Cycles
+    // -------------------------------------------------------------
+    if (architecture === 'CYCLE_BASED' && cycles && cycles.length > 0) {
+      const cycleBreakdown = [];
+      const cycleScores = [];
+      const formulaSteps = [];
+
+      for (let cIdx = 0; cIdx < cycles.length; cIdx++) {
+        const cycle = cycles[cIdx];
+        const cycleId = cycle.id || `cycle-${cIdx + 1}`;
+        const cycleName = cycle.name || `Cycle ${cIdx + 1}`;
+        const cycleCode = (cycle.code || `CYCLE${cIdx + 1}`).toUpperCase();
+        const combRule = cycle.combinationRule || 'AVERAGE';
+
+        const itemScores = [];
+        for (const item of (cycle.assessments || [])) {
+          const itemKey = (item.code || item.id || '').toUpperCase();
+          const itemMax = Number(item.maxMarks ?? 30);
+          let rawVal = null;
+          if (inputData && typeof inputData === 'object' && !Array.isArray(inputData)) {
+            rawVal = inputData[itemKey] ?? inputData[itemKey.toLowerCase()] ?? inputData[item.id] ?? inputData[item.name];
+            // Also check nested under cycle
+            if (rawVal === null && inputData[cycleId]) {
+              rawVal = inputData[cycleId][item.id] ?? inputData[cycleId][itemKey];
+            }
+          }
+          if (rawVal === null && Array.isArray(inputData)) {
+            rawVal = inputData[itemScores.length];
+          }
+          const numVal = (rawVal !== null && rawVal !== undefined && !isNaN(Number(rawVal))) ? Math.min(Number(rawVal), itemMax) : 0;
+          itemScores.push({ name: item.name, code: itemKey, score: numVal, maxMarks: itemMax });
+        }
+
+        let cycleScore = 0;
+        let cycleFormula = '';
+        if (combRule === 'AVERAGE') {
+          const sum = itemScores.reduce((acc, x) => acc + x.score, 0);
+          cycleScore = itemScores.length > 0 ? sum / itemScores.length : 0;
+          cycleFormula = `${cycleName} [Avg]: (${itemScores.map(x => x.score).join(' + ')}) / ${itemScores.length} = ${cycleScore.toFixed(2)}`;
+        } else if (combRule === 'SUM') {
+          cycleScore = itemScores.reduce((acc, x) => acc + x.score, 0);
+          cycleFormula = `${cycleName} [Sum]: (${itemScores.map(x => x.score).join(' + ')}) = ${cycleScore.toFixed(2)}`;
+        } else {
+          // WEIGHTED
+          const sum = itemScores.reduce((acc, x) => acc + x.score, 0);
+          cycleScore = itemScores.length > 0 ? sum / itemScores.length : 0;
+          cycleFormula = `${cycleName}: ${cycleScore.toFixed(2)}`;
+        }
+
+        cycleScores.push(cycleScore);
+        cycleBreakdown.push({
+          cycleId,
+          cycleName,
+          cycleCode,
+          score: Number(cycleScore.toFixed(2)),
+          items: itemScores,
+          formulaStep: cycleFormula,
+        });
+        formulaSteps.push(cycleFormula);
+      }
+
+      // Aggregate across cycles
+      const aggRule = cycleAggregation?.rule || 'AVERAGE';
+      let aggregatedUnrounded = 0;
+      let aggStep = '';
+
+      if (aggRule === 'BEST_1') {
+        const sorted = [...cycleScores].sort((a, b) => b - a);
+        aggregatedUnrounded = sorted[0] || 0;
+        aggStep = `Best of Cycles: MAX(${cycleScores.map(s => s.toFixed(1)).join(', ')}) = ${aggregatedUnrounded.toFixed(2)}`;
+      } else if (aggRule === 'WEIGHTED_80_20') {
+        const sorted = [...cycleScores].sort((a, b) => b - a);
+        const best = sorted[0] || 0;
+        const other = sorted[1] || 0;
+        const bw = Number(cycleAggregation.bestWeight ?? 80);
+        const ow = Number(cycleAggregation.otherWeight ?? 20);
+        aggregatedUnrounded = best * (bw / 100) + other * (ow / 100);
+        aggStep = `Weighted Cycles: (${best.toFixed(1)} × ${bw}%) + (${other.toFixed(1)} × ${ow}%) = ${aggregatedUnrounded.toFixed(2)}`;
+      } else if (aggRule === 'SUM') {
+        aggregatedUnrounded = cycleScores.reduce((a, b) => a + b, 0);
+        aggStep = `Sum of Cycles: (${cycleScores.map(s => s.toFixed(1)).join(' + ')}) = ${aggregatedUnrounded.toFixed(2)}`;
+      } else {
+        // AVERAGE (default)
+        const sum = cycleScores.reduce((a, b) => a + b, 0);
+        aggregatedUnrounded = cycleScores.length > 0 ? sum / cycleScores.length : 0;
+        aggStep = `Average of Cycles: (${cycleScores.map(s => s.toFixed(1)).join(' + ')}) / ${cycleScores.length} = ${aggregatedUnrounded.toFixed(2)}`;
+      }
+
+      formulaSteps.push(aggStep);
+
+      let finalMarks = aggregatedUnrounded;
+      if (rounding === RoundingRule.ROUND_NEAREST_INT) finalMarks = Math.round(aggregatedUnrounded);
+      else if (rounding === RoundingRule.CEIL) finalMarks = Math.ceil(aggregatedUnrounded);
+      else if (rounding === RoundingRule.FLOOR) finalMarks = Math.floor(aggregatedUnrounded);
+      else finalMarks = Number(aggregatedUnrounded.toFixed(2));
+
+      const isPass = finalMarks >= minPass;
+      return {
+        marks: finalMarks,
+        status: isPass ? 'PASS' : 'FAIL',
+        isPass,
+        targetMax,
+        minPass,
+        cycleBreakdown,
+        formulaDescription: config.customFormula || `Periodic Cycle Assessment (${cycles.length} Cycles)`,
+        formulaStep: formulaSteps.join(' | ') + ` => Final Internal Score: ${finalMarks} / ${targetMax}`,
+      };
+    }
+
+    // -------------------------------------------------------------
+    // ARCHITECTURE 2: FLAT ASSESSMENT POOL
+    // e.g. 2 Mids + 2 Assignments + 1 Project (5 items total) ➔ Average of all 5
+    // -------------------------------------------------------------
+    if (architecture === 'FLAT_POOL' && flatItems && flatItems.length > 0) {
+      const itemScores = [];
+      for (let i = 0; i < flatItems.length; i++) {
+        const item = flatItems[i];
+        const itemKey = (item.code || item.id || `ITEM${i + 1}`).toUpperCase();
+        const itemMax = Number(item.maxMarks ?? 30);
+        let rawVal = null;
+        if (inputData && typeof inputData === 'object' && !Array.isArray(inputData)) {
+          rawVal = inputData[itemKey] ?? inputData[itemKey.toLowerCase()] ?? inputData[item.id] ?? inputData[item.name];
+        }
+        if (rawVal === null && Array.isArray(inputData)) {
+          rawVal = inputData[i];
+        }
+        const numVal = (rawVal !== null && rawVal !== undefined && !isNaN(Number(rawVal))) ? Math.min(Number(rawVal), itemMax) : 0;
+        itemScores.push({ name: item.name, code: itemKey, score: numVal, maxMarks: itemMax });
+      }
+
+      let pooledScore = 0;
+      let poolStep = '';
+      if (flatRule === 'SUM_ALL') {
+        pooledScore = itemScores.reduce((acc, x) => acc + x.score, 0);
+        poolStep = `Sum of ${itemScores.length} assessments: (${itemScores.map(x => x.score).join(' + ')}) = ${pooledScore.toFixed(2)}`;
+      } else if (flatRule === 'BEST_N') {
+        const count = Math.min(flatBestCount, itemScores.length);
+        const sorted = [...itemScores].sort((a, b) => b.score - a.score);
+        const top = sorted.slice(0, count);
+        const sum = top.reduce((acc, x) => acc + x.score, 0);
+        pooledScore = top.length > 0 ? sum / top.length : 0;
+        poolStep = `Best ${top.length} of ${itemScores.length} assessments: (${top.map(x => x.score).join(' + ')}) / ${top.length} = ${pooledScore.toFixed(2)}`;
+      } else {
+        // AVERAGE_ALL (default)
+        const sum = itemScores.reduce((acc, x) => acc + x.score, 0);
+        pooledScore = itemScores.length > 0 ? sum / itemScores.length : 0;
+        poolStep = `Average of ${itemScores.length} assessments: (${itemScores.map(x => x.score).join(' + ')}) / ${itemScores.length} = ${pooledScore.toFixed(2)}`;
+      }
+
+      let finalMarks = pooledScore;
+      if (rounding === RoundingRule.ROUND_NEAREST_INT) finalMarks = Math.round(pooledScore);
+      else if (rounding === RoundingRule.CEIL) finalMarks = Math.ceil(pooledScore);
+      else if (rounding === RoundingRule.FLOOR) finalMarks = Math.floor(pooledScore);
+      else finalMarks = Number(pooledScore.toFixed(2));
+
+      const isPass = finalMarks >= minPass;
+      return {
+        marks: finalMarks,
+        status: isPass ? 'PASS' : 'FAIL',
+        isPass,
+        targetMax,
+        minPass,
+        componentBreakdown: itemScores,
+        formulaDescription: config.customFormula || `Flat Pooled Assessment (${flatItems.length} items)`,
+        formulaStep: poolStep + ` => Final Internal Score: ${finalMarks} / ${targetMax}`,
+      };
+    }
+
+    // -------------------------------------------------------------
+    // ARCHITECTURE 3: INDEPENDENT COMPONENT BUCKETS (Existing)
+    // -------------------------------------------------------------
 
     // inputData can be an object mapping componentId or lowercase code to entries,
     // or a flat array of mid numbers in legacy requests

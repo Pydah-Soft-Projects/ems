@@ -21,6 +21,12 @@ import type {
   RegulationInternalSettingsOverview,
   RegulationMarksAuditRecord,
   AssessmentComponent,
+  EvaluationArchitecture,
+  CycleAssessmentItem,
+  EvaluationCycle,
+  CycleAggregationConfig,
+  FlatPoolItem,
+  EvaluationStructureConfig,
 } from '@/types/regulation-internals';
 import {
   DEFAULT_GRADING_SCALE,
@@ -86,8 +92,86 @@ export const DEFAULT_ASSESSMENT_COMPONENTS: AssessmentComponent[] = [
   },
 ];
 
-export function generateFormulaPreview(components: AssessmentComponent[], maxInternal: number): string {
-  if (!components || components.length === 0) return `Standard Mid Scheme (${maxInternal} Marks)`;
+export const DEFAULT_EVALUATION_CYCLES: EvaluationCycle[] = [
+  {
+    id: 'cycle-1',
+    name: 'Internal Assessment 1 (Cycle 1)',
+    code: 'CYCLE1',
+    combinationRule: 'AVERAGE',
+    scaledMaxMarks: 40,
+    assessments: [
+      { id: 'c1-mid', name: 'Mid Exam 1', code: 'MID1', maxMarks: 30 },
+      { id: 'c1-asgn', name: 'Assignment 1', code: 'ASGN1', maxMarks: 10 },
+    ],
+  },
+  {
+    id: 'cycle-2',
+    name: 'Internal Assessment 2 (Cycle 2)',
+    code: 'CYCLE2',
+    combinationRule: 'AVERAGE',
+    scaledMaxMarks: 40,
+    assessments: [
+      { id: 'c2-mid', name: 'Mid Exam 2', code: 'MID2', maxMarks: 30 },
+      { id: 'c2-asgn', name: 'Assignment 2', code: 'ASGN2', maxMarks: 10 },
+    ],
+  },
+];
+
+export const DEFAULT_FLAT_POOL_ITEMS: FlatPoolItem[] = [
+  { id: 'fp-m1', name: 'Mid Exam 1', code: 'MID1', maxMarks: 30 },
+  { id: 'fp-m2', name: 'Mid Exam 2', code: 'MID2', maxMarks: 30 },
+  { id: 'fp-a1', name: 'Assignment 1', code: 'ASGN1', maxMarks: 10 },
+  { id: 'fp-a2', name: 'Assignment 2', code: 'ASGN2', maxMarks: 10 },
+  { id: 'fp-prj', name: 'Course Project', code: 'PROJ', maxMarks: 20 },
+];
+
+export function generateFormulaPreview(configOrComponents: any, maxInternal: number): string {
+  if (!configOrComponents) return `Standard Mid Scheme (${maxInternal} Marks)`;
+
+  // If it's a Cycle-Based Architecture
+  if (configOrComponents.architecture === 'CYCLE_BASED' && Array.isArray(configOrComponents.cycles)) {
+    const cycles: EvaluationCycle[] = configOrComponents.cycles;
+    const agg: CycleAggregationConfig = configOrComponents.cycleAggregation || { rule: 'AVERAGE' };
+    const cycleStrings = cycles.map((c) => {
+      const itemNames = (c.assessments || []).map((a: CycleAssessmentItem) => `${a.name} (${a.maxMarks}M)`).join(' + ');
+      const ruleLabel = c.combinationRule === 'SUM' ? 'Sum' : c.combinationRule === 'WEIGHTED' ? 'Weighted' : 'Avg';
+      return `${c.name}: [${ruleLabel}: ${itemNames}]`;
+    });
+
+    let aggLabel = 'Average of Cycles';
+    if (agg.rule === 'BEST_1') aggLabel = 'Best of Conducted Cycles';
+    if (agg.rule === 'WEIGHTED_80_20') aggLabel = `Weighted (${agg.bestWeight ?? 80}:${agg.otherWeight ?? 20}) of Cycles`;
+    if (agg.rule === 'SUM') aggLabel = 'Sum of Cycles';
+
+    return `Total Internal (${maxInternal}M) = ${aggLabel} across [ ${cycleStrings.join(' | ')} ]`;
+  }
+
+  // If it's a Flat Pool Architecture
+  if (configOrComponents.architecture === 'FLAT_POOL' && Array.isArray(configOrComponents.flatItems)) {
+    const items: FlatPoolItem[] = configOrComponents.flatItems;
+    const itemNames = items.map((i: FlatPoolItem) => `${i.name} (${i.maxMarks}M)`).join(' + ');
+    const rule = configOrComponents.flatRule || 'AVERAGE_ALL';
+    if (rule === 'SUM_ALL') {
+      return `Total Internal (${maxInternal}M) = Sum of ${items.length} Assessments: ${itemNames}`;
+    }
+    if (rule === 'BEST_N') {
+      return `Total Internal (${maxInternal}M) = Best ${configOrComponents.flatBestCount ?? 3} of ${items.length} Assessments: [ ${itemNames} ]`;
+    }
+    return `Total Internal (${maxInternal}M) = Average of ${items.length} Assessments: (${itemNames}) / ${items.length}`;
+  }
+
+  // If it's a Custom Expression
+  if (configOrComponents.architecture === 'CUSTOM_EXPRESSION' && configOrComponents.customExpression) {
+    return `Total Internal (${maxInternal}M) = Math Expression: ${configOrComponents.customExpression}`;
+  }
+
+  // Standard Component Array (BUCKET_BASED)
+  const components: AssessmentComponent[] = Array.isArray(configOrComponents)
+    ? configOrComponents
+    : (Array.isArray(configOrComponents.components) ? configOrComponents.components : []);
+
+  if (components.length === 0) return `Standard Mid Scheme (${maxInternal} Marks)`;
+
   const parts = components.map((c) => {
     let ruleText = 'Avg';
     if (c.aggregationRule === 'BEST_N') ruleText = `Best ${c.bestCount ?? 2}`;
@@ -153,15 +237,54 @@ export default function RegulationMarksPage() {
 
   // Dynamic Assessment Components & Custom Formula State (Sole CIE Setup)
   const [formComponents, setFormComponents] = useState<AssessmentComponent[]>(DEFAULT_ASSESSMENT_COMPONENTS);
+  const [formSelectedYears, setFormSelectedYears] = useState<number[]>([]);
 
   // Dedicated Standalone Custom Formula Builder & Interactive Playground State
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
   const [formulaTargetRegCode, setFormulaTargetRegCode] = useState<string>('GLOBAL_DEFAULT');
   const [formulaTargetCourseId, setFormulaTargetCourseId] = useState<string>('');
   const [formulaTargetYear, setFormulaTargetYear] = useState<string>('');
+  const [formulaSelectedYears, setFormulaSelectedYears] = useState<number[]>([]);
   const [formulaComponents, setFormulaComponents] = useState<AssessmentComponent[]>(DEFAULT_ASSESSMENT_COMPONENTS);
+
+  // Formula Architecture & Multi-Flow State
+  const [formulaArchitecture, setFormulaArchitecture] = useState<EvaluationArchitecture>('CYCLE_BASED');
+  const [formulaCycles, setFormulaCycles] = useState<EvaluationCycle[]>(DEFAULT_EVALUATION_CYCLES);
+  const [formulaCycleAggregation, setFormulaCycleAggregation] = useState<CycleAggregationConfig>({
+    rule: 'BEST_1',
+    bestWeight: 80,
+    otherWeight: 20,
+  });
+  const [formulaFlatItems, setFormulaFlatItems] = useState<FlatPoolItem[]>(DEFAULT_FLAT_POOL_ITEMS);
+  const [formulaFlatRule, setFormulaFlatRule] = useState<'AVERAGE_ALL' | 'SUM_ALL' | 'BEST_N'>('AVERAGE_ALL');
+  const [formulaFlatBestCount, setFormulaFlatBestCount] = useState<number>(3);
+  const [formulaCustomExpression, setFormulaCustomExpression] = useState<string>(
+    '0.8 * MAX((MID1 + ASGN1)/2, (MID2 + ASGN2)/2) + 0.2 * MIN((MID1 + ASGN1)/2, (MID2 + ASGN2)/2)'
+  );
+  // Playground live candidate test inputs for Cycles & Flat Pool
+  const [formulaCycleInputs, setFormulaCycleInputs] = useState<Record<string, Record<string, string>>>({
+    'cycle-1': { 'c1-mid': '26', 'c1-asgn': '8' },
+    'cycle-2': { 'c2-mid': '28', 'c2-asgn': '10' },
+  });
+  const [formulaFlatInputs, setFormulaFlatInputs] = useState<Record<string, string>>({
+    'fp-m1': '24',
+    'fp-m2': '26',
+    'fp-a1': '8',
+    'fp-a2': '9',
+    'fp-prj': '18',
+  });
   const [formulaMaxInternal, setFormulaMaxInternal] = useState<string>('40');
   const [formulaMinPassPct, setFormulaMinPassPct] = useState<string>('40');
+  // External SEE & Aggregate Total Setup in Formula Builder
+  const [formulaMaxExternal, setFormulaMaxExternal] = useState<string>('60');
+  const [formulaMinPassExternalPct, setFormulaMinPassExternalPct] = useState<string>('35');
+  const [formulaMinPassExternal, setFormulaMinPassExternal] = useState<string>('21');
+  const [formulaRequireExternalPass, setFormulaRequireExternalPass] = useState(true);
+  const [formulaMaxTotal, setFormulaMaxTotal] = useState<string>('100');
+  const [formulaMinPassTotalPct, setFormulaMinPassTotalPct] = useState<string>('40');
+  const [formulaMinPassTotal, setFormulaMinPassTotal] = useState<string>('40');
+  const [formulaPassStrategy, setFormulaPassStrategy] = useState<PassStrategy>('EXTERNAL_AND_TOTAL');
+  const [formulaTestExternal, setFormulaTestExternal] = useState<string>('42');
   const [formulaTestInputs, setFormulaTestInputs] = useState<Record<string, string[]>>({});
   const [savingFormula, setSavingFormula] = useState(false);
 
@@ -387,11 +510,17 @@ export default function RegulationMarksPage() {
     courseId: number | null = null,
     courseName: string = '',
     yearOfStudy: number | null = null,
+    yearsOfStudy: number[] = [],
   ) => {
     setEditingItem(item);
     setFormCourseId(courseId ?? item.courseId ?? null);
     setFormCourseName(courseName || item.courseName || '');
     setFormYearOfStudy(yearOfStudy ?? item.yearOfStudy ?? null);
+    setFormSelectedYears(
+      yearsOfStudy.length > 0
+        ? yearsOfStudy
+        : (yearOfStudy ? [yearOfStudy] : (item.yearOfStudy ? [item.yearOfStudy] : []))
+    );
     setFormNumInternals(String(item.numInternals ?? 2));
 
     const itemInt = Number(item.maxInternalMarks ?? 30);
@@ -635,6 +764,74 @@ export default function RegulationMarksPage() {
     }
   };
 
+  // Copy Year 1 Setup across remaining years of a course
+  const handleApplyYear1ToRemaining = async (course: RegulationCourseSetting, regCode: string) => {
+    const y1 = course.years.find((y) => y.yearOfStudy === 1)?.setting;
+    if (!y1) {
+      toast.push('Year 1 configuration not found for this course.', 'danger');
+      return;
+    }
+    const remainingYears = course.years.filter((y) => y.yearOfStudy > 1).map((y) => y.yearOfStudy);
+    if (remainingYears.length === 0) {
+      toast.push('No remaining years found for this course.', 'info');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Apply Year 1 configuration across Year ${remainingYears.join(', ')} of ${course.courseName}?\n\nThis will apply the CIE formula components, external examination marks (${y1.maxExternalMarks}M), and aggregate pass cutoffs to all remaining years.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await api.saveRegulationMarksSetting({
+        regulationCode: regCode,
+        courseId: course.courseId,
+        courseName: course.courseName,
+        yearsOfStudy: remainingYears,
+        yearOfStudy: remainingYears[0],
+        calculationMethod: y1.calculationMethod,
+        numInternals: y1.numInternals,
+        bestMidWeightage: y1.bestMidWeightage,
+        otherMidWeightage: y1.otherMidWeightage,
+        maxInternalMarks: y1.maxInternalMarks,
+        minPassMarks: y1.minPassMarks,
+        minPassPercentage: y1.minPassPercentage,
+        maxExternalMarks: y1.maxExternalMarks,
+        minExternalPassMarks: y1.minExternalPassMarks,
+        minExternalPassPercentage: y1.minExternalPassPercentage,
+        requireExternalPass: y1.requireExternalPass,
+        maxTotalMarks: y1.maxTotalMarks,
+        minTotalPassMarks: y1.minTotalPassMarks,
+        minTotalPassPercentage: y1.minTotalPassPercentage,
+        passStrategy: y1.passStrategy,
+        requireInternalPass: y1.requireInternalPass,
+        requireTotalPass: y1.requireTotalPass,
+        gradingScale: y1.gradingScale,
+        evaluationComponents: y1.evaluationComponents || [],
+        customFormula: y1.customFormula || null,
+        remarks: `Synchronized from Year 1 setup for ${course.courseName}`,
+      });
+      toast.push(`Year 1 setup successfully applied across Year ${remainingYears.join(', ')}!`, 'success');
+      void loadSettings();
+      void loadHistory();
+    } catch (err) {
+      toast.push(err instanceof ApiError ? err.message : 'Failed to apply Year 1 setup', 'danger');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOpenFormulaBuilder = (regCode: string, courseId?: number | null, year?: number | null) => {
+    setFormulaTargetRegCode(regCode);
+    setFormulaTargetCourseId(courseId ? String(courseId) : '');
+    setFormulaTargetYear(year ? String(year) : '');
+    setFormulaSelectedYears(year ? [year] : []);
+    setActiveMainTab('formula-builder');
+  };
+
   // Save full marks scheme
   const handleSaveScheme = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -690,8 +887,14 @@ export default function RegulationMarksPage() {
     const legacyOtherWeight = primaryMidComp?.otherWeightage ?? 20;
     const customFormulaStr = generateFormulaPreview(formComponents, maxInt);
 
-    const scopeLabel = formYearOfStudy
-      ? `${editingItem.regulationCode} / ${formCourseName || 'Course'} / Year ${formYearOfStudy}`
+    const hasMulti = formSelectedYears.length > 0;
+    const finalYearOfStudy = formSelectedYears.length === 1 ? formSelectedYears[0] : (hasMulti ? null : formYearOfStudy);
+    const finalYearsOfStudy = formSelectedYears.length > 1 ? formSelectedYears : undefined;
+
+    const scopeLabel = finalYearsOfStudy
+      ? `${editingItem.regulationCode} / ${formCourseName || 'Course'} / Years [${finalYearsOfStudy.join(', ')}]`
+      : finalYearOfStudy
+      ? `${editingItem.regulationCode} / ${formCourseName || 'Course'} / Year ${finalYearOfStudy}`
       : formCourseId
       ? `${editingItem.regulationCode} / ${formCourseName || 'Course'} (All Years)`
       : `${editingItem.regulationCode} (Regulation Default)`;
@@ -699,13 +902,14 @@ export default function RegulationMarksPage() {
     try {
       setSaving(true);
       await api.saveRegulationMarksSetting({
-        id: editingItem.id || undefined,
+        id: (finalYearsOfStudy || (!finalYearOfStudy && formCourseId)) ? undefined : (editingItem.id || undefined),
         regulationId: editingItem.regulationId,
         regulationCode: editingItem.regulationCode,
         regulationName: editingItem.regulationName,
         courseId: formCourseId,
         courseName: formCourseName || null,
-        yearOfStudy: formYearOfStudy,
+        yearOfStudy: finalYearOfStudy,
+        yearsOfStudy: finalYearsOfStudy,
         numInternals: numInts,
         // Internal - backward compatible fields derived from Custom Assessment Components
         calculationMethod: legacyMethod as CalculationMethod,
@@ -837,14 +1041,179 @@ export default function RegulationMarksPage() {
     });
   };
 
-  // Real-time calculation logic for the custom formula playground
+  // Architecture Switcher Handler
+  const handleSelectArchitecture = (arch: EvaluationArchitecture) => {
+    setFormulaArchitecture(arch);
+    if (arch === 'CYCLE_BASED') {
+      setFormulaCycles(DEFAULT_EVALUATION_CYCLES);
+      setFormulaMaxInternal('40');
+      setFormulaMaxExternal('60');
+      setFormulaMaxTotal('100');
+    } else if (arch === 'FLAT_POOL') {
+      setFormulaFlatItems(DEFAULT_FLAT_POOL_ITEMS);
+      setFormulaMaxInternal('40');
+      setFormulaMaxExternal('60');
+      setFormulaMaxTotal('100');
+    }
+  };
+
+  // Cycle Management Handlers
+  const handleAddCycle = () => {
+    const nextIdx = formulaCycles.length + 1;
+    const newCycle: EvaluationCycle = {
+      id: `cycle-${Date.now()}`,
+      name: `Internal Assessment ${nextIdx} (Cycle ${nextIdx})`,
+      code: `CYCLE${nextIdx}`,
+      combinationRule: 'AVERAGE',
+      scaledMaxMarks: parseFloat(formulaMaxInternal) || 40,
+      assessments: [
+        { id: `c${nextIdx}-mid`, name: `Mid Exam ${nextIdx}`, code: `MID${nextIdx}`, maxMarks: 30 },
+        { id: `c${nextIdx}-asgn`, name: `Assignment ${nextIdx}`, code: `ASGN${nextIdx}`, maxMarks: 10 },
+      ],
+    };
+    setFormulaCycles((prev) => [...prev, newCycle]);
+  };
+
+  const handleDeleteCycle = (cycleIdx: number) => {
+    setFormulaCycles((prev) => prev.filter((_, i) => i !== cycleIdx));
+  };
+
+  const handleUpdateCycle = (cycleIdx: number, field: keyof EvaluationCycle, val: any) => {
+    setFormulaCycles((prev) => {
+      const next = [...prev];
+      next[cycleIdx] = { ...next[cycleIdx], [field]: val };
+      return next;
+    });
+  };
+
+  const handleAddCycleAssessment = (cycleIdx: number) => {
+    setFormulaCycles((prev) => {
+      const next = [...prev];
+      const cycle = next[cycleIdx];
+      const nextItemIdx = (cycle.assessments || []).length + 1;
+      const newItem: CycleAssessmentItem = {
+        id: `item-${Date.now()}`,
+        name: `Assessment ${nextItemIdx}`,
+        code: `A${nextItemIdx}`,
+        maxMarks: 10,
+      };
+      next[cycleIdx] = {
+        ...cycle,
+        assessments: [...(cycle.assessments || []), newItem],
+      };
+      return next;
+    });
+  };
+
+  const handleDeleteCycleAssessment = (cycleIdx: number, itemIdx: number) => {
+    setFormulaCycles((prev) => {
+      const next = [...prev];
+      const cycle = next[cycleIdx];
+      next[cycleIdx] = {
+        ...cycle,
+        assessments: (cycle.assessments || []).filter((_: unknown, i: number) => i !== itemIdx),
+      };
+      return next;
+    });
+  };
+
+  const handleUpdateCycleAssessment = (
+    cycleIdx: number,
+    itemIdx: number,
+    field: keyof CycleAssessmentItem,
+    val: any
+  ) => {
+    setFormulaCycles((prev) => {
+      const next = [...prev];
+      const cycle = next[cycleIdx];
+      const items = [...(cycle.assessments || [])];
+      items[itemIdx] = { ...items[itemIdx], [field]: val };
+      next[cycleIdx] = { ...cycle, assessments: items };
+      return next;
+    });
+  };
+
+  const handleCycleTestInputChange = (cycleId: string, itemId: string, val: string) => {
+    setFormulaCycleInputs((prev) => ({
+      ...prev,
+      [cycleId]: {
+        ...(prev[cycleId] || {}),
+        [itemId]: val,
+      },
+    }));
+  };
+
+  // Flat Pool Management Handlers
+  const handleAddFlatItem = () => {
+    const nextIdx = formulaFlatItems.length + 1;
+    setFormulaFlatItems((prev) => [
+      ...prev,
+      {
+        id: `fp-${Date.now()}`,
+        name: `Assessment Item ${nextIdx}`,
+        code: `ITEM${nextIdx}`,
+        maxMarks: 20,
+      },
+    ]);
+  };
+
+  const handleDeleteFlatItem = (itemIdx: number) => {
+    setFormulaFlatItems((prev) => prev.filter((_, i) => i !== itemIdx));
+  };
+
+  const handleUpdateFlatItem = (itemIdx: number, field: keyof FlatPoolItem, val: any) => {
+    setFormulaFlatItems((prev) => {
+      const next = [...prev];
+      next[itemIdx] = { ...next[itemIdx], [field]: val };
+      return next;
+    });
+  };
+
+  const handleFlatTestInputChange = (itemId: string, val: string) => {
+    setFormulaFlatInputs((prev) => ({
+      ...prev,
+      [itemId]: val,
+    }));
+  };
+
+  // Dynamic Linking handlers for Formula Builder External SEE Setup
+  const handleFormulaMaxExternalChange = (val: string) => {
+    setFormulaMaxExternal(val);
+    const numExt = parseFloat(val);
+    if (!isNaN(numExt)) {
+      const targetPct = parseFloat(formulaMinPassExternalPct) || 35;
+      setFormulaMinPassExternal(String(Math.round((numExt * targetPct) / 100)));
+      const numInt = parseFloat(formulaMaxInternal) || 40;
+      setFormulaMaxTotal(String(numInt + numExt));
+    }
+  };
+
+  const handleFormulaExternalPassPctChange = (pctStr: string) => {
+    setFormulaMinPassExternalPct(pctStr);
+    const pct = parseFloat(pctStr);
+    const maxExt = parseFloat(formulaMaxExternal) || 0;
+    if (!isNaN(pct) && maxExt > 0) {
+      setFormulaMinPassExternal(String(Math.round((maxExt * pct) / 100)));
+    }
+  };
+
+  const handleFormulaExternalMarksChange = (marksStr: string) => {
+    setFormulaMinPassExternal(marksStr);
+    const marks = parseFloat(marksStr);
+    const maxExt = parseFloat(formulaMaxExternal) || 0;
+    if (!isNaN(marks) && maxExt > 0) {
+      setFormulaMinPassExternalPct(String(Math.round((marks / maxExt) * 100)));
+    }
+  };
+
+  // Real-time calculation logic for the custom formula playground (Internal + External + Total)
   const formulaPlaygroundResult = useMemo(() => {
     const targetMax = parseFloat(formulaMaxInternal) || 40;
     const minPassPct = parseFloat(formulaMinPassPct) || 40;
     const minPass = Math.round((targetMax * minPassPct) / 100);
 
-    let totalScore = 0;
-    const breakdown: Array<{
+    let finalMarks = 0;
+    const breakdown: {
       componentId: string;
       name: string;
       code: string;
@@ -853,70 +1222,190 @@ export default function RegulationMarksPage() {
       scaledScore: number;
       scaledMax: number;
       step: string;
-    }> = [];
+    }[] = [];
 
-    for (const comp of formulaComponents) {
-      const inputs = formulaTestInputs[comp.id] || [];
-      const maxPerInstance = Number(comp.maxMarksPerInstance) || 30;
-      const scaledMax = Number(comp.scaledMaxMarks) || 30;
-      const count = Number(comp.count) || 2;
+    // Evaluate based on active architecture
+    if (formulaArchitecture === 'CYCLE_BASED') {
+      const cycleScores: number[] = [];
+      formulaCycles.forEach((cycle) => {
+        const itemScores: number[] = [];
+        (cycle.assessments || []).forEach((item: CycleAssessmentItem) => {
+          const valStr = formulaCycleInputs[cycle.id]?.[item.id] ?? '';
+          const num = parseFloat(valStr);
+          itemScores.push(!isNaN(num) ? Math.min(num, item.maxMarks) : 0);
+        });
 
-      const validScores: number[] = [];
-      for (let i = 0; i < count; i++) {
-        const valStr = inputs[i];
-        if (valStr !== undefined && valStr !== '' && !isNaN(parseFloat(valStr))) {
-          validScores.push(Math.min(parseFloat(valStr), maxPerInstance));
+        let cycleScore = 0;
+        let stepText = '';
+        if (cycle.combinationRule === 'SUM') {
+          cycleScore = itemScores.reduce((acc, v) => acc + v, 0);
+          stepText = `${cycle.name} Sum: (${itemScores.join(' + ')}) = ${cycleScore.toFixed(2)}`;
         } else {
-          validScores.push(0);
+          // AVERAGE (default)
+          const sum = itemScores.reduce((acc, v) => acc + v, 0);
+          cycleScore = itemScores.length > 0 ? sum / itemScores.length : 0;
+          stepText = `${cycle.name} Avg: (${itemScores.join(' + ')}) / ${itemScores.length} = ${cycleScore.toFixed(2)}`;
         }
-      }
+        cycleScores.push(cycleScore);
+        breakdown.push({
+          componentId: cycle.id,
+          name: cycle.name,
+          code: cycle.code,
+          rawScores: itemScores,
+          rawAverage: Number(cycleScore.toFixed(2)),
+          scaledScore: Number(cycleScore.toFixed(2)),
+          scaledMax: cycle.scaledMaxMarks || targetMax,
+          step: stepText,
+        });
+      });
 
-      let scaledScore = 0;
-      let rawAverage = 0;
-      let step = '';
-
-      if (comp.aggregationRule === 'BEST_N') {
-        const sorted = [...validScores].sort((a, b) => b - a);
-        const top = sorted.slice(0, Math.min(comp.bestCount || 2, sorted.length));
-        rawAverage = top.reduce((a, b) => a + b, 0) / (top.length || 1);
-        scaledScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
-        step = `Best ${top.length} of ${validScores.length} (${top.join(' + ')}) / ${top.length} = ${rawAverage.toFixed(1)} / ${maxPerInstance} ➔ ${scaledScore.toFixed(1)} / ${scaledMax}M`;
-      } else if (comp.aggregationRule === 'WEIGHTED') {
-        const sorted = [...validScores].sort((a, b) => b - a);
+      // Inter-cycle aggregation
+      if (formulaCycleAggregation.rule === 'BEST_1') {
+        const sorted = [...cycleScores].sort((a, b) => b - a);
+        finalMarks = sorted[0] || 0;
+      } else if (formulaCycleAggregation.rule === 'WEIGHTED_80_20') {
+        const sorted = [...cycleScores].sort((a, b) => b - a);
         const best = sorted[0] || 0;
-        const second = sorted[1] || 0;
-        const bw = comp.bestWeightage || 80;
-        const ow = comp.otherWeightage || 20;
-        const weighted = (best * (bw / 100)) + (second * (ow / 100));
-        rawAverage = weighted;
-        scaledScore = maxPerInstance > 0 ? (weighted / maxPerInstance) * scaledMax : weighted;
-        step = `(${best} × ${bw}%) + (${second} × ${ow}%) = ${weighted.toFixed(1)} / ${maxPerInstance} ➔ ${scaledScore.toFixed(1)} / ${scaledMax}M`;
-      } else if (comp.aggregationRule === 'SUM_ALL') {
-        rawAverage = validScores.reduce((a, b) => a + b, 0);
-        scaledScore = Math.min(rawAverage, scaledMax);
-        step = `Sum (${validScores.join(' + ')}) = ${rawAverage.toFixed(1)} ➔ ${scaledScore.toFixed(1)} / ${scaledMax}M`;
+        const other = sorted[1] || 0;
+        const bw = formulaCycleAggregation.bestWeight ?? 80;
+        const ow = formulaCycleAggregation.otherWeight ?? 20;
+        finalMarks = best * (bw / 100) + other * (ow / 100);
+      } else if (formulaCycleAggregation.rule === 'SUM') {
+        finalMarks = cycleScores.reduce((acc, v) => acc + v, 0);
+      } else {
+        // AVERAGE
+        const sum = cycleScores.reduce((acc, v) => acc + v, 0);
+        finalMarks = cycleScores.length > 0 ? sum / cycleScores.length : 0;
+      }
+    } else if (formulaArchitecture === 'FLAT_POOL') {
+      const itemScores: number[] = [];
+      formulaFlatItems.forEach((item) => {
+        const valStr = formulaFlatInputs[item.id] ?? '';
+        const num = parseFloat(valStr);
+        const validVal = !isNaN(num) ? Math.min(num, item.maxMarks) : 0;
+        itemScores.push(validVal);
+        breakdown.push({
+          componentId: item.id,
+          name: item.name,
+          code: item.code,
+          rawScores: [validVal],
+          rawAverage: validVal,
+          scaledScore: validVal,
+          scaledMax: item.maxMarks,
+          step: `${item.name} Score: ${validVal} / ${item.maxMarks}`,
+        });
+      });
+
+      if (formulaFlatRule === 'SUM_ALL') {
+        finalMarks = itemScores.reduce((acc, v) => acc + v, 0);
+      } else if (formulaFlatRule === 'BEST_N') {
+        const sorted = [...itemScores].sort((a, b) => b - a);
+        const top = sorted.slice(0, Math.min(formulaFlatBestCount, sorted.length));
+        const sum = top.reduce((acc, v) => acc + v, 0);
+        finalMarks = top.length > 0 ? sum / top.length : 0;
       } else {
         // AVERAGE_ALL
-        rawAverage = validScores.reduce((a, b) => a + b, 0) / (validScores.length || 1);
-        scaledScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
-        step = `Avg of ${validScores.length} (${validScores.map(v => v.toFixed(1)).join(' + ')}) / ${validScores.length} = ${rawAverage.toFixed(1)} / ${maxPerInstance} ➔ ${scaledScore.toFixed(1)} / ${scaledMax}M`;
+        const sum = itemScores.reduce((acc, v) => acc + v, 0);
+        finalMarks = itemScores.length > 0 ? sum / itemScores.length : 0;
       }
+    } else {
+      // BUCKET_BASED (default components)
+      let totalScore = 0;
+      for (const comp of formulaComponents) {
+        const entries = formulaTestInputs[comp.id] || [];
+        const validScores: number[] = [];
+        for (let i = 0; i < comp.count; i++) {
+          const valStr = entries[i];
+          if (valStr !== undefined && valStr !== '' && !isNaN(parseFloat(valStr))) {
+            validScores.push(Math.min(parseFloat(valStr), comp.maxMarksPerInstance));
+          } else {
+            validScores.push(0);
+          }
+        }
 
-      totalScore += scaledScore;
-      breakdown.push({
-        componentId: comp.id,
-        name: comp.name,
-        code: comp.code,
-        rawScores: validScores,
-        rawAverage: Number(rawAverage.toFixed(2)),
-        scaledScore: Number(scaledScore.toFixed(2)),
-        scaledMax,
-        step,
-      });
+        const maxPerInstance = comp.maxMarksPerInstance || 30;
+        const scaledMax = comp.scaledMaxMarks || maxPerInstance;
+        let rawAverage = 0;
+        let scaledScore = 0;
+        let step = '';
+
+        if (comp.aggregationRule === 'BEST_N') {
+          const sorted = [...validScores].sort((a, b) => b - a);
+          const topN = sorted.slice(0, Math.min(comp.bestCount || 2, sorted.length));
+          const sum = topN.reduce((acc, v) => acc + v, 0);
+          rawAverage = topN.length > 0 ? sum / topN.length : 0;
+          scaledScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
+          step = `Best ${topN.length} avg: (${topN.join(' + ')})/${topN.length} = ${rawAverage.toFixed(1)} ➔ Scaled: ${scaledScore.toFixed(1)}/${scaledMax}`;
+        } else if (comp.aggregationRule === 'WEIGHTED') {
+          const sorted = [...validScores].sort((a, b) => b - a);
+          const best = sorted[0] || 0;
+          const second = sorted[1] || 0;
+          const bw = comp.bestWeightage || 80;
+          const ow = comp.otherWeightage || 20;
+          rawAverage = best * (bw / 100) + second * (ow / 100);
+          scaledScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
+          step = `Weighted: (${best}×${bw}%) + (${second}×${ow}%) = ${rawAverage.toFixed(1)} ➔ Scaled: ${scaledScore.toFixed(1)}/${scaledMax}`;
+        } else if (comp.aggregationRule === 'SUM_ALL') {
+          const sum = validScores.reduce((acc, v) => acc + v, 0);
+          rawAverage = sum;
+          scaledScore = Math.min(sum, scaledMax);
+          step = `Sum: (${validScores.join(' + ')}) = ${scaledScore.toFixed(1)}/${scaledMax}`;
+        } else {
+          const sum = validScores.reduce((acc, v) => acc + v, 0);
+          rawAverage = validScores.length > 0 ? sum / validScores.length : 0;
+          scaledScore = maxPerInstance > 0 ? (rawAverage / maxPerInstance) * scaledMax : rawAverage;
+          step = `Average: (${validScores.join(' + ')})/${validScores.length} = ${rawAverage.toFixed(1)} ➔ Scaled: ${scaledScore.toFixed(1)}/${scaledMax}`;
+        }
+
+        totalScore += scaledScore;
+        breakdown.push({
+          componentId: comp.id,
+          name: comp.name,
+          code: comp.code,
+          rawScores: validScores,
+          rawAverage: Number(rawAverage.toFixed(2)),
+          scaledScore: Number(scaledScore.toFixed(2)),
+          scaledMax,
+          step,
+        });
+      }
+      finalMarks = totalScore;
     }
 
-    const finalMarks = Number(totalScore.toFixed(2));
+    finalMarks = Number(finalMarks.toFixed(2));
     const isPass = finalMarks >= minPass;
+
+    // External SEE & Aggregate Calculations in Playground
+    const extMax = parseFloat(formulaMaxExternal) || 60;
+    const extMinPassPct = parseFloat(formulaMinPassExternalPct) || 35;
+    const extMinPass = Math.round((extMax * extMinPassPct) / 100);
+    const candidateExt = parseFloat(formulaTestExternal) || 0;
+    const isExtPass = candidateExt >= extMinPass;
+
+    const totMax = targetMax + extMax;
+    const totScore = Number((finalMarks + candidateExt).toFixed(2));
+    const totMinPassPct = parseFloat(formulaMinPassTotalPct) || 40;
+    const totMinPass = Math.round((totMax * totMinPassPct) / 100);
+    const isTotPass = totScore >= totMinPass;
+
+    let overallPass = false;
+    let overallReason = '';
+    if (formulaPassStrategy === 'ALL_THREE') {
+      overallPass = isPass && isExtPass && isTotPass;
+      overallReason = overallPass
+        ? 'Cleared CIE Internal, SEE External & Total Aggregate Cutoffs'
+        : (!isPass ? 'Failed Internal Cutoff' : (!isExtPass ? 'Failed External Cutoff' : 'Failed Total Aggregate Cutoff'));
+    } else if (formulaPassStrategy === 'TOTAL_ONLY') {
+      overallPass = isTotPass;
+      overallReason = overallPass ? 'Cleared Aggregate Pass Cutoff' : 'Failed Aggregate Pass Cutoff';
+    } else {
+      // EXTERNAL_AND_TOTAL
+      const extCheck = formulaRequireExternalPass ? isExtPass : true;
+      overallPass = extCheck && isTotPass;
+      overallReason = overallPass
+        ? 'Cleared SEE External Cutoff & Total Aggregate Cutoff'
+        : (!extCheck ? 'Failed External SEE Cutoff' : 'Failed Total Aggregate Cutoff');
+    }
 
     return {
       finalMarks,
@@ -925,10 +1414,45 @@ export default function RegulationMarksPage() {
       minPassPct,
       isPass,
       breakdown,
+      external: {
+        marks: candidateExt,
+        max: extMax,
+        minPass: extMinPass,
+        minPassPct: extMinPassPct,
+        isPass: isExtPass,
+      },
+      total: {
+        marks: totScore,
+        max: totMax,
+        minPass: totMinPass,
+        minPassPct: totMinPassPct,
+        isPass: isTotPass,
+        overallPass,
+        overallReason,
+      },
     };
-  }, [formulaComponents, formulaTestInputs, formulaMaxInternal, formulaMinPassPct]);
+  }, [
+    formulaArchitecture,
+    formulaCycles,
+    formulaCycleAggregation,
+    formulaFlatItems,
+    formulaFlatRule,
+    formulaFlatBestCount,
+    formulaCycleInputs,
+    formulaFlatInputs,
+    formulaComponents,
+    formulaTestInputs,
+    formulaMaxInternal,
+    formulaMinPassPct,
+    formulaMaxExternal,
+    formulaMinPassExternalPct,
+    formulaTestExternal,
+    formulaMinPassTotalPct,
+    formulaPassStrategy,
+    formulaRequireExternalPass,
+  ]);
 
-  // Save from Formula Builder Playground
+  // Save from Formula Builder Playground (Supports Multi-Years & External SEE setup)
   const handleSaveFormulaFromPlayground = async () => {
     if (!data) return;
     const targetReg = formulaTargetRegCode === 'GLOBAL_DEFAULT'
@@ -939,11 +1463,43 @@ export default function RegulationMarksPage() {
     const minPassPct = parseFloat(formulaMinPassPct) || 40;
     const minPass = Math.round((maxInt * minPassPct) / 100);
 
+    const maxExt = parseFloat(formulaMaxExternal) || 60;
+    const minPassExtPct = parseFloat(formulaMinPassExternalPct) || 35;
+    const minPassExt = parseFloat(formulaMinPassExternal) || Math.round((maxExt * minPassExtPct) / 100);
+
+    const exactSum = maxInt + maxExt;
+    const minPassTotPct = parseFloat(formulaMinPassTotalPct) || 40;
+    const minPassTot = parseFloat(formulaMinPassTotal) || Math.round((exactSum * minPassTotPct) / 100);
+
     const cId = formulaTargetCourseId ? parseInt(formulaTargetCourseId, 10) : null;
     const matchedCourse = cId && targetReg.courses ? targetReg.courses.find(c => c.courseId === cId) : null;
-    const yOfStudy = formulaTargetYear ? parseInt(formulaTargetYear, 10) : null;
+    const hasMulti = formulaSelectedYears.length > 0;
+    const yOfStudy = formulaSelectedYears.length === 1 ? formulaSelectedYears[0] : (hasMulti ? null : (formulaTargetYear ? parseInt(formulaTargetYear, 10) : null));
+    const multiYears = formulaSelectedYears.length > 1 ? formulaSelectedYears : undefined;
 
-    const formulaStr = generateFormulaPreview(formulaComponents, maxInt);
+    let evalComponentsPayload: any = formulaComponents;
+    if (formulaArchitecture === 'CYCLE_BASED') {
+      evalComponentsPayload = {
+        architecture: 'CYCLE_BASED',
+        cycles: formulaCycles,
+        cycleAggregation: formulaCycleAggregation,
+      };
+    } else if (formulaArchitecture === 'FLAT_POOL') {
+      evalComponentsPayload = {
+        architecture: 'FLAT_POOL',
+        flatItems: formulaFlatItems,
+        flatRule: formulaFlatRule,
+        flatBestCount: formulaFlatBestCount,
+      };
+    } else if (formulaArchitecture === 'CUSTOM_EXPRESSION') {
+      evalComponentsPayload = {
+        architecture: 'CUSTOM_EXPRESSION',
+        customExpression: formulaCustomExpression,
+        flatItems: formulaFlatItems,
+      };
+    }
+
+    const formulaStr = generateFormulaPreview(evalComponentsPayload, maxInt);
 
     try {
       setSavingFormula(true);
@@ -954,23 +1510,36 @@ export default function RegulationMarksPage() {
         courseId: cId,
         courseName: matchedCourse ? matchedCourse.courseName : null,
         yearOfStudy: yOfStudy,
+        yearsOfStudy: multiYears,
         numInternals: formulaComponents.find(c => c.code.toLowerCase().includes('mid'))?.count || 2,
         calculationMethod: 'AVERAGE_ALL_MIDS',
         maxInternalMarks: maxInt,
         minPassMarks: minPass,
         minPassPercentage: minPassPct,
-        maxExternalMarks: targetReg.maxExternalMarks || 60,
-        minExternalPassMarks: targetReg.minExternalPassMarks || 21,
-        minExternalPassPercentage: targetReg.minExternalPassPercentage || 35,
-        maxTotalMarks: maxInt + (Number(targetReg.maxExternalMarks) || 60),
-        minTotalPassMarks: targetReg.minTotalPassMarks || 40,
-        minTotalPassPercentage: targetReg.minTotalPassPercentage || 40,
-        evaluationComponents: formulaComponents,
+        // External SEE Setup (User-Configured)
+        maxExternalMarks: maxExt,
+        minExternalPassMarks: minPassExt,
+        minExternalPassPercentage: minPassExtPct,
+        requireExternalPass: formulaRequireExternalPass,
+        // Total Aggregate Setup (User-Configured)
+        maxTotalMarks: exactSum,
+        minTotalPassMarks: minPassTot,
+        minTotalPassPercentage: minPassTotPct,
+        requireInternalPass: false,
+        requireTotalPass: true,
+        passStrategy: formulaPassStrategy,
+        evaluationComponents: evalComponentsPayload,
         customFormula: formulaStr,
-        remarks: `Custom formula configured via Formula Builder: ${formulaStr}`,
+        remarks: `Custom formula & assessment setup: ${formulaStr} + ${maxExt}M SEE`,
       });
 
-      toast.push(`Custom formula saved successfully for ${formulaTargetRegCode}${matchedCourse ? ` / ${matchedCourse.courseName}` : ''}${yOfStudy ? ` (Year ${yOfStudy})` : ''}`, 'success');
+      const yearLabel = multiYears
+        ? `Years [${multiYears.join(', ')}]`
+        : yOfStudy
+        ? `Year ${yOfStudy}`
+        : 'All Years';
+
+      toast.push(`Custom formula & External SEE setup saved successfully for ${formulaTargetRegCode}${matchedCourse ? ` / ${matchedCourse.courseName}` : ''} (${yearLabel})`, 'success');
       void loadSettings();
       void loadHistory();
     } catch (err) {
@@ -1469,6 +2038,174 @@ export default function RegulationMarksPage() {
                                       </div>
                                     </div>
 
+                                    {/* VISUAL YEAR STATUS OVERVIEW & MULTI-YEAR ACTION BAR */}
+                                    {(() => {
+                                      const customizedYears = selectedCourse.years.filter((y) => y.isCustomized);
+                                      const inheritedYears = selectedCourse.years.filter((y) => !y.isCustomized);
+                                      const y1 = selectedCourse.years.find((y) => y.yearOfStudy === 1);
+                                      const remainingCount = selectedCourse.years.filter((y) => y.yearOfStudy > 1).length;
+
+                                      return (
+                                        <div className="space-y-4">
+                                          {/* Status Summary & Quick Batch Actions Bar */}
+                                          <div className="p-4 rounded-xl border border-indigo-200 bg-linear-to-r from-indigo-50/80 via-white to-sky-50/70 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                            <div className="space-y-0.5">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-900 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
+                                                  Year-Wise Configurations Overview
+                                                </span>
+                                                <span className="text-xs font-bold text-slate-700">
+                                                  {selectedCourse.courseName} ({selectedCourse.totalYears} Study Years)
+                                                </span>
+                                              </div>
+                                              <p className="text-xs text-slate-600">
+                                                <strong className="text-emerald-700">{customizedYears.length}</strong> year{customizedYears.length === 1 ? '' : 's'} with custom overrides &bull;{' '}
+                                                <strong className="text-slate-700">{inheritedYears.length}</strong> year{inheritedYears.length === 1 ? '' : 's'} inheriting baseline
+                                              </p>
+                                            </div>
+
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              {y1 && remainingCount > 0 && (
+                                                <Button
+                                                  variant="secondary"
+                                                  size="sm"
+                                                  onClick={() => void handleApplyYear1ToRemaining(selectedCourse, reg.regulationCode)}
+                                                  disabled={saving}
+                                                  className="bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300 font-bold flex items-center gap-1.5 shadow-2xs text-xs"
+                                                  title="Apply Year 1 continuous & external configuration to Years 2, 3, 4"
+                                                >
+                                                  <span>⚡</span>
+                                                  <span>Apply Year 1 Setup to Remaining Years (Y2–Y{selectedCourse.totalYears})</span>
+                                                </Button>
+                                              )}
+                                              <Button
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={() => handleOpenFormulaBuilder(reg.regulationCode, selectedCourse.courseId, null)}
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs"
+                                              >
+                                                <span>✨</span>
+                                                <span>Multi-Year Formula Builder</span>
+                                              </Button>
+                                            </div>
+                                          </div>
+
+                                          {/* Visual Year Cards Grid */}
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                                            {selectedCourse.years.map((yr) => {
+                                              const yCfg = yr.setting;
+                                              const formulaDisplay = yCfg.customFormula || generateFormulaPreview(yCfg.evaluationComponents || [], yCfg.maxInternalMarks);
+                                              const isY1 = yr.yearOfStudy === 1;
+
+                                              return (
+                                                <div
+                                                  key={yr.yearOfStudy}
+                                                  className={`p-4 rounded-xl border transition-all space-y-3 relative ${
+                                                    yr.isCustomized
+                                                      ? 'border-emerald-300 bg-emerald-50/40 shadow-xs ring-1 ring-emerald-200'
+                                                      : 'border-slate-200 bg-white hover:border-slate-300 shadow-2xs'
+                                                  }`}
+                                                >
+                                                  {/* Card Top: Year Title & Status Badge */}
+                                                  <div className="flex items-center justify-between gap-1.5 border-b pb-2 ${
+                                                    yr.isCustomized ? 'border-emerald-200' : 'border-slate-100'
+                                                  }">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <span className="font-black text-slate-900 text-sm">
+                                                        Year {yr.yearOfStudy}
+                                                      </span>
+                                                      <span className="text-[10px] text-slate-500 font-medium">
+                                                        (Sem {yr.yearOfStudy * 2 - 1}&{yr.yearOfStudy * 2})
+                                                      </span>
+                                                    </div>
+
+                                                    <span
+                                                      className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase tracking-wider ${
+                                                        yr.isCustomized
+                                                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                      }`}
+                                                    >
+                                                      {yr.isCustomized ? '✓ Configured' : '↳ Inherited'}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* Marks Breakdown Metric */}
+                                                  <div className="space-y-1.5 text-xs">
+                                                    <div className="flex items-center justify-between font-mono">
+                                                      <span className="text-slate-500 font-medium">CIE + SEE:</span>
+                                                      <span className="font-bold text-slate-900">
+                                                        {yCfg.maxInternalMarks} Int + {yCfg.maxExternalMarks} Ext
+                                                      </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between font-mono">
+                                                      <span className="text-slate-500 font-medium">Course Total:</span>
+                                                      <span className="font-black text-indigo-900">
+                                                        {yCfg.maxTotalMarks} Total (Pass &ge; {yCfg.minTotalPassMarks})
+                                                      </span>
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Formula Badge */}
+                                                  <div className="p-2 rounded-lg bg-white/90 border border-slate-200/80 text-[11px] space-y-1">
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                                                      Assessment Formula
+                                                    </span>
+                                                    <p className="font-mono text-slate-800 font-semibold line-clamp-2" title={formulaDisplay}>
+                                                      {formulaDisplay}
+                                                    </p>
+                                                  </div>
+
+                                                  {/* Card Action Buttons */}
+                                                  <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100">
+                                                    {yr.isCustomized && yCfg.id ? (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => void handleResetToDefault(yCfg)}
+                                                        className="text-[11px] text-rose-600 hover:text-rose-800 font-medium hover:underline cursor-pointer"
+                                                        title="Reset this year to inherit Course Default"
+                                                      >
+                                                        Reset
+                                                      </button>
+                                                    ) : (
+                                                      <span className="text-[10px] text-slate-400">
+                                                        {yr.inheritedFrom ? `↳ ${yr.inheritedFrom}` : 'Course Default'}
+                                                      </span>
+                                                    )}
+
+                                                    <div className="flex items-center gap-1.5 ml-auto">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleOpenFormulaBuilder(reg.regulationCode, selectedCourse.courseId, yr.yearOfStudy)}
+                                                        className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded cursor-pointer transition-colors"
+                                                        title="Open in dynamic formula builder"
+                                                      >
+                                                        Formula
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                          handleOpenEdit(
+                                                            yCfg,
+                                                            selectedCourse.courseId,
+                                                            selectedCourse.courseName,
+                                                            yr.yearOfStudy,
+                                                          )
+                                                        }
+                                                        className="text-[11px] font-bold text-slate-800 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-2 py-1 rounded cursor-pointer transition-colors"
+                                                      >
+                                                        Edit
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
                                     {/* YEAR-WISE BREAKDOWN TABLE */}
                                     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
                                       <table className="w-full border-collapse text-left text-xs">
@@ -1700,206 +2437,645 @@ export default function RegulationMarksPage() {
 
                       {/* Year Select */}
                       {formulaTargetCourseId && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase">Year Scope</label>
-                          <select
-                            value={formulaTargetYear}
-                            onChange={(e) => setFormulaTargetYear(e.target.value)}
-                            className="px-2.5 py-1.5 text-xs rounded-md border border-slate-300 bg-white font-bold text-slate-900 shadow-2xs"
-                          >
-                            <option value="">All Years of Course</option>
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase">
+                            Study Years (Multi-Year Selection)
+                          </label>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormulaTargetYear('');
+                                setFormulaSelectedYears([]);
+                              }}
+                              className={`px-2.5 py-1 text-xs rounded-md font-bold transition-all cursor-pointer ${
+                                !formulaTargetYear && formulaSelectedYears.length === 0
+                                  ? 'bg-indigo-600 text-white shadow-2xs'
+                                  : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                              }`}
+                            >
+                              All Years of Course
+                            </button>
                             {data?.regulations
                               .find((r) => r.regulationCode === formulaTargetRegCode)
                               ?.courses?.find((c) => String(c.courseId) === formulaTargetCourseId)
-                              ?.years.map((y) => (
-                                <option key={y.yearOfStudy} value={String(y.yearOfStudy)}>
-                                  Year {y.yearOfStudy}
-                                </option>
-                              ))}
-                          </select>
+                              ?.years.map((y) => {
+                                const isSelected =
+                                  formulaTargetYear === String(y.yearOfStudy) ||
+                                  formulaSelectedYears.includes(y.yearOfStudy);
+
+                                return (
+                                  <button
+                                    key={y.yearOfStudy}
+                                    type="button"
+                                    onClick={() => {
+                                      let next: number[];
+                                      if (formulaSelectedYears.includes(y.yearOfStudy)) {
+                                        next = formulaSelectedYears.filter((num) => num !== y.yearOfStudy);
+                                      } else {
+                                        next = [...formulaSelectedYears, y.yearOfStudy].sort((a, b) => a - b);
+                                      }
+                                      setFormulaSelectedYears(next);
+                                      if (next.length === 1) {
+                                        setFormulaTargetYear(String(next[0]));
+                                      } else {
+                                        setFormulaTargetYear('');
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1 text-xs rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-300'
+                                        : 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-100'
+                                    }`}
+                                  >
+                                    <span>Year {y.yearOfStudy}</span>
+                                    {y.isCustomized && (
+                                      <span className="text-[9px] text-emerald-600 font-black">★</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const matched = data?.regulations
+                                  .find((r) => r.regulationCode === formulaTargetRegCode)
+                                  ?.courses?.find((c) => String(c.courseId) === formulaTargetCourseId);
+                                if (matched) {
+                                  const remaining = matched.years
+                                    .filter((y) => y.yearOfStudy > 1)
+                                    .map((y) => y.yearOfStudy);
+                                  setFormulaSelectedYears(remaining);
+                                  setFormulaTargetYear('');
+                                }
+                              }}
+                              className="text-[10px] text-indigo-700 hover:underline px-1.5 py-1 font-bold cursor-pointer"
+                            >
+                              Remaining (Y2+)
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* STEP 2: ASSESSMENT COMPONENTS BUILDER */}
-                <div className="p-5 rounded-xl border border-slate-200 bg-white space-y-4 shadow-2xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+                {/* STEP 2: ASSESSMENT ARCHITECTURE & EVALUATION FORMULA BUILDER */}
+                <div className="p-5 rounded-xl border border-indigo-200 bg-white space-y-5 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-indigo-100 gap-3">
                     <div>
                       <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                        <span>🧩</span> Assessment Evaluation Components
+                        <span>🧩</span> Continuous Internal Assessment Architecture & Dynamic Scheme
                       </h4>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Define examination instances (e.g. 3 Mids, 2 Assignments) and how each component aggregates.
+                        Select an academic structure pattern and customize examination components, periodic cycles, marks, and aggregation rules without hardcoding.
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={handleAddFormulaTabComponent}
-                        className="text-xs font-bold"
-                      >
-                        + Add Component
-                      </Button>
-                      {formulaComponentsSum !== parseFloat(formulaMaxInternal) && (
-                        <button
-                          type="button"
-                          onClick={() => setFormulaMaxInternal(String(formulaComponentsSum))}
-                          className="px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer"
+                      {formulaArchitecture === 'BUCKET_BASED' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleAddFormulaTabComponent}
+                          className="text-xs font-bold"
                         >
-                          Auto-Sync Max ({formulaComponentsSum}M)
-                        </button>
+                          + Add Component
+                        </Button>
+                      )}
+                      {formulaArchitecture === 'CYCLE_BASED' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleAddCycle}
+                          className="text-xs font-bold bg-indigo-50 text-indigo-900 border-indigo-300 hover:bg-indigo-100"
+                        >
+                          + Add Evaluation Cycle
+                        </Button>
+                      )}
+                      {formulaArchitecture === 'FLAT_POOL' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleAddFlatItem}
+                          className="text-xs font-bold bg-indigo-50 text-indigo-900 border-indigo-300 hover:bg-indigo-100"
+                        >
+                          + Add Assessment Item
+                        </Button>
                       )}
                     </div>
                   </div>
 
-                  {/* Components List Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {formulaComponents.map((comp, idx) => (
-                      <div
-                        key={comp.id || idx}
-                        className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all space-y-3 relative group"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-800 text-xs font-black flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <input
-                              type="text"
-                              value={comp.name}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'name', e.target.value)}
-                              placeholder="Component Name (e.g. Mid Exams)"
-                              className="font-black text-xs text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-300 flex-1 outline-none focus:border-indigo-500"
-                            />
-                            <input
-                              type="text"
-                              value={comp.code}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'code', e.target.value.toUpperCase())}
-                              placeholder="Code"
-                              className="font-mono text-xs font-bold text-slate-600 bg-white px-2 py-1 rounded border border-slate-300 w-24 outline-none focus:border-indigo-500"
-                            />
-                          </div>
-                          {formulaComponents.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteFormulaTabComponent(idx)}
-                              className="text-slate-400 hover:text-rose-600 p-1 transition-colors cursor-pointer"
-                              title="Delete Component"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                          {/* How Many Conducted */}
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase">Instances</label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={10}
-                              value={comp.count}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'count', parseInt(e.target.value, 10) || 1)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-800"
-                            />
-                            <span className="text-[10px] text-slate-400">e.g. 3 Mids</span>
-                          </div>
-
-                          {/* Max Marks Per Instance */}
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase">Marks / Instance</label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={100}
-                              value={comp.maxMarksPerInstance}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'maxMarksPerInstance', parseFloat(e.target.value) || 30)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-800"
-                            />
-                            <span className="text-[10px] text-slate-400">e.g. 30M paper</span>
-                          </div>
-
-                          {/* Aggregation Rule */}
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase">Rule</label>
-                            <select
-                              value={comp.aggregationRule}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'aggregationRule', e.target.value)}
-                              className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-800 text-[11px]"
-                            >
-                              <option value="AVERAGE_ALL">Average of All</option>
-                              <option value="BEST_N">Best N of Total</option>
-                              <option value="WEIGHTED">Weighted (80:20)</option>
-                              <option value="SUM_ALL">Sum of Scores</option>
-                            </select>
-                            <span className="text-[10px] text-slate-400">Evaluation rule</span>
-                          </div>
-
-                          {/* Scaled Marks Contributed */}
-                          <div>
-                            <label className="block text-[10px] font-bold text-indigo-700 uppercase">Scaled Max</label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={comp.scaledMaxMarks}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'scaledMaxMarks', parseFloat(e.target.value) || 0)}
-                              className="w-full px-2 py-1 rounded border border-indigo-300 bg-white font-black text-indigo-900"
-                            />
-                            <span className="text-[10px] text-indigo-600 font-bold">Contribution</span>
-                          </div>
-                        </div>
-
-                        {/* Extra Params for Rule */}
-                        {comp.aggregationRule === 'BEST_N' && (
-                          <div className="flex items-center gap-2 pt-1 text-xs">
-                            <span className="text-[11px] font-semibold text-slate-600">Take Top:</span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={comp.count}
-                              value={comp.bestCount || 2}
-                              onChange={(e) => handleUpdateFormulaTabComponent(idx, 'bestCount', parseInt(e.target.value, 10) || 1)}
-                              className="w-16 px-2 py-0.5 rounded border border-slate-300 bg-white font-bold text-slate-900 text-xs"
-                            />
-                            <span className="text-[11px] text-slate-500">best scores among {comp.count} conducted</span>
-                          </div>
+                  {/* 4 ARCHITECTURE PATTERN SELECTOR CARDS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Pattern 1: Periodic Assessment Cycles */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectArchitecture('CYCLE_BASED')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                        formulaArchitecture === 'CYCLE_BASED'
+                          ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-2 ring-indigo-300'
+                          : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">🔄</span>
+                        {formulaArchitecture === 'CYCLE_BASED' && (
+                          <span className="text-[10px] font-black uppercase text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-300">
+                            Active Pattern
+                          </span>
                         )}
+                      </div>
+                      <h5 className="font-black text-xs text-slate-900 mt-2">Periodic Cycles / Rounds</h5>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        (Mid 1 + Assign 1) & (Mid 2 + Assign 2) &rarr; Best-of, Average, or 80:20 of Cycles.
+                      </p>
+                    </button>
 
-                        {comp.aggregationRule === 'WEIGHTED' && (
-                          <div className="flex items-center gap-2 pt-1 text-xs">
-                            <span className="text-[11px] font-semibold text-slate-600">Best %:</span>
+                    {/* Pattern 2: Flat Assessment Pool */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectArchitecture('FLAT_POOL')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                        formulaArchitecture === 'FLAT_POOL'
+                          ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-2 ring-indigo-300'
+                          : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">🗂️</span>
+                        {formulaArchitecture === 'FLAT_POOL' && (
+                          <span className="text-[10px] font-black uppercase text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-300">
+                            Active Pattern
+                          </span>
+                        )}
+                      </div>
+                      <h5 className="font-black text-xs text-slate-900 mt-2">Flat Assessment Pool</h5>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        2 Mids + 2 Assignments + 1 Project (5 items total) &rarr; Average of all 5 or Sum.
+                      </p>
+                    </button>
+
+                    {/* Pattern 3: Independent Component Buckets */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectArchitecture('BUCKET_BASED')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                        formulaArchitecture === 'BUCKET_BASED'
+                          ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-2 ring-indigo-300'
+                          : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">📊</span>
+                        {formulaArchitecture === 'BUCKET_BASED' && (
+                          <span className="text-[10px] font-black uppercase text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-300">
+                            Active Pattern
+                          </span>
+                        )}
+                      </div>
+                      <h5 className="font-black text-xs text-slate-900 mt-2">Component Buckets</h5>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        Separate Mids (80:20 or Avg, 30M) + Assignments (Avg, 10M) summed together.
+                      </p>
+                    </button>
+
+                    {/* Pattern 4: Custom Math Expression */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectArchitecture('CUSTOM_EXPRESSION')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                        formulaArchitecture === 'CUSTOM_EXPRESSION'
+                          ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-2 ring-indigo-300'
+                          : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-base">✍️</span>
+                        {formulaArchitecture === 'CUSTOM_EXPRESSION' && (
+                          <span className="text-[10px] font-black uppercase text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-300">
+                            Active Pattern
+                          </span>
+                        )}
+                      </div>
+                      <h5 className="font-black text-xs text-slate-900 mt-2">Custom Math Formula</h5>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        Write free-form mathematical expressions with dynamic variable tokens and functions.
+                      </p>
+                    </button>
+                  </div>
+
+                  {/* ------------------------------------------------------------- */}
+                  {/* VIEW 1: PERIODIC ASSESSMENT CYCLES BUILDER */}
+                  {/* ------------------------------------------------------------- */}
+                  {formulaArchitecture === 'CYCLE_BASED' && (
+                    <div className="space-y-4 pt-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {formulaCycles.map((cycle, cIdx) => (
+                          <div
+                            key={cycle.id || cIdx}
+                            className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/30 space-y-3.5 relative shadow-2xs"
+                          >
+                            <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-black flex items-center justify-center">
+                                  {cIdx + 1}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={cycle.name}
+                                  onChange={(e) => handleUpdateCycle(cIdx, 'name', e.target.value)}
+                                  className="font-black text-xs text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-300 flex-1 outline-none focus:border-indigo-500"
+                                  placeholder="Cycle Name (e.g. Internal Assessment 1)"
+                                />
+                              </div>
+                              {formulaCycles.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCycle(cIdx)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 transition-colors cursor-pointer ml-2"
+                                  title="Delete Cycle"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Cycle Internal Combination Rule */}
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                              <span className="font-bold text-slate-600">Inside-Cycle Rule:</span>
+                              <select
+                                value={cycle.combinationRule || 'AVERAGE'}
+                                onChange={(e) => handleUpdateCycle(cIdx, 'combinationRule', e.target.value)}
+                                className="px-2 py-0.5 rounded border border-slate-300 bg-slate-50 font-bold text-slate-800 text-xs outline-none"
+                              >
+                                <option value="AVERAGE">Average of items: (Mid + Assign) / 2</option>
+                                <option value="SUM">Sum of items: Mid + Assign</option>
+                                <option value="WEIGHTED">Weighted combination</option>
+                              </select>
+                            </div>
+
+                            {/* Assessments in this Cycle */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
+                                <span>Assessments in this Cycle:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddCycleAssessment(cIdx)}
+                                  className="text-indigo-700 hover:underline font-bold cursor-pointer"
+                                >
+                                  + Add Item
+                                </button>
+                              </div>
+
+                              {(cycle.assessments || []).map((item: CycleAssessmentItem, itemIdx: number) => (
+                                <div
+                                  key={item.id || itemIdx}
+                                  className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs"
+                                >
+                                  <input
+                                    type="text"
+                                    value={item.name}
+                                    onChange={(e) => handleUpdateCycleAssessment(cIdx, itemIdx, 'name', e.target.value)}
+                                    placeholder="Name (e.g. Mid Exam 1)"
+                                    className="font-bold text-xs text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200 flex-1 outline-none"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.code}
+                                    onChange={(e) => handleUpdateCycleAssessment(cIdx, itemIdx, 'code', e.target.value.toUpperCase())}
+                                    placeholder="Code"
+                                    className="font-mono text-xs font-bold text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-200 w-20 outline-none"
+                                  />
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={100}
+                                      value={item.maxMarks}
+                                      onChange={(e) => handleUpdateCycleAssessment(cIdx, itemIdx, 'maxMarks', parseFloat(e.target.value) || 10)}
+                                      className="w-14 px-1.5 py-1 rounded border border-slate-200 bg-slate-50 font-bold text-slate-900 text-center text-xs"
+                                    />
+                                    <span className="text-[10px] text-slate-400 font-bold">Marks</span>
+                                  </div>
+                                  {(cycle.assessments || []).length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteCycleAssessment(cIdx, itemIdx)}
+                                      className="text-slate-300 hover:text-rose-600 p-1 cursor-pointer"
+                                    >
+                                      &times;
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Inter-Cycle Aggregation Scheme */}
+                      <div className="p-4 rounded-xl border border-indigo-200 bg-linear-to-r from-indigo-50/40 to-white space-y-3">
+                        <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                          <span className="text-xs font-black uppercase text-indigo-900 tracking-wider">
+                            Inter-Cycle Aggregation Scheme (How to combine Cycle 1, Cycle 2, ...)
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <label
+                            className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                              formulaCycleAggregation.rule === 'BEST_1'
+                                ? 'border-indigo-600 bg-white ring-2 ring-indigo-200 shadow-2xs'
+                                : 'border-slate-200 bg-white/70 hover:bg-white'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="cycleAggregationRule"
+                              checked={formulaCycleAggregation.rule === 'BEST_1'}
+                              onChange={() => setFormulaCycleAggregation((p: CycleAggregationConfig) => ({ ...p, rule: 'BEST_1' }))}
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">Best Single Cycle (100%)</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Takes the maximum score between conducted cycles: MAX(Cycle 1, Cycle 2)
+                              </p>
+                            </div>
+                          </label>
+
+                          <label
+                            className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                              formulaCycleAggregation.rule === 'AVERAGE'
+                                ? 'border-indigo-600 bg-white ring-2 ring-indigo-200 shadow-2xs'
+                                : 'border-slate-200 bg-white/70 hover:bg-white'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="cycleAggregationRule"
+                              checked={formulaCycleAggregation.rule === 'AVERAGE'}
+                              onChange={() => setFormulaCycleAggregation((p: CycleAggregationConfig) => ({ ...p, rule: 'AVERAGE' }))}
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">Average of All Cycles</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Simple arithmetic mean: (Cycle 1 + Cycle 2) / 2
+                              </p>
+                            </div>
+                          </label>
+
+                          <label
+                            className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                              formulaCycleAggregation.rule === 'WEIGHTED_80_20'
+                                ? 'border-indigo-600 bg-white ring-2 ring-indigo-200 shadow-2xs'
+                                : 'border-slate-200 bg-white/70 hover:bg-white'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="cycleAggregationRule"
+                              checked={formulaCycleAggregation.rule === 'WEIGHTED_80_20'}
+                              onChange={() => setFormulaCycleAggregation((p: CycleAggregationConfig) => ({ ...p, rule: 'WEIGHTED_80_20' }))}
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">80% Best + 20% Other Cycle</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Weighted ratio: (80% &times; Best) + (20% &times; Remaining)
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ------------------------------------------------------------- */}
+                  {/* VIEW 2: FLAT ASSESSMENT POOL BUILDER */}
+                  {/* ------------------------------------------------------------- */}
+                  {formulaArchitecture === 'FLAT_POOL' && (
+                    <div className="space-y-4 pt-1">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-700">Pool Aggregation Strategy:</span>
+                          <select
+                            value={formulaFlatRule}
+                            onChange={(e) => setFormulaFlatRule(e.target.value as any)}
+                            className="px-2.5 py-1 rounded-md border border-slate-300 bg-white font-bold text-slate-900"
+                          >
+                            <option value="AVERAGE_ALL">Average of All Conducted Items (Sum / Count)</option>
+                            <option value="SUM_ALL">Sum of All Items</option>
+                            <option value="BEST_N">Best N of Items</option>
+                          </select>
+                        </div>
+                        {formulaFlatRule === 'BEST_N' && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-600">Take Top:</span>
                             <input
                               type="number"
-                              min={0}
-                              max={100}
-                              value={comp.bestWeightage || 80}
-                              onChange={(e) => {
-                                const bw = parseFloat(e.target.value) || 0;
-                                handleUpdateFormulaTabComponent(idx, 'bestWeightage', bw);
-                                handleUpdateFormulaTabComponent(idx, 'otherWeightage', Math.max(0, 100 - bw));
-                              }}
-                              className="w-16 px-2 py-0.5 rounded border border-slate-300 bg-white font-bold text-slate-900 text-xs"
+                              min={1}
+                              max={formulaFlatItems.length}
+                              value={formulaFlatBestCount}
+                              onChange={(e) => setFormulaFlatBestCount(parseInt(e.target.value, 10) || 1)}
+                              className="w-14 px-2 py-1 rounded border border-slate-300 font-bold text-slate-900 text-center"
                             />
-                            <span className="text-[11px] font-semibold text-slate-600">Second %:</span>
-                            <input
-                              type="number"
-                              disabled
-                              value={comp.otherWeightage || 20}
-                              className="w-16 px-2 py-0.5 rounded border border-slate-200 bg-slate-100 font-bold text-slate-500 text-xs"
-                            />
+                            <span className="text-slate-500">items</span>
                           </div>
                         )}
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {formulaFlatItems.map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-indigo-300 transition-all space-y-2.5 shadow-2xs"
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-black flex items-center justify-center">
+                                {idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => handleUpdateFlatItem(idx, 'name', e.target.value)}
+                                placeholder="Assessment Name"
+                                className="font-bold text-xs text-slate-900 bg-white px-2 py-1 rounded border border-slate-300 flex-1 outline-none"
+                              />
+                              {formulaFlatItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteFlatItem(idx)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                                >
+                                  &times;
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Code</label>
+                                <input
+                                  type="text"
+                                  value={item.code}
+                                  onChange={(e) => handleUpdateFlatItem(idx, 'code', e.target.value.toUpperCase())}
+                                  className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-mono font-bold text-slate-700"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase">Max Marks</label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={100}
+                                  value={item.maxMarks}
+                                  onChange={(e) => handleUpdateFlatItem(idx, 'maxMarks', parseFloat(e.target.value) || 10)}
+                                  className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-900 text-center"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ------------------------------------------------------------- */}
+                  {/* VIEW 3: COMPONENT BUCKETS (Existing) */}
+                  {/* ------------------------------------------------------------- */}
+                  {formulaArchitecture === 'BUCKET_BASED' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                      {formulaComponents.map((comp, idx) => (
+                        <div
+                          key={comp.id || idx}
+                          className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all space-y-3 relative group"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-800 text-xs font-black flex items-center justify-center">
+                                {idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={comp.name}
+                                onChange={(e) => handleUpdateFormulaTabComponent(idx, 'name', e.target.value)}
+                                placeholder="Component Name (e.g. Mid Exams)"
+                                className="font-black text-xs text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-300 flex-1 outline-none focus:border-indigo-500"
+                              />
+                              <input
+                                type="text"
+                                value={comp.code}
+                                onChange={(e) => handleUpdateFormulaTabComponent(idx, 'code', e.target.value.toUpperCase())}
+                                placeholder="Code"
+                                className="font-mono text-xs font-bold text-slate-600 bg-white px-2 py-1 rounded border border-slate-300 w-24 outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                            {formulaComponents.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFormulaTabComponent(idx)}
+                                className="text-slate-400 hover:text-rose-600 p-1 transition-colors cursor-pointer"
+                                title="Delete Component"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase">Instances</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10}
+                                value={comp.count}
+                                onChange={(e) => handleUpdateFormulaTabComponent(idx, 'count', parseInt(e.target.value, 10) || 1)}
+                                className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-800"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase">Marks / Instance</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={comp.maxMarksPerInstance}
+                                onChange={(e) => handleUpdateFormulaTabComponent(idx, 'maxMarksPerInstance', parseFloat(e.target.value) || 30)}
+                                className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-800"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase">Rule</label>
+                              <select
+                                value={comp.aggregationRule}
+                                onChange={(e) => handleUpdateFormulaTabComponent(idx, 'aggregationRule', e.target.value as any)}
+                                className="w-full px-2 py-1 rounded border border-slate-300 bg-white font-bold text-slate-800 text-[11px]"
+                              >
+                                <option value="AVERAGE_ALL">Average of All</option>
+                                <option value="BEST_N">Best N of Total</option>
+                                <option value="WEIGHTED">Weighted (80:20)</option>
+                                <option value="SUM_ALL">Sum of Scores</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-indigo-700 uppercase">Scaled Max</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={comp.scaledMaxMarks}
+                                onChange={(e) => handleUpdateFormulaTabComponent(idx, 'scaledMaxMarks', parseFloat(e.target.value) || 0)}
+                                className="w-full px-2 py-1 rounded border border-indigo-300 bg-white font-black text-indigo-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ------------------------------------------------------------- */}
+                  {/* VIEW 4: CUSTOM MATH EXPRESSION BUILDER */}
+                  {/* ------------------------------------------------------------- */}
+                  {formulaArchitecture === 'CUSTOM_EXPRESSION' && (
+                    <div className="space-y-3 pt-1">
+                      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+                        <span className="font-bold text-slate-700 block">Available Assessment Variables:</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {['MID1', 'ASGN1', 'MID2', 'ASGN2', 'PROJ', 'MAX()', 'MIN()', 'AVG()', 'ROUND()'].map((tok) => (
+                            <button
+                              key={tok}
+                              type="button"
+                              onClick={() => setFormulaCustomExpression((p) => p + ' ' + tok)}
+                              className="px-2 py-1 rounded bg-white border border-slate-300 hover:border-indigo-400 font-mono font-bold text-indigo-900 cursor-pointer text-xs"
+                            >
+                              +{tok}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Mathematical Expression Formula:
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={formulaCustomExpression}
+                          onChange={(e) => setFormulaCustomExpression(e.target.value)}
+                          className="w-full p-3 font-mono text-xs font-bold text-slate-900 bg-white rounded-xl border border-indigo-300 outline-none focus:ring-2 focus:ring-indigo-400"
+                          placeholder="e.g. 0.8 * MAX((MID1 + ASGN1)/2, (MID2 + ASGN2)/2) + 0.2 * MIN((MID1 + ASGN1)/2, (MID2 + ASGN2)/2)"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* FORMULA MATH PREVIEW BADGE */}
                   <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -1908,7 +3084,16 @@ export default function RegulationMarksPage() {
                         Generated Mathematical Formula:
                       </span>
                       <p className="font-mono font-bold text-indigo-950 mt-0.5 text-xs">
-                        {generateFormulaPreview(formulaComponents, parseFloat(formulaMaxInternal) || 40)}
+                        {generateFormulaPreview(
+                          formulaArchitecture === 'CYCLE_BASED'
+                            ? { architecture: 'CYCLE_BASED', cycles: formulaCycles, cycleAggregation: formulaCycleAggregation }
+                            : formulaArchitecture === 'FLAT_POOL'
+                            ? { architecture: 'FLAT_POOL', flatItems: formulaFlatItems, flatRule: formulaFlatRule, flatBestCount: formulaFlatBestCount }
+                            : formulaArchitecture === 'CUSTOM_EXPRESSION'
+                            ? { architecture: 'CUSTOM_EXPRESSION', customExpression: formulaCustomExpression, flatItems: formulaFlatItems }
+                            : formulaComponents,
+                          parseFloat(formulaMaxInternal) || 40
+                        )}
                       </p>
                     </div>
 
@@ -1942,7 +3127,136 @@ export default function RegulationMarksPage() {
                   </div>
                 </div>
 
-                {/* STEP 3: INTERACTIVE LIVE TESTER / PLAYGROUND */}
+                {/* STEP 3: SEMESTER END EXAMINATION (SEE) & AGGREGATE PASS RULES */}
+                <div className="p-5 rounded-xl border border-emerald-200 bg-linear-to-b from-emerald-50/30 to-white space-y-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-emerald-200 gap-3">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                        <span>🏛️</span> Semester End Examination (SEE) & Overall Pass Scheme
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Configure external theory/practical paper maximum marks, dynamic pass cutoffs, and aggregate degree pass strategies.
+                      </p>
+                    </div>
+
+                    <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      /{formulaMaxExternal} SEE + /{formulaMaxInternal} CIE = /{formulaMaxTotal} Total Marks
+                    </span>
+                  </div>
+
+                  {/* External SEE Inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-white rounded-xl border border-emerald-200 shadow-2xs">
+                    <Input
+                      label="Maximum External Marks (SEE Total)"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={formulaMaxExternal}
+                      onChange={(e) => handleFormulaMaxExternalChange(e.target.value)}
+                      hint="Typically 60 (for 40 Int) or 70 (for 30 Int)"
+                    />
+                    <Input
+                      label="External Pass Target % (Completely Dynamic)"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="any"
+                      value={formulaMinPassExternalPct}
+                      onChange={(e) => handleFormulaExternalPassPctChange(e.target.value)}
+                      hint="e.g. 35% target &rarr; auto-calculates cutoff marks"
+                    />
+                    <Input
+                      label="External Minimum Pass Cutoff Marks"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="any"
+                      value={formulaMinPassExternal}
+                      onChange={(e) => handleFormulaExternalMarksChange(e.target.value)}
+                      hint="Changing marks auto-updates pass %"
+                    />
+                  </div>
+
+                  {/* Total Aggregate & Evaluation Strategy */}
+                  <div className="p-3.5 bg-white rounded-xl border border-purple-200 space-y-3 shadow-2xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Combined Total Scale</label>
+                        <div className="w-full px-3 py-2 rounded-lg text-xs bg-slate-100 border border-slate-300 font-black text-slate-900 font-mono">
+                          {formulaMaxTotal} Total Marks ({formulaMaxInternal} Int + {formulaMaxExternal} Ext)
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1">Strict sum of CIE + SEE</p>
+                      </div>
+
+                      <Input
+                        label="Total Pass Target % (Completely Dynamic)"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="any"
+                        value={formulaMinPassTotalPct}
+                        onChange={(e) => setFormulaMinPassTotalPct(e.target.value)}
+                        hint="Typically 40% aggregate required to pass course"
+                      />
+
+                      <Input
+                        label="Min Total Pass Cutoff Marks"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="any"
+                        value={formulaMinPassTotal}
+                        onChange={(e) => setFormulaMinPassTotal(e.target.value)}
+                        hint="Auto-calculated from target percentage"
+                      />
+                    </div>
+
+                    {/* Pass Strategy Cards */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                        Evaluation Pass Strategy Scheme
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        {PASS_STRATEGIES.map((s) => (
+                          <label
+                            key={s.value}
+                            className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-all ${
+                              formulaPassStrategy === s.value
+                                ? 'border-purple-500 bg-purple-50/40 shadow-2xs ring-2 ring-purple-300'
+                                : 'border-slate-200 bg-white hover:bg-slate-50'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="formulaPassStrategy"
+                              checked={formulaPassStrategy === s.value}
+                              onChange={() => setFormulaPassStrategy(s.value)}
+                              className="mt-0.5"
+                            />
+                            <div>
+                              <p className="text-xs font-bold text-slate-900">{s.label}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{s.description}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 pt-1">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formulaRequireExternalPass}
+                          onChange={(e) => setFormulaRequireExternalPass(e.target.checked)}
+                          className="rounded border-slate-300"
+                        />
+                        Mandatory External Minimum Pass (Candidate MUST score &ge; {formulaMinPassExternal} marks in SEE)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 4: INTERACTIVE LIVE TESTER / PLAYGROUND */}
                 <div className="p-5 rounded-xl border border-sky-200 bg-linear-to-b from-sky-50/30 to-white space-y-4 shadow-2xs">
                   <div className="flex items-center justify-between pb-2 border-b border-sky-200">
                     <div>
@@ -1959,84 +3273,259 @@ export default function RegulationMarksPage() {
                     </span>
                   </div>
 
-                  {/* Dynamic Inputs for Every Component & Instance */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {formulaComponents.map((comp) => (
-                      <div
-                        key={comp.id}
-                        className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5"
-                      >
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                          <span className="text-xs font-black text-slate-900">
-                            {comp.name} ({comp.count} Instances conducted)
-                          </span>
-                          <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                            Contributes /{comp.scaledMaxMarks} Marks
-                          </span>
-                        </div>
+                  {/* Dynamic Inputs for Active Assessment Architecture */}
+                  {formulaArchitecture === 'CYCLE_BASED' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {formulaCycles.map((cycle, cIdx) => (
+                        <div
+                          key={cycle.id || cIdx}
+                          className="p-3.5 bg-white rounded-xl border border-indigo-200 shadow-2xs space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between border-b border-indigo-100 pb-1.5">
+                            <span className="text-xs font-black text-indigo-950">
+                              {cycle.name} (Inside: {cycle.combinationRule})
+                            </span>
+                            <span className="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              Live Cycle Score: {(formulaPlaygroundResult.breakdown[cIdx]?.scaledScore ?? 0).toFixed(2)}M
+                            </span>
+                          </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {Array.from({ length: comp.count }).map((_, instIdx) => {
-                            const val = formulaTestInputs[comp.id]?.[instIdx] ?? '';
-                            return (
-                              <div key={instIdx} className="space-y-1">
-                                <label className="block text-[10px] font-bold text-slate-500">
-                                  {comp.name.includes('Mid') ? `Mid ${instIdx + 1}` : `${comp.code} ${instIdx + 1}`}
-                                </label>
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={comp.maxMarksPerInstance}
-                                    value={val}
-                                    onChange={(e) => handleFormulaTestInputChange(comp.id, instIdx, e.target.value)}
-                                    placeholder="Score"
-                                    className="w-full px-2 py-1 rounded border border-slate-300 text-xs font-bold text-slate-900 text-center outline-none focus:border-indigo-500"
-                                  />
-                                  <span className="text-slate-400 text-xs font-bold">/{comp.maxMarksPerInstance}</span>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            {(cycle.assessments || []).map((item: CycleAssessmentItem) => {
+                              const val = formulaCycleInputs[cycle.id]?.[item.id] ?? '';
+                              return (
+                                <div key={item.id} className="space-y-1">
+                                  <label className="block text-[10px] font-bold text-slate-500">
+                                    {item.name} ({item.code})
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={item.maxMarks}
+                                      value={val}
+                                      onChange={(e) => handleCycleTestInputChange(cycle.id, item.id, e.target.value)}
+                                      placeholder="Score"
+                                      className="w-full px-2 py-1 rounded border border-slate-300 text-xs font-bold text-slate-900 text-center outline-none focus:border-indigo-500"
+                                    />
+                                    <span className="text-slate-400 text-xs font-bold">/{item.maxMarks}</span>
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
+
+                  {formulaArchitecture === 'FLAT_POOL' && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                      {formulaFlatItems.map((item) => {
+                        const val = formulaFlatInputs[item.id] ?? '';
+                        return (
+                          <div key={item.id} className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                            <label className="block text-[10px] font-bold text-slate-700 truncate" title={item.name}>
+                              {item.name}
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                max={item.maxMarks}
+                                value={val}
+                                onChange={(e) => handleFlatTestInputChange(item.id, e.target.value)}
+                                placeholder="Score"
+                                className="w-full px-2 py-1 rounded border border-slate-300 text-xs font-bold text-slate-900 text-center outline-none focus:border-indigo-500"
+                              />
+                              <span className="text-slate-400 text-xs font-bold">/{item.maxMarks}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {formulaArchitecture === 'BUCKET_BASED' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {formulaComponents.map((comp) => (
+                        <div
+                          key={comp.id}
+                          className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                            <span className="text-xs font-black text-slate-900">
+                              {comp.name} ({comp.count} Instances)
+                            </span>
+                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              /{comp.scaledMaxMarks} Marks
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {Array.from({ length: comp.count }).map((_, instIdx) => {
+                              const val = formulaTestInputs[comp.id]?.[instIdx] ?? '';
+                              return (
+                                <div key={instIdx} className="space-y-1">
+                                  <label className="block text-[10px] font-bold text-slate-500">
+                                    {comp.name.includes('Mid') ? `Mid ${instIdx + 1}` : `${comp.code} ${instIdx + 1}`}
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={comp.maxMarksPerInstance}
+                                      value={val}
+                                      onChange={(e) => handleFormulaTestInputChange(comp.id, instIdx, e.target.value)}
+                                      placeholder="Score"
+                                      className="w-full px-2 py-1 rounded border border-slate-300 text-xs font-bold text-slate-900 text-center outline-none focus:border-indigo-500"
+                                    />
+                                    <span className="text-slate-400 text-xs font-bold">/{comp.maxMarksPerInstance}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Candidate External SEE Test Input */}
+                  <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                        <span>🏛️</span> Candidate Semester End Examination (SEE) Theory Paper Score
+                      </span>
+                      <p className="text-[11px] text-emerald-800">
+                        Enter candidate marks scored in external paper to test full 3-step course pass / fail evaluation.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-slate-700">SEE Score:</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={parseFloat(formulaMaxExternal) || 60}
+                        value={formulaTestExternal}
+                        onChange={(e) => setFormulaTestExternal(e.target.value)}
+                        placeholder="Marks"
+                        className="w-20 px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white font-mono font-bold text-sm text-slate-900 text-center outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                      <span className="text-xs font-bold text-slate-600">/{formulaMaxExternal} Marks</span>
+                    </div>
                   </div>
 
-                  {/* LIVE REAL-TIME CALCULATION RESULTS CARD */}
-                  <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/50 space-y-3">
+                  {/* LIVE REAL-TIME CALCULATION RESULTS CARDS (CIE, SEE & TOTAL AGGREGATE) */}
+                  <div className="p-4 rounded-xl border border-indigo-200 bg-linear-to-b from-indigo-50/50 via-white to-sky-50/30 space-y-4 shadow-2xs">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-200/60 pb-3">
                       <div>
                         <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800">
-                          Evaluated Live Outcome
+                          Evaluated Live Outcome (Complete Assessment Scheme)
                         </span>
                         <h4 className="text-base font-black text-slate-900 mt-0.5 flex items-center gap-2">
-                          <span>Final Total Internal Score:</span>
-                          <span className="text-indigo-900 font-mono text-lg">
-                            {formulaPlaygroundResult.finalMarks} / {formulaPlaygroundResult.targetMax} Marks
-                          </span>
+                          <span>Overall Assessment Result:</span>
                           <span
-                            className={`text-xs font-black px-2.5 py-0.5 rounded border shadow-2xs ${
-                              formulaPlaygroundResult.isPass
+                            className={`text-xs font-black px-3 py-1 rounded-full border shadow-2xs ${
+                              formulaPlaygroundResult.total.overallPass
                                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                                 : 'bg-rose-100 text-rose-800 border-rose-300'
                             }`}
                           >
-                            {formulaPlaygroundResult.isPass ? 'PASSED INTERNAL' : 'FAILED INTERNAL'}
+                            {formulaPlaygroundResult.total.overallPass ? '✓ CANDIDATE PASSED' : '✕ CANDIDATE FAILED'}
                           </span>
                         </h4>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          {formulaPlaygroundResult.total.overallReason}
+                        </p>
                       </div>
 
                       <div className="text-right text-xs">
-                        <span className="text-slate-500 font-semibold">Passing Threshold:</span>
-                        <p className="font-mono font-bold text-slate-800">
-                          ≥ {formulaPlaygroundResult.minPass} Marks ({formulaPlaygroundResult.minPassPct}%)
+                        <span className="text-slate-500 font-semibold">Aggregate Strategy:</span>
+                        <p className="font-mono font-bold text-purple-900">
+                          {PASS_STRATEGIES.find((s) => s.value === formulaPassStrategy)?.label || formulaPassStrategy}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 3 Step Visual Metric Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      {/* Step 1: Internal CIE Result */}
+                      <div className="p-3 rounded-xl bg-sky-50/80 border border-sky-200 space-y-1">
+                        <span className="text-[10px] font-bold text-sky-800 uppercase tracking-wider">
+                          1. Internal CIE Result
+                        </span>
+                        <p className="font-mono font-black text-slate-900 text-lg">
+                          {formulaPlaygroundResult.finalMarks}{' '}
+                          <span className="text-xs text-slate-500 font-normal">/{formulaPlaygroundResult.targetMax} Marks</span>
+                        </p>
+                        <p className="text-[11px] font-semibold flex items-center gap-1.5">
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                              formulaPlaygroundResult.isPass
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {formulaPlaygroundResult.isPass ? 'PASSED CUTOFF' : 'FAILED CUTOFF'}
+                          </span>
+                          <span className="text-slate-500 text-[10px]">(&ge; {formulaPlaygroundResult.minPass}M / {formulaPlaygroundResult.minPassPct}%)</span>
+                        </p>
+                      </div>
+
+                      {/* Step 2: External SEE Result */}
+                      <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 space-y-1">
+                        <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                          2. External SEE Result
+                        </span>
+                        <p className="font-mono font-black text-slate-900 text-lg">
+                          {formulaPlaygroundResult.external.marks}{' '}
+                          <span className="text-xs text-slate-500 font-normal">/{formulaPlaygroundResult.external.max} Marks</span>
+                        </p>
+                        <p className="text-[11px] font-semibold flex items-center gap-1.5">
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                              formulaPlaygroundResult.external.isPass
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {formulaPlaygroundResult.external.isPass ? 'PASSED CUTOFF' : 'FAILED CUTOFF'}
+                          </span>
+                          <span className="text-slate-500 text-[10px]">(&ge; {formulaPlaygroundResult.external.minPass}M / {formulaPlaygroundResult.external.minPassPct}%)</span>
+                        </p>
+                      </div>
+
+                      {/* Step 3: Combined Total Aggregate */}
+                      <div className="p-3 rounded-xl bg-purple-50/80 border border-purple-200 space-y-1">
+                        <span className="text-[10px] font-bold text-purple-800 uppercase tracking-wider">
+                          3. Total Aggregate Score
+                        </span>
+                        <p className="font-mono font-black text-purple-950 text-lg">
+                          {formulaPlaygroundResult.total.marks}{' '}
+                          <span className="text-xs text-slate-500 font-normal">/{formulaPlaygroundResult.total.max} Marks</span>
+                        </p>
+                        <p className="text-[11px] font-semibold flex items-center gap-1.5">
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[10px] font-black ${
+                              formulaPlaygroundResult.total.isPass
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {formulaPlaygroundResult.total.isPass ? 'PASSED AGGREGATE' : 'BELOW AGGREGATE'}
+                          </span>
+                          <span className="text-slate-500 text-[10px]">(&ge; {formulaPlaygroundResult.total.minPass}M / {formulaPlaygroundResult.total.minPassPct}%)</span>
                         </p>
                       </div>
                     </div>
 
                     {/* Step-by-Step Breakdown for Each Component */}
-                    <div className="space-y-1.5 text-xs font-mono">
+                    <div className="space-y-1.5 text-xs font-mono pt-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase font-sans">
+                        Internal Assessment Step-by-Step Math Resolution:
+                      </span>
                       {formulaPlaygroundResult.breakdown.map((b) => (
                         <div
                           key={b.componentId}
@@ -2294,23 +3783,77 @@ export default function RegulationMarksPage() {
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase">Year Scope</label>
-                    <select
-                      value={formYearOfStudy ? String(formYearOfStudy) : ''}
-                      onChange={(e) => {
-                        setFormYearOfStudy(e.target.value ? parseInt(e.target.value, 10) : null);
-                      }}
-                      disabled={!formCourseId}
-                      className="px-2.5 py-1 text-xs rounded-md border border-slate-300 bg-white font-semibold text-slate-800 disabled:opacity-50"
-                    >
-                      <option value="">All Years of Course (Course Default)</option>
-                      {editingYears.map((y) => (
-                        <option key={y.yearOfStudy} value={String(y.yearOfStudy)}>
-                          Year {y.yearOfStudy} {y.isCustomized ? '★ (Custom Override)' : '(Inherited)'}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase">
+                      Year Scope (Multi-Year Selection Supported)
+                    </label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!formCourseId}
+                        onClick={() => {
+                          setFormYearOfStudy(null);
+                          setFormSelectedYears([]);
+                        }}
+                        className={`px-2.5 py-1 text-xs rounded-md font-bold transition-all cursor-pointer ${
+                          !formYearOfStudy && formSelectedYears.length === 0
+                            ? 'bg-sky-700 text-white shadow-2xs'
+                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                        } disabled:opacity-40`}
+                      >
+                        All Years (Course Default)
+                      </button>
+                      {editingYears.map((y) => {
+                        const isSelected =
+                          formYearOfStudy === y.yearOfStudy ||
+                          formSelectedYears.includes(y.yearOfStudy);
+
+                        return (
+                          <button
+                            key={y.yearOfStudy}
+                            type="button"
+                            disabled={!formCourseId}
+                            onClick={() => {
+                              let next: number[];
+                              if (formSelectedYears.includes(y.yearOfStudy)) {
+                                next = formSelectedYears.filter((num) => num !== y.yearOfStudy);
+                              } else {
+                                next = [...formSelectedYears, y.yearOfStudy].sort((a, b) => a - b);
+                              }
+                              setFormSelectedYears(next);
+                              if (next.length === 1) {
+                                setFormYearOfStudy(next[0]);
+                              } else {
+                                setFormYearOfStudy(null);
+                              }
+                            }}
+                            className={`px-2.5 py-1 text-xs rounded-md font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-300'
+                                : 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-100'
+                            } disabled:opacity-40`}
+                          >
+                            <span>Year {y.yearOfStudy}</span>
+                            {y.isCustomized && (
+                              <span className="text-[9px] opacity-90 font-black">★</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {formCourseId && editingYears.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allY = editingYears.map((y) => y.yearOfStudy);
+                            setFormSelectedYears(allY);
+                            setFormYearOfStudy(null);
+                          }}
+                          className="text-[10px] text-indigo-700 hover:underline px-1.5 py-1 font-bold cursor-pointer"
+                        >
+                          Select All
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

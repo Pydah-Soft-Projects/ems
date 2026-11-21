@@ -28,7 +28,7 @@ const PRIVILEGE_GROUPS = [
     privileges: [
       {
         key: 'regulations:internals:read',
-        label: 'View regulation marks setup & simulation workbench (Internal, External & Combo)',
+        label: 'View regulation marks setup & assessment formulas (Internal, External & Combo)',
       },
       {
         key: 'regulations:internals:write',
